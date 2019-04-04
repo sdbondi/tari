@@ -421,6 +421,7 @@ It has a few important functions:
 - Manage the underlying network connections; with automatic reconnection if necessary.
 - Listen for messages from its [InboundConnection] and pass the messages onto the given handler socket.
 - Send messages to the peer using the [OutboundConnection].
+- If possible, reject connections from other [NetAddress]es.
 
 Unlike [InboundConnection] and [OutboundConnection] which are essentially stateless,
 `PeerConnection` maintains a particular `ConnectionState`.
@@ -457,6 +458,7 @@ A `PeerConnection`:
 - MUST immediately reject and dispose of a multipart message not consisting of four parts, as detailed in [DataMessage].
 - MUST construct a [DataMessage] from the multiple parts.
 - MUST pass the constructed [DataMessage] to the message handler.
+- for inbound IP [NetAddress]es, MUST deny connections from other IP addresses.
 - Should a connection drop, the connection state MUST transition to `Connecting` and the connection retried.
 - When a shutdown signal is received, MUST send a `net::Disconnect` message and drop the connection.
 
@@ -506,13 +508,17 @@ Alice wants to connect to Bob
 1. Alice creates a `PeerConnection` to which Bob can connect.
    - A new CURVE keypair is generated
 2. Alice connects to Bob's control server and Bob accepts the connection.
-3. Alice sends an `peer::establish_connection` message, with
+3. Alice sends an `peer::EstablishConnection` message, with
    - the CURVE public key for the socket connection,
    - the node's public key corresponding to its [Node ID],
    - the [NetAddress] of the new PeerConnection.
 4. Bob accepts this request, and opens a new `PeerConnnection` socket using Alice's CURVE public key.
-5. Bob connects to the given [NetAddress] and sends a `peer::establish_connection` message.
+5. Bob connects to the given [NetAddress] and sends a `peer::AcceptConnection` message.
 6. If Alice accepts the connection, they can begin sending messages. If not, both sides terminate the connection.
+
+An attacker may send a `peer::EstablishConnection` request to many nodes with another node's [NetAddress]
+with the intention of performing a DDoS attack on that node. To mitigate this, if the `peer::AcceptConnection`
+message is rejected with a bad signature or public key, this attacker MUST be banned.
 
 #### PeerManager
 
@@ -690,6 +696,7 @@ If the HWM is hit:
   the connection is bound, a dedicated 'secure connection negotiation socket' would be needed.
 - Details of distributed message storage.
 - Which [NetAddress] to use if a peer has many.
+- Heuristics for banning peers.
 
 [basenode]: Glossary.md#base-node
 [broadcaststrategy]: #outboundmessageservice
