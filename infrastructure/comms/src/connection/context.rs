@@ -20,15 +20,37 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::{
-    connection::{Connection, NetAddress},
-    peer_manager::peer::Peer,
+use zmq;
+
+use crate::connection::{
+    types::SocketType,
+    ConnectionError,
 };
 
-pub struct PeerConnection {
-    inbound_net_address: NetAddress,
-    outbound_peer: Peer,
+#[derive(Clone)]
+pub struct Context(zmq::Context);
 
+impl Context {
+    pub fn new() -> Self {
+        Self(zmq::Context::new())
+    }
+
+    pub fn socket(&self, socket_type: SocketType) -> Result<zmq::Socket, ConnectionError> {
+        use SocketType::*;
+
+        let zmq_socket_type = match socket_type {
+            Request => zmq::REQ,
+            Reply => zmq::REP,
+            Router => zmq::ROUTER,
+            Dealer => zmq::DEALER,
+            Pub => zmq::PUB,
+            Sub => zmq::SUB,
+            Push => zmq::PUSH,
+            Pull => zmq::PULL,
+            Pair => zmq::PAIR,
+        };
+
+        self.0.socket(zmq_socket_type)
+            .map_err(|e| ConnectionError::SocketError(format!("{}", e)))
+    }
 }
-
-impl Connection for PeerConnection {}

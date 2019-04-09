@@ -24,16 +24,27 @@ pub mod i2p;
 pub mod net_address;
 pub mod onion;
 pub mod p2p;
+pub mod context;
+pub mod message;
+pub mod types;
 
 use derive_error::Error;
 
-pub use self::net_address::{NetAddress, NetAddressError};
+pub use self::{
+    net_address::{NetAddress, NetAddressError},
+    message::MessageError,
+    types::Result,
+    context::Context,
+};
 
 #[derive(Debug, Error)]
 pub enum ConnectionError {
     NetAddressError(NetAddressError),
+    #[error(msg_embedded, no_from, non_std)]
+    SocketError(String),
     /// Connection timed out
     Timeout,
+    MessageError(MessageError),
 }
 
 pub trait Connection {}

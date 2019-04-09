@@ -20,15 +20,3 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::{
-    connection::{Connection, NetAddress},
-    peer_manager::peer::Peer,
-};
-
-pub struct PeerConnection {
-    inbound_net_address: NetAddress,
-    outbound_peer: Peer,
-
-}
-
-impl Connection for PeerConnection {}
