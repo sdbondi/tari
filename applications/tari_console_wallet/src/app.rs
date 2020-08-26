@@ -26,7 +26,7 @@ use crate::{
 };
 use tari_wallet::{
     contacts_service::storage::database::Contact,
-    transaction_service::storage::database::CompletedTransaction,
+    transaction_service::storage::models::CompletedTransaction,
     util::emoji::EmojiId,
 };
 

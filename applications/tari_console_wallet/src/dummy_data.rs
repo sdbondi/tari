@@ -34,7 +34,7 @@ use tari_core::transactions::{
 use tari_crypto::keys::{PublicKey as PublicKeyTrait, SecretKey as SecretKeyTrait};
 use tari_wallet::{
     contacts_service::storage::database::Contact,
-    transaction_service::storage::database::{
+    transaction_service::storage::models::{
         CompletedTransaction,
         InboundTransaction,
         OutboundTransaction,
@@ -61,6 +61,8 @@ pub fn dummy_inbound_txs() -> Vec<InboundTransaction> {
             .unwrap(),
         cancelled: false,
         direct_send_success: false,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     inbound_txs.push(InboundTransaction {
@@ -78,6 +80,8 @@ pub fn dummy_inbound_txs() -> Vec<InboundTransaction> {
             .unwrap(),
         cancelled: false,
         direct_send_success: false,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     inbound_txs.push(InboundTransaction {
@@ -95,6 +99,8 @@ pub fn dummy_inbound_txs() -> Vec<InboundTransaction> {
             .unwrap(),
         cancelled: false,
         direct_send_success: false,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     inbound_txs.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
@@ -121,6 +127,8 @@ pub fn dummy_outbound_txs() -> Vec<OutboundTransaction> {
             .unwrap(),
         cancelled: false,
         direct_send_success: false,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     outbound_txs.push(OutboundTransaction {
@@ -139,6 +147,8 @@ pub fn dummy_outbound_txs() -> Vec<OutboundTransaction> {
             .unwrap(),
         cancelled: false,
         direct_send_success: false,
+        send_count: 0,
+        last_send_timestamp: None,
     });
     outbound_txs.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
     outbound_txs
@@ -165,6 +175,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Outbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -185,6 +197,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Inbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -205,6 +219,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Inbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -225,6 +241,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Outbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -245,6 +263,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Outbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -265,6 +285,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Inbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
 
     completed_txs.push(CompletedTransaction {
@@ -285,6 +307,8 @@ pub fn dummy_completed_txs() -> Vec<CompletedTransaction> {
         cancelled: false,
         direction: TransactionDirection::Outbound,
         coinbase_block_height: None,
+        send_count: 0,
+        last_send_timestamp: None,
     });
     completed_txs.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
 

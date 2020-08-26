@@ -26,7 +26,7 @@ use crate::{
     utils::{formatting::display_compressed_string, widgets::MultiColumnList},
 };
 use tari_core::transactions::tari_amount::MicroTari;
-use tari_wallet::transaction_service::storage::database::{TransactionDirection, TransactionStatus};
+use tari_wallet::transaction_service::storage::models::{TransactionDirection, TransactionStatus};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},

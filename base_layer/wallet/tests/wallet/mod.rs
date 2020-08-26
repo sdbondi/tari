@@ -62,6 +62,7 @@ use tari_wallet::{
         sqlite_utilities::{partial_wallet_backup, run_migration_and_create_sqlite_connection},
     },
     transaction_service::{
+        config::TransactionServiceConfig,
         handle::TransactionEvent,
         storage::{memory_db::TransactionMemoryDatabase, sqlite_db::TransactionServiceSqliteDatabase},
     },
@@ -128,7 +129,17 @@ fn create_wallet(
     let output_manager_backend = OutputManagerSqliteDatabase::new(connection.clone(), None);
     let contacts_backend = ContactsServiceSqliteDatabase::new(connection);
 
-    let config = WalletConfig::new(comms_config, factories, None, Network::Rincewind);
+    let transaction_service_config = TransactionServiceConfig {
+        resend_response_cooldown: Duration::from_secs(1),
+        ..Default::default()
+    };
+
+    let config = WalletConfig::new(
+        comms_config,
+        factories,
+        Some(transaction_service_config),
+        Network::Rincewind,
+    );
 
     let runtime_node = Runtime::new().unwrap();
     let wallet = Wallet::new(
@@ -353,7 +364,6 @@ fn test_store_and_forward_send_tx() {
         factories.clone(),
     );
     let mut bob_wallet = create_wallet(bob_identity.clone(), &db_tempdir.path(), "bob_db", factories.clone());
-    let mut alice_event_stream = alice_wallet.transaction_service.get_event_stream_fused();
 
     alice_wallet
         .runtime
@@ -383,7 +393,7 @@ fn test_store_and_forward_send_tx() {
         .block_on(alice_wallet.output_manager_service.add_output(uo1))
         .unwrap();
 
-    alice_wallet
+    let tx_id = alice_wallet
         .runtime
         .block_on(alice_wallet.transaction_service.send_transaction(
             carol_identity.public_key().clone(),
@@ -398,13 +408,22 @@ fn test_store_and_forward_send_tx() {
         .runtime
         .block_on(async { delay_for(Duration::from_secs(10)).await });
 
+    alice_wallet
+        .runtime
+        .block_on(alice_wallet.transaction_service.cancel_transaction(tx_id))
+        .unwrap();
+
+    alice_wallet
+        .runtime
+        .block_on(async { delay_for(Duration::from_secs(10)).await });
+
     let mut carol_wallet = create_wallet(
         carol_identity.clone(),
         &db_tempdir.path(),
         "carol_db",
         factories.clone(),
     );
-
+    let mut carol_event_stream = carol_wallet.transaction_service.get_event_stream_fused();
     carol_wallet
         .runtime
         .block_on(carol_wallet.comms.peer_manager().add_peer(create_peer(
@@ -419,15 +438,17 @@ fn test_store_and_forward_send_tx() {
 
     alice_wallet.runtime.block_on(async {
         let mut delay = delay_for(Duration::from_secs(60)).fuse();
-        let mut tx_reply = 0;
+        let mut tx_recv = false;
+        let mut tx_cancelled = false;
         loop {
             futures::select! {
-                event = alice_event_stream.select_next_some() => {
+                event = carol_event_stream.select_next_some() => {
                     match &*event.unwrap() {
-                        TransactionEvent::ReceivedTransactionReply(_) => tx_reply+=1,
+                        TransactionEvent::ReceivedTransaction(_) => tx_recv = true,
+                        TransactionEvent::TransactionCancelled(_) => tx_cancelled = true,
                         _ => (),
                     }
-                    if tx_reply == 1 {
+                    if tx_recv && tx_cancelled {
                         break;
                     }
                 },
@@ -436,7 +457,8 @@ fn test_store_and_forward_send_tx() {
                 },
             }
         }
-        assert_eq!(tx_reply, 1, "Must have received a reply from Carol");
+        assert!(tx_recv, "Must have received a tx from alice");
+        assert!(tx_cancelled, "Must have received a cancel tx from alice");
     });
 
     alice_wallet.shutdown();
