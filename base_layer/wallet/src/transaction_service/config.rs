@@ -43,7 +43,7 @@ impl Default for TransactionServiceConfig {
             direct_send_timeout: Duration::from_secs(20),
             broadcast_send_timeout: Duration::from_secs(30),
             low_power_polling_timeout: Duration::from_secs(300),
-            transaction_resend_period: Duration::from_secs(3600),
+            transaction_resend_period: Duration::from_secs(10),
             resend_response_cooldown: Duration::from_secs(300),
             pending_transaction_cancellation_timeout: Duration::from_secs(259200), // 3 Days
         }
