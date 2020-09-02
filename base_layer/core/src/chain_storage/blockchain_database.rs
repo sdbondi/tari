@@ -482,6 +482,19 @@ where B: BlockchainBackend
         fetch_orphan(&*db, hash)
     }
 
+    pub fn fetch_all_orphans(&self) -> Result<Vec<Block>, ChainStorageError> {
+        let db = self.db_read_access()?;
+        let mut result = vec![];
+        // TODO: this is a bit clumsy in order to safely handle the results. There should be a cleaner way
+        db.for_each_orphan(|o| result.push(o))?;
+        let mut orphans = vec![];
+        for o in result {
+            // check each result
+            orphans.push(o?.1);
+        }
+        Ok(orphans)
+    }
+
     /// Returns the set of target difficulties for the specified proof of work algorithm.
     pub fn fetch_target_difficulties(
         &self,

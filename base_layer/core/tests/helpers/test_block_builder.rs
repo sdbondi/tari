@@ -1,4 +1,4 @@
-// Copyright 2019. The Tari Project
+// Copyright 2020. The Tari Project
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 // following conditions are met:
@@ -21,11 +21,51 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-use std::{
-    collections::HashMap,
-    rc::{Rc, Weak},
+use crate::helpers::{
+    block_builders::{chain_block, find_header_with_achieved_difficulty},
+    sample_blockchains::create_new_blockchain,
 };
-use tari_core::consensus::{ConsensusManager, Network};
+use rand::{rngs::OsRng, RngCore};
+use serde::private::ser::serialize_tagged_newtype;
+use tari_core::{
+    blocks::Block,
+    chain_storage::{BlockAddResult, BlockchainDatabase, ChainStorageError, MemoryDatabase},
+    transactions::types::HashDigest,
+};
+use tari_crypto::tari_utilities::Hashable;
 
-mod chain_backend;
-mod chain_storage;
+#[derive(Default)]
+pub struct TestBlockBuilder {}
+
+impl TestBlockBuilder {
+    pub fn new_block(&self, name: &str) -> TestBlockBuilderInner {
+        TestBlockBuilderInner::new(name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestBlockBuilderInner {
+    pub name: String,
+    pub child_of: Option<String>,
+    pub difficulty: Option<u64>,
+}
+
+impl TestBlockBuilderInner {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            child_of: None,
+            difficulty: None,
+        }
+    }
+
+    pub fn child_of(mut self, parent: &str) -> Self {
+        self.child_of = Some(parent.to_string());
+        self
+    }
+
+    pub fn difficulty(mut self, difficulty: u64) -> Self {
+        self.difficulty = Some(difficulty);
+        self
+    }
+}

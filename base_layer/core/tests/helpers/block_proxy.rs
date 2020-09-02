@@ -1,4 +1,4 @@
-// Copyright 2019. The Tari Project
+// Copyright 2020. The Tari Project
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 // following conditions are met:
@@ -21,11 +21,33 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-use std::{
-    collections::HashMap,
-    rc::{Rc, Weak},
+use crate::helpers::{
+    block_builders::{chain_block, find_header_with_achieved_difficulty},
+    sample_blockchains::create_new_blockchain,
 };
-use tari_core::consensus::{ConsensusManager, Network};
+use rand::{rngs::OsRng, RngCore};
+use serde::private::ser::serialize_tagged_newtype;
+use tari_core::{
+    blocks::Block,
+    chain_storage::{BlockAddResult, BlockchainDatabase, ChainStorageError, MemoryDatabase},
+    transactions::types::HashDigest,
+};
+use tari_crypto::tari_utilities::Hashable;
 
-mod chain_backend;
-mod chain_storage;
+#[derive(Debug)]
+pub struct BlockProxy {
+    pub name: String,
+    pub block: Block,
+}
+
+impl PartialEq for BlockProxy {
+    fn eq(&self, other: &Self) -> bool {
+        self.block.eq(&other.block)
+    }
+}
+
+impl BlockProxy {
+    pub fn new(name: String, block: Block) -> Self {
+        Self { name, block }
+    }
+}
