@@ -20,7 +20,7 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::app::MyIdentity;
+use crate::ui::state::MyIdentity;
 use chrono::{Duration as ChronoDuration, Utc};
 use rand::{rngs::OsRng, RngCore};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -304,11 +304,11 @@ pub fn get_dummy_base_node_status() -> Option<u64> {
     }
 }
 
-pub fn get_dummy_identity() -> MyIdentity<'static> {
+pub fn get_dummy_identity() -> MyIdentity {
     MyIdentity {
-        public_key: "92b34a4dc815531af8aeb8a1f1c8d18b927ddd7feabc706df6a1f87cf5014e54",
-        public_address: "/onion3/mqsfoi62gonulivatrhitugwil3hcxf23eisaieetgyw7x2pdi2bzpyd:18142",
-        emoji_id: "🐾💎🎤🎨📌🍄🎰🍉🚧💉💡👟🚒📌🔌🐶🐾🐢🔭🐨😻💨🐎🐊🚢👟🚧🐞🚜🌂🎩🎱📈",
+        public_key: "92b34a4dc815531af8aeb8a1f1c8d18b927ddd7feabc706df6a1f87cf5014e54".to_string(),
+        public_address: "/onion3/mqsfoi62gonulivatrhitugwil3hcxf23eisaieetgyw7x2pdi2bzpyd:18142".to_string(),
+        emoji_id: "🐾💎🎤🎨📌🍄🎰🍉🚧💉💡👟🚒📌🔌🐶🐾🐢🔭🐨😻💨🐎🐊🚢👟🚧🐞🚜🌂🎩🎱📈".to_string(),
         qr_code: "█▀▀▀▀▀█  ██ ▀▀▀ ██▀█▀█▀▄▀█▄▀▄ ▄▄▀ █▀▀▀▀▀█
     █ ███ █ █▄▀▄  ▀▀▀▀▀▄ █▀ █▀▄▀▄ █   █ ███ █
     █ ▀▀▀ █ █ ▀  ▄▄▀▀█▀▄▄███▄▀ ▀▄▀█▀▄ █ ▀▀▀ █
@@ -329,7 +329,8 @@ pub fn get_dummy_identity() -> MyIdentity<'static> {
     █▀▀▀▀▀█ ▄█▄   ▄▄ █▄▀▄█▄▀██▀▄█ ▀ █ ▀ █▄▄▄▄
     █ ███ █ ███▄█▄█ █▄▄ ▀▀▄ ▄ ▀▀  ▀█▀█▀▀▀▄▀█▄
     █ ▀▀▀ █ ▀█▄ ▄▄▄▄  █▀█▄▄▀  ▀▄ ▀▀▄ █▀▀▀███
-    ▀▀▀▀▀▀▀ ▀ ▀           ▀ ▀▀ ▀ ▀    ▀ ▀▀\n",
+    ▀▀▀▀▀▀▀ ▀ ▀           ▀ ▀▀ ▀ ▀    ▀ ▀▀\n"
+            .to_string(),
     }
 }
 

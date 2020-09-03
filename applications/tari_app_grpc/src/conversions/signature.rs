@@ -20,6 +20,37 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-pub mod base_node_grpc {
-    tonic::include_proto!("tari.base_node");
+use std::convert::{TryFrom, TryInto};
+use tari_core::{
+    proto::utils::try_convert_all,
+    transactions::{
+        aggregated_body::AggregateBody,
+        bullet_rangeproofs::BulletRangeProof,
+        tari_amount::MicroTari,
+        transaction::{
+            KernelFeatures,
+            OutputFeatures,
+            OutputFlags,
+            TransactionInput,
+            TransactionKernel,
+            TransactionOutput,
+        },
+        types::{Commitment, PrivateKey, PublicKey, Signature},
+    },
+};
+use tari_crypto::tari_utilities::ByteArray;
+
+use crate::tari_rpc as grpc;
+use tari_core::transactions::transaction::Transaction;
+
+impl TryFrom<grpc::Signature> for Signature {
+    type Error = String;
+
+    fn try_from(sig: grpc::Signature) -> Result<Self, Self::Error> {
+        let public_nonce =
+            PublicKey::from_bytes(&sig.public_nonce).map_err(|_| "Could not get public nonce".to_string())?;
+        let signature = PrivateKey::from_bytes(&sig.signature).map_err(|_| "Could not get signature".to_string())?;
+
+        Ok(Self::new(public_nonce, signature))
+    }
 }
