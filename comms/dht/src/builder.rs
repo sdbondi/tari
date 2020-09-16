@@ -91,12 +91,12 @@ impl DhtBuilder {
     }
 
     pub fn with_signature_cache_ttl(mut self, ttl: Duration) -> Self {
-        self.config.msg_hash_cache_ttl = ttl;
+        self.config.dedup_msg_hash_cache_ttl = ttl;
         self
     }
 
     pub fn with_signature_cache_capacity(mut self, capacity: usize) -> Self {
-        self.config.msg_hash_cache_capacity = capacity;
+        self.config.dedup_msg_hash_cache_capacity = capacity;
         self
     }
 

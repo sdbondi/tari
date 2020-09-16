@@ -537,7 +537,7 @@ async fn handle_outbound_tx(
 ) -> Result<(), MempoolServiceError>
 {
     outbound_message_service
-        .propagate(
+        .broadcast(
             NodeDestination::Unknown,
             OutboundEncryption::None,
             exclude_peers,

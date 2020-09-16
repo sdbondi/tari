@@ -55,7 +55,7 @@ use tari_shutdown::ShutdownSignal;
 use tari_utilities::message_format::{MessageFormat, MessageFormatError};
 use thiserror::Error;
 use tokio::task;
-use ttl_cache::TtlCache;
+use ttl_cache::{Entry, TtlCache};
 
 const LOG_TARGET: &str = "comms::dht::actor";
 
@@ -103,9 +103,9 @@ impl From<SendError> for DhtActorError {
 pub enum DhtRequest {
     /// Send a Join request to the network
     SendJoin,
-    /// Inserts a message signature to the msg hash cache. This operation replies with a boolean
-    /// which is true if the signature already exists in the cache, otherwise false
-    MsgHashCacheInsert(Vec<u8>, oneshot::Sender<bool>),
+    /// Inserts a message signature to the msg hash cache. This operation replies with the number
+    /// of times (exclusive) that this message hash has previously been seen.
+    MsgHashCacheInsert(Vec<u8>, oneshot::Sender<usize>),
     /// Fetch selected peers according to the broadcast strategy
     SelectPeers(BroadcastStrategy, oneshot::Sender<Vec<NodeId>>),
     GetMetadata(DhtMetadataKey, oneshot::Sender<Result<Option<Vec<u8>>, DhtActorError>>),
@@ -149,7 +149,7 @@ impl DhtRequester {
         reply_rx.await.map_err(|_| DhtActorError::ReplyCanceled)
     }
 
-    pub async fn insert_message_hash(&mut self, signature: Vec<u8>) -> Result<bool, DhtActorError> {
+    pub async fn insert_message_hash(&mut self, signature: Vec<u8>) -> Result<usize, DhtActorError> {
         let (reply_tx, reply_rx) = oneshot::channel();
         self.sender
             .send(DhtRequest::MsgHashCacheInsert(signature, reply_tx))
@@ -186,7 +186,7 @@ pub struct DhtActor {
     config: DhtConfig,
     shutdown_signal: Option<ShutdownSignal>,
     request_rx: Fuse<mpsc::Receiver<DhtRequest>>,
-    msg_hash_cache: TtlCache<Vec<u8>, ()>,
+    msg_hash_cache: TtlCache<Vec<u8>, usize>,
 }
 
 impl DhtActor {
@@ -203,7 +203,7 @@ impl DhtActor {
     ) -> Self
     {
         Self {
-            msg_hash_cache: TtlCache::new(config.msg_hash_cache_capacity),
+            msg_hash_cache: TtlCache::new(config.dedup_msg_hash_cache_capacity),
             config,
             database: DhtDatabase::new(conn),
             outbound_requester,
@@ -287,14 +287,9 @@ impl DhtActor {
                 Box::pin(Self::broadcast_join(config, node_identity, outbound_requester))
             },
             MsgHashCacheInsert(hash, reply_tx) => {
-                // No locks needed here. Downside is this isn't really async, however this should be
-                // fine as it is very quick
-                let already_exists = self
-                    .msg_hash_cache
-                    .insert(hash, (), self.config.msg_hash_cache_ttl)
-                    .is_some();
-                let result = reply_tx.send(already_exists).map_err(|_| DhtActorError::ReplyCanceled);
-                Box::pin(future::ready(result))
+                let num_seen = self.insert_message_hash(hash);
+                let _ = reply_tx.send(num_seen);
+                Box::pin(future::ready(Ok(())))
             },
             SelectPeers(broadcast_strategy, reply_tx) => {
                 let peer_manager = Arc::clone(&self.peer_manager);
@@ -335,6 +330,20 @@ impl DhtActor {
                     }
                     Ok(())
                 })
+            },
+        }
+    }
+
+    fn insert_message_hash(&mut self, hash: Vec<u8>) -> usize {
+        let entry = self.msg_hash_cache.entry(hash);
+        match entry {
+            Entry::Occupied(mut entry) => {
+                let n = *entry.get() + 1;
+                entry.insert(n, self.config.dedup_msg_hash_cache_ttl)
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(1, self.config.dedup_msg_hash_cache_ttl);
+                0
             },
         }
     }
@@ -703,12 +712,12 @@ mod test {
         actor.spawn();
 
         let signature = vec![1u8, 2, 3];
-        let is_dup = requester.insert_message_hash(signature.clone()).await.unwrap();
-        assert_eq!(is_dup, false);
-        let is_dup = requester.insert_message_hash(signature).await.unwrap();
-        assert_eq!(is_dup, true);
-        let is_dup = requester.insert_message_hash(Vec::new()).await.unwrap();
-        assert_eq!(is_dup, false);
+        let num_seen = requester.insert_message_hash(signature.clone()).await.unwrap();
+        assert_eq!(num_seen, 0);
+        let num_seen = requester.insert_message_hash(signature).await.unwrap();
+        assert_eq!(num_seen, 1);
+        let num_seen = requester.insert_message_hash(Vec::new()).await.unwrap();
+        assert_eq!(num_seen, 0);
     }
 
     #[tokio_macros::test_basic]

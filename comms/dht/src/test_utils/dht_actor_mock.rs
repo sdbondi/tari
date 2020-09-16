@@ -29,7 +29,7 @@ use futures::{channel::mpsc, stream::Fuse, StreamExt};
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
         RwLock,
     },
@@ -44,7 +44,7 @@ pub fn create_dht_actor_mock(buf_size: usize) -> (DhtRequester, DhtActorMock) {
 
 #[derive(Default, Debug, Clone)]
 pub struct DhtMockState {
-    signature_cache_insert: Arc<AtomicBool>,
+    signature_cache_insert: Arc<AtomicUsize>,
     call_count: Arc<AtomicUsize>,
     select_peers: Arc<RwLock<Vec<Peer>>>,
     settings: Arc<RwLock<HashMap<String, Vec<u8>>>>,
@@ -53,14 +53,14 @@ pub struct DhtMockState {
 impl DhtMockState {
     pub fn new() -> Self {
         Self {
-            signature_cache_insert: Arc::new(AtomicBool::new(false)),
+            signature_cache_insert: Arc::new(AtomicUsize::new(0)),
             call_count: Arc::new(AtomicUsize::new(0)),
             select_peers: Arc::new(RwLock::new(Vec::new())),
             settings: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub fn set_signature_cache_insert(&self, v: bool) -> &Self {
+    pub fn set_signature_cache_insert(&self, v: usize) -> &Self {
         self.signature_cache_insert.store(v, Ordering::SeqCst);
         self
     }

@@ -430,7 +430,7 @@ where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError>
 
     async fn check_duplicate(dht_requester: &mut DhtRequester, body: &[u8]) -> Result<(), StoreAndForwardError> {
         let msg_hash = Challenge::new().chain(body).result().to_vec();
-        if dht_requester.insert_message_hash(msg_hash).await? {
+        if dht_requester.insert_message_hash(msg_hash).await? > 0 {
             Err(StoreAndForwardError::DuplicateMessage)
         } else {
             Ok(())

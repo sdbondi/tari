@@ -83,6 +83,7 @@ use tari_comms_dht::{
     outbound::OutboundEncryption,
     Dht,
     DhtBuilder,
+    DhtConfig,
 };
 use tari_storage::{
     lmdb_store::{LMDBBuilder, LMDBConfig},
@@ -180,6 +181,7 @@ async fn main() {
         repeat_with(|| {
             make_node(
                 PeerFeatures::COMMUNICATION_CLIENT,
+                // Some(seed_node.to_peer()),
                 Some(nodes[OsRng.gen_range(0, NUM_NODES - 1)].to_peer()),
                 messaging_events_tx.clone(),
             )
@@ -190,7 +192,6 @@ async fn main() {
 
     // Every node knows about every other node/client - uncomment this if you want to see the effect of "perfect network
     // knowledge" on the network.
-    //
     // for n in &nodes {
     //     for ni in &nodes {
     //         if n.node_identity().node_id() != ni.node_identity().node_id() {
@@ -247,10 +248,26 @@ async fn main() {
             .wait_for_connectivity(Duration::from_secs(10))
             .await
             .unwrap();
+
         wallet.dht.dht_requester().send_join().await.unwrap();
     }
 
-    take_a_break().await;
+    log::info!("------------------------------- BASE NODE JOIN -------------------------------");
+    for node in nodes.iter_mut() {
+        println!(
+            "Node '{}' is joining the network via the seed node '{}'",
+            node, seed_node
+        );
+        node.comms
+            .connectivity()
+            .wait_for_connectivity(Duration::from_secs(10))
+            .await
+            .unwrap();
+
+        node.dht.dht_requester().send_join().await.unwrap();
+    }
+
+    // take_a_break().await;
     let mut total_messages = 0;
     total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
 
@@ -271,30 +288,51 @@ async fn main() {
 
     take_a_break().await;
 
-    log::info!("------------------------------- DISCOVERY -------------------------------");
-    total_messages += discovery(&wallets, &mut messaging_events_rx).await;
+    // log::info!("------------------------------- DISCOVERY -------------------------------");
+    // total_messages += discovery(&wallets, &mut messaging_events_rx).await;
+    //
+    // total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
+    //
+    // log::info!("------------------------------- SAF/DIRECTED PROPAGATION -------------------------------");
+    // for _ in 0..5 {
+    //     let random_wallet = wallets.remove(OsRng.gen_range(0, wallets.len() - 1));
+    //     let (num_msgs, random_wallet) = do_store_and_forward_message_propagation(
+    //         random_wallet,
+    //         &wallets,
+    //         &nodes,
+    //         messaging_events_tx.clone(),
+    //         &mut messaging_events_rx,
+    //     )
+    //     .await;
+    //     total_messages += num_msgs;
+    //     // Put the wallet back
+    //     wallets.push(random_wallet);
+    // }
 
-    total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
-
-    log::info!("------------------------------- SAF/DIRECTED PROPAGATION -------------------------------");
-    for _ in 0..5 {
-        let random_wallet = wallets.remove(OsRng.gen_range(0, wallets.len() - 1));
-        let (num_msgs, random_wallet) = do_store_and_forward_message_propagation(
-            random_wallet,
-            &wallets,
-            &nodes,
-            messaging_events_tx.clone(),
-            &mut messaging_events_rx,
-        )
-        .await;
-        total_messages += num_msgs;
-        // Put the wallet back
-        wallets.push(random_wallet);
-    }
-
+    let num_nodes = nodes.len();
     log::info!("------------------------------- PROPAGATION -------------------------------");
-    do_network_wide_propagation(&mut nodes).await;
-
+    let failures = do_network_wide_propagation(&mut nodes, OsRng.gen_range(0, num_nodes - 1)).await;
+    total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
+    log::info!("------------------------------- PROPAGATION -------------------------------");
+    let next_idx = failures
+        .first()
+        .map(|v| *v)
+        .unwrap_or_else(|| OsRng.gen_range(0, num_nodes - 1));
+    let failures = do_network_wide_propagation(&mut nodes, next_idx).await;
+    total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
+    log::info!("------------------------------- PROPAGATION -------------------------------");
+    let next_idx = failures
+        .first()
+        .map(|v| *v)
+        .unwrap_or_else(|| OsRng.gen_range(0, num_nodes - 1));
+    let failures = do_network_wide_propagation(&mut nodes, next_idx).await;
+    total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
+    log::info!("------------------------------- PROPAGATION -------------------------------");
+    let next_idx = failures
+        .first()
+        .map(|v| *v)
+        .unwrap_or_else(|| OsRng.gen_range(0, num_nodes - 1));
+    do_network_wide_propagation(&mut nodes, next_idx).await;
     total_messages += drain_messaging_events(&mut messaging_events_rx, false).await;
 
     println!("{} messages sent in total across the network", total_messages);
@@ -475,10 +513,10 @@ async fn network_connectivity_stats(nodes: &[TestNode], wallets: &[TestNode]) {
     );
 }
 
-async fn do_network_wide_propagation(nodes: &mut [TestNode]) {
-    let random_node = &nodes[OsRng.gen_range(0, nodes.len() - 1)];
+async fn do_network_wide_propagation(nodes: &mut [TestNode], node_idx: usize) -> Vec<usize> {
+    let random_node = &nodes[node_idx];
     let random_node_id = random_node.comms.node_identity().node_id().clone();
-    const PUBLIC_MESSAGE: &str = "This is something you're all interested in!";
+    let message = format!("This is something you're all interested in (from {})!", random_node);
 
     banner!("🌎 {} is going to broadcast a message to the network", random_node);
     let send_states = random_node
@@ -488,7 +526,7 @@ async fn do_network_wide_propagation(nodes: &mut [TestNode]) {
             NodeDestination::Unknown,
             OutboundEncryption::None,
             vec![],
-            OutboundDomainMessage::new(0i32, PUBLIC_MESSAGE.to_string()),
+            OutboundDomainMessage::new(0i32, message),
         )
         .await
         .unwrap();
@@ -509,76 +547,80 @@ async fn do_network_wide_propagation(nodes: &mut [TestNode]) {
 
     let start_global = Instant::now();
     // Spawn task for each peer that will read the message and propagate it on
-    let tasks = nodes
-        .into_iter()
-        .filter(|n| n.comms.node_identity().node_id() != &random_node_id)
-        .enumerate()
-        .map(|(idx, node)| {
-            let mut outbound_req = node.dht.outbound_requester();
-            let mut conn_man = node.comms.connection_manager();
-            let mut ims_rx = node.ims_rx.take().unwrap();
-            let start = Instant::now();
-            let start_global = start_global.clone();
-            let node_name = node.name.clone();
+    let tasks = nodes.into_iter().enumerate().map(|(idx, node)| {
+        let mut outbound_req = node.dht.outbound_requester();
+        let mut conn_man = node.comms.connection_manager();
+        let mut inbound_msgs = node.inbound_msgs.take().unwrap();
+        let start = Instant::now();
+        let start_global = start_global.clone();
+        let node_name = node.name.clone();
+        let is_subject = node.comms.node_identity().node_id() == &random_node_id;
 
-            task::spawn(async move {
-                let result = time::timeout(Duration::from_secs(10), ims_rx.next()).await;
-                let mut is_success = false;
-                match result {
-                    Ok(Some(msg)) => {
-                        let public_msg = msg
-                            .decryption_result
-                            .unwrap()
-                            .decode_part::<String>(1)
-                            .unwrap()
-                            .unwrap();
-                        println!(
-                            "📬 {} got public message '{}' (t={:.0?})",
-                            node_name,
-                            public_msg,
-                            start_global.elapsed()
-                        );
-                        is_success = true;
-                        let send_states = outbound_req
-                            .propagate(
-                                NodeDestination::Unknown,
-                                OutboundEncryption::None,
-                                vec![msg.source_peer.node_id.clone()],
-                                OutboundDomainMessage::new(0i32, public_msg),
-                            )
-                            .await
-                            .unwrap();
-                        let num_connections = conn_man.get_num_active_connections().await.unwrap();
-                        let (success, failed) = send_states.wait_all().await;
-                        println!(
-                            "🦠 {} propagated to {}/{} peer(s) ({} connection(s))",
-                            node_name,
-                            success.len(),
-                            success.len() + failed.len(),
-                            num_connections
-                        );
-                    },
-                    Err(_) | Ok(None) => {
-                        banner!(
-                            "💩 {} failed to receive network message after {:.2?}",
-                            node_name,
-                            start.elapsed(),
-                        );
-                    },
-                }
+        task::spawn(async move {
+            if is_subject {
+                return (idx, inbound_msgs, false);
+            }
 
-                (idx, ims_rx, is_success)
-            })
-        });
+            let result = time::timeout(Duration::from_secs(10), inbound_msgs.next()).await;
+            let mut is_success = false;
+            match result {
+                Ok(Some(msg)) => {
+                    let public_msg = msg
+                        .decryption_result
+                        .unwrap()
+                        .decode_part::<String>(1)
+                        .unwrap()
+                        .unwrap();
+                    println!(
+                        "📬 {} got public message '{}' (t={:.0?})",
+                        node_name,
+                        public_msg,
+                        start_global.elapsed()
+                    );
+                    is_success = true;
+                    let send_states = outbound_req
+                        .broadcast(
+                            NodeDestination::Unknown,
+                            OutboundEncryption::None,
+                            vec![msg.source_peer.node_id.clone()],
+                            OutboundDomainMessage::new(0i32, public_msg),
+                        )
+                        .await
+                        .unwrap();
+                    let num_connections = conn_man.get_num_active_connections().await.unwrap();
+                    let (success, failed) = send_states.wait_all().await;
+                    println!(
+                        "🦠 {} propagated to {}/{} peer(s) ({} connection(s))",
+                        node_name,
+                        success.len(),
+                        success.len() + failed.len(),
+                        num_connections
+                    );
+                },
+                Err(_) | Ok(None) => {
+                    banner!(
+                        "💩 {} failed to receive network message after {:.2?}",
+                        node_name,
+                        start.elapsed(),
+                    );
+                },
+            }
+
+            (idx, inbound_msgs, is_success)
+        })
+    });
 
     // Put the ims_rxs back
-    let ims_rxs = future::join_all(tasks).await;
+    let results = future::join_all(tasks).await;
     let mut num_successes = 0;
-    for ims in ims_rxs {
-        let (idx, ims_rx, is_success) = ims.unwrap();
-        nodes[idx].ims_rx = Some(ims_rx);
+    let mut failures = Vec::new();
+    for result in results {
+        let (idx, inbound_msgs, is_success) = result.unwrap();
+        nodes[idx].inbound_msgs = Some(inbound_msgs);
         if is_success {
             num_successes += 1;
+        } else {
+            failures.push(idx);
         }
     }
 
@@ -587,6 +629,7 @@ async fn do_network_wide_propagation(nodes: &mut [TestNode]) {
         num_successes,
         nodes.len() - 1
     );
+    failures
 }
 
 async fn do_store_and_forward_message_propagation(
@@ -721,7 +764,7 @@ async fn do_store_and_forward_message_propagation(
 
     let mut num_msgs = 0;
     loop {
-        let result = time::timeout(Duration::from_secs(10), wallet.ims_rx.as_mut().unwrap().next()).await;
+        let result = time::timeout(Duration::from_secs(10), wallet.inbound_msgs.as_mut().unwrap().next()).await;
         num_msgs += 1;
         match result {
             Ok(msg) => {
@@ -864,7 +907,7 @@ struct TestNode {
     seed_peer: Option<Peer>,
     dht: Dht,
     conn_man_events_rx: mpsc::Receiver<Arc<ConnectionManagerEvent>>,
-    ims_rx: Option<mpsc::Receiver<DecryptedDhtMessage>>,
+    inbound_msgs: Option<mpsc::Receiver<DecryptedDhtMessage>>,
 }
 
 impl TestNode {
@@ -887,7 +930,7 @@ impl TestNode {
             seed_peer,
             comms,
             dht,
-            ims_rx: Some(ims_rx),
+            inbound_msgs: Some(ims_rx),
             conn_man_events_rx: events_rx,
         }
     }
@@ -1044,13 +1087,16 @@ async fn setup_comms_dht(
         comms.connectivity(),
         comms.shutdown_signal(),
     )
-    .local_test()
-    .enable_auto_join()
-    .set_auto_store_and_forward_requests(true)
-    .with_discovery_timeout(Duration::from_secs(15))
-    .with_num_neighbouring_nodes(NUM_NEIGHBOURING_NODES)
-    .with_num_random_nodes(NUM_RANDOM_NODES)
-    .with_propagation_factor(PROPAGATION_FACTOR)
+    .with_config(DhtConfig {
+        dedup_max_allowed_occurrences: 1,
+        num_neighbouring_nodes: NUM_NEIGHBOURING_NODES,
+        num_random_nodes: NUM_RANDOM_NODES,
+        propagation_factor: PROPAGATION_FACTOR,
+        discovery_request_timeout: Duration::from_secs(15),
+        saf_auto_request: true,
+        auto_join: true,
+        ..DhtConfig::default_local_test()
+    })
     .finish()
     .await
     .unwrap();

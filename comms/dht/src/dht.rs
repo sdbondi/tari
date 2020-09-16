@@ -37,7 +37,6 @@ use crate::{
     store_forward,
     store_forward::{StoreAndForwardError, StoreAndForwardRequest, StoreAndForwardRequester, StoreAndForwardService},
     tower_filter,
-    DedupLayer,
     DhtActorError,
     DhtConfig,
 };
@@ -272,7 +271,10 @@ impl Dht {
         ServiceBuilder::new()
             .layer(inbound::DeserializeLayer::new(self.peer_manager.clone()))
             .layer(inbound::ValidateLayer::new(self.config.network))
-            .layer(DedupLayer::new(self.dht_requester()))
+            .layer(inbound::DedupLayer::new(
+                self.dht_requester(),
+                self.config.dedup_max_allowed_occurrences,
+            ))
             .layer(tower_filter::FilterLayer::new(self.unsupported_saf_messages_filter()))
             .layer(MessageLoggingLayer::new(format!(
                 "Inbound [{}]",

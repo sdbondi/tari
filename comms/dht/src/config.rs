@@ -75,10 +75,14 @@ pub struct DhtConfig {
     pub saf_minimum_request_period: Duration,
     /// The max capacity of the message hash cache
     /// Default: 10000
-    pub msg_hash_cache_capacity: usize,
+    pub dedup_msg_hash_cache_capacity: usize,
     /// The time-to-live for items in the message hash cache
     /// Default: 300s (5 mins)
-    pub msg_hash_cache_ttl: Duration,
+    pub dedup_msg_hash_cache_ttl: Duration,
+    /// The maximum number of times that a message can be seen (within the TTL) before discarding duplicates of that
+    /// message.
+    /// Default: 3
+    pub dedup_max_allowed_occurrences: usize,
     /// The duration to wait for a peer discovery to complete before giving up.
     /// Default: 2 minutes
     pub discovery_request_timeout: Duration,
@@ -117,6 +121,7 @@ impl DhtConfig {
             database_url: DbConnectionUrl::Memory,
             saf_auto_request: false,
             auto_join: false,
+            dedup_max_allowed_occurrences: 1,
             ..Default::default()
         }
     }
@@ -137,8 +142,9 @@ impl Default for DhtConfig {
             saf_auto_request: true,
             saf_max_message_size: 512 * 1024, // 500 KiB
             saf_minimum_request_period: SAF_HIGH_PRIORITY_MSG_STORAGE_TTL,
-            msg_hash_cache_capacity: 10_000,
-            msg_hash_cache_ttl: Duration::from_secs(5 * 60),
+            dedup_msg_hash_cache_capacity: 10_000,
+            dedup_msg_hash_cache_ttl: Duration::from_secs(5 * 60),
+            dedup_max_allowed_occurrences: 3,
             database_url: DbConnectionUrl::Memory,
             discovery_request_timeout: Duration::from_secs(2 * 60),
             connectivity_update_interval: Duration::from_secs(2 * 60),

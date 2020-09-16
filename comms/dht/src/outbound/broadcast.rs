@@ -451,7 +451,7 @@ where S: Service<DhtOutboundMessage, Response = (), Error = PipelineError>
         Ok(messages.into_iter().unzip())
     }
 
-    async fn add_to_dedup_cache(&mut self, body: &[u8]) -> Result<bool, DhtOutboundError> {
+    async fn add_to_dedup_cache(&mut self, body: &[u8]) -> Result<(), DhtOutboundError> {
         let hash = Challenge::new().chain(&body).result().to_vec();
         trace!(
             target: LOG_TARGET,
@@ -462,7 +462,9 @@ where S: Service<DhtOutboundMessage, Response = (), Error = PipelineError>
         self.dht_requester
             .insert_message_hash(hash)
             .await
-            .map_err(|_| DhtOutboundError::FailedToInsertMessageHash)
+            .map_err(|_| DhtOutboundError::FailedToInsertMessageHash)?;
+
+        Ok(())
     }
 
     fn process_encryption(
