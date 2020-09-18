@@ -40,8 +40,6 @@ pub use blockchain_database::{
     Validators,
 };
 
-mod consts;
-
 mod db_transaction;
 pub use db_transaction::{
     DbKey,

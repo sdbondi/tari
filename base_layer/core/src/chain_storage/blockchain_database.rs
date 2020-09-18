@@ -22,11 +22,6 @@
 use crate::{
     blocks::{blockheader::BlockHash, Block, BlockHeader, NewBlockTemplate},
     chain_storage::{
-        consts::{
-            BLOCKCHAIN_DATABASE_ORPHAN_STORAGE_CAPACITY,
-            BLOCKCHAIN_DATABASE_PRUNED_MODE_PRUNING_INTERVAL,
-            BLOCKCHAIN_DATABASE_PRUNING_HORIZON,
-        },
         db_transaction::{DbKey, DbTransaction, DbValue, MetadataKey, MetadataValue, MmrTree},
         error::ChainStorageError,
         ChainMetadata,
@@ -58,17 +53,21 @@ const LOG_TARGET: &str = "c::cs::database";
 /// Configuration for the BlockchainDatabase.
 #[derive(Clone, Copy)]
 pub struct BlockchainDatabaseConfig {
+    /// The maximum number of orphans that can be stored in the Orphan block pool. Default: 720
     pub orphan_storage_capacity: usize,
+    /// The pruning horizon that is set for a default configuration of the blockchain db. Default: 0
     pub pruning_horizon: u64,
+    /// The chain height interval used to determine when a pruned node should perform pruning. This value is ignored if
+    /// pruning horizon is 0. Default: 50
     pub pruning_interval: u64,
 }
 
 impl Default for BlockchainDatabaseConfig {
     fn default() -> Self {
         Self {
-            orphan_storage_capacity: BLOCKCHAIN_DATABASE_ORPHAN_STORAGE_CAPACITY,
-            pruning_horizon: BLOCKCHAIN_DATABASE_PRUNING_HORIZON,
-            pruning_interval: BLOCKCHAIN_DATABASE_PRUNED_MODE_PRUNING_INTERVAL,
+            orphan_storage_capacity: 720,
+            pruning_horizon: 0,
+            pruning_interval: 50,
         }
     }
 }
@@ -1885,7 +1884,7 @@ fn cleanup_orphans<T: BlockchainBackend>(db: &mut T, orphan_storage_capacity: us
     if num_over_limit > 0 {
         info!(
             target: LOG_TARGET,
-            "Orphan block storage limit reached, performing cleanup.",
+            "Orphan block pool is full (capacity = {}, count = {})", orphan_storage_capacity, orphan_count
         );
 
         let mut orphans = Vec::<(u64, BlockHash)>::with_capacity(orphan_count);
@@ -1897,7 +1896,7 @@ fn cleanup_orphans<T: BlockchainBackend>(db: &mut T, orphan_storage_capacity: us
         orphans.sort_by(|a, b| a.0.cmp(&b.0));
 
         let metadata = db.fetch_chain_metadata()?;
-        let horizon_height = metadata.horizon_block(metadata.height_of_longest_chain.unwrap_or(0));
+        let horizon_height = metadata.horizon_block(metadata.height_of_longest_chain());
         let mut txn = DbTransaction::new();
         for (removed_count, (height, block_hash)) in orphans.into_iter().enumerate() {
             if height > horizon_height && removed_count >= num_over_limit {
