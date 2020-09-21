@@ -47,8 +47,10 @@ use tokio::runtime;
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::initializer";
 
-pub struct BaseNodeStateMachineInitializer<B>
-where B: BlockchainBackend + 'static
+pub struct BaseNodeStateMachineInitializer<B, D>
+where
+    B: BlockchainBackend + 'static,
+    D: BlockchainBackend + 'static,
 {
     db: BlockchainDatabase<B>,
     rules: ConsensusManager,
@@ -57,10 +59,13 @@ where B: BlockchainBackend + 'static
     peer_manager: Arc<PeerManager>,
     connectivity_requester: ConnectivityRequester,
     interrupt_signal: ShutdownSignal,
+    temp_db: Option<D>,
 }
 
-impl<B> BaseNodeStateMachineInitializer<B>
-where B: BlockchainBackend + 'static
+impl<B, D> BaseNodeStateMachineInitializer<B, D>
+where
+    B: BlockchainBackend + 'static,
+    D: BlockchainBackend + 'static,
 {
     pub fn new(
         db: BlockchainDatabase<B>,
@@ -70,6 +75,7 @@ where B: BlockchainBackend + 'static
         peer_manager: Arc<PeerManager>,
         connectivity_requester: ConnectivityRequester,
         interrupt_signal: ShutdownSignal,
+        temp_db: Option<D>,
     ) -> Self
     {
         Self {
@@ -80,12 +86,15 @@ where B: BlockchainBackend + 'static
             peer_manager,
             connectivity_requester,
             interrupt_signal,
+            temp_db,
         }
     }
 }
 
-impl<B> ServiceInitializer for BaseNodeStateMachineInitializer<B>
-where B: BlockchainBackend + 'static
+impl<B, D> ServiceInitializer for BaseNodeStateMachineInitializer<B, D>
+where
+    B: BlockchainBackend + 'static,
+    D: BlockchainBackend + 'static,
 {
     type Future = impl Future<Output = Result<(), ServiceInitializationError>>;
 
@@ -109,6 +118,7 @@ where B: BlockchainBackend + 'static
         let connectivity_requester = self.connectivity_requester.clone();
         let rules = self.rules.clone();
         let db = self.db.clone();
+        let temp_db = self.temp_db.take();
         let interrupt_signal = self.interrupt_signal.clone();
         executor.spawn(async move {
             let handles = handles_fut.await;
@@ -145,7 +155,7 @@ where B: BlockchainBackend + 'static
                 state_event_publisher,
             );
 
-            node.run().await;
+            node.run(temp_db).await;
             info!(target: LOG_TARGET, "Base Node State Machine Service has shut down");
         });
 

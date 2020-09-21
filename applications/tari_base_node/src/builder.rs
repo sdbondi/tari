@@ -288,8 +288,9 @@ impl BaseNodeContext {
 /// `interrupt_signal` - The signal used to stop the application
 /// ## Returns
 /// Result containing the NodeContainer, String will contain the reason on error
-pub async fn configure_and_initialize_node(
+pub async fn configure_and_initialize_node<D: BlockchainBackend + 'static>(
     config: &GlobalConfig,
+    temp_db: Option<D>,
     node_identity: Arc<NodeIdentity>,
     wallet_node_identity: Arc<NodeIdentity>,
     interrupt_signal: ShutdownSignal,
@@ -304,6 +305,7 @@ pub async fn configure_and_initialize_node(
             let backend = MemoryDatabase::<HashDigest>::default();
             let ctx = build_node_context(
                 backend,
+                temp_db,
                 network,
                 node_identity,
                 wallet_node_identity,
@@ -318,6 +320,7 @@ pub async fn configure_and_initialize_node(
                 .map_err(|e| e.to_string())?;
             let ctx = build_node_context(
                 backend,
+                temp_db,
                 network,
                 node_identity,
                 wallet_node_identity,
@@ -342,8 +345,9 @@ pub async fn configure_and_initialize_node(
 /// `interrupt_signal` - The signal used to stop the application
 /// ## Returns
 /// Result containing the BaseNodeContext, String will contain the reason on error
-async fn build_node_context<B>(
+async fn build_node_context<B, D>(
     backend: B,
+    temp_backend: Option<D>,
     network: NetworkType,
     base_node_identity: Arc<NodeIdentity>,
     wallet_node_identity: Arc<NodeIdentity>,
@@ -352,6 +356,7 @@ async fn build_node_context<B>(
 ) -> Result<BaseNodeContext, String>
 where
     B: BlockchainBackend + 'static,
+    D: BlockchainBackend + 'static,
 {
     //---------------------------------- Blockchain --------------------------------------------//
 
@@ -398,6 +403,7 @@ where
         &base_node_comms,
         &base_node_dht,
         db.clone(),
+        temp_backend,
         base_node_subscriptions.clone(),
         mempool,
         rules.clone(),
@@ -761,10 +767,11 @@ async fn setup_wallet_comms(
 ///
 /// ## Returns
 /// A hashmap of handles wrapped in an atomic reference counter
-async fn register_base_node_services<B>(
+async fn register_base_node_services<B, D>(
     comms: &CommsNode,
     dht: &Dht,
     db: BlockchainDatabase<B>,
+    temp_db: Option<D>,
     subscription_factory: Arc<SubscriptionFactory>,
     mempool: Mempool<B>,
     consensus_manager: ConsensusManager,
@@ -774,6 +781,7 @@ async fn register_base_node_services<B>(
 ) -> Arc<ServiceHandles>
 where
     B: BlockchainBackend + 'static,
+    D: BlockchainBackend + 'static,
 {
     let node_config = BaseNodeServiceConfig::default(); // TODO - make this configurable
     let mempool_config = MempoolServiceConfig::default(); // TODO - make this configurable
@@ -810,6 +818,7 @@ where
             comms.peer_manager(),
             comms.connectivity(),
             interrupt_signal,
+            temp_db,
         ))
         .finish()
         .await

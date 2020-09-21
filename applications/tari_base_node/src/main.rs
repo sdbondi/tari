@@ -105,12 +105,14 @@ use tari_app_utilities::{
     identity_management::setup_node_identity,
     utilities::{setup_runtime, ExitCodes},
 };
-use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, GlobalConfig};
+use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, DatabaseType, GlobalConfig};
 use tari_comms::peer_manager::PeerFeatures;
+use tari_core::chain_storage::{create_lmdb_database, create_recovery_lmdb_database, remove_lmdb_database};
 use tari_shutdown::Shutdown;
 use tonic::transport::Server;
-
 pub const LOG_TARGET: &str = "base_node::app";
+use std::path::Path;
+use tari_mmr::MmrCacheConfig;
 
 /// Application entry point
 fn main() {
@@ -135,7 +137,7 @@ fn main_inner() -> Result<(), ExitCodes> {
     bootstrap.initialize_logging()?;
 
     // Populate the configuration struct
-    let node_config = GlobalConfig::convert_from(cfg).map_err(|err| {
+    let mut node_config = GlobalConfig::convert_from(cfg).map_err(|err| {
         error!(target: LOG_TARGET, "The configuration file has an error. {}", err);
         ExitCodes::ConfigError
     })?;
@@ -174,6 +176,36 @@ fn main_inner() -> Result<(), ExitCodes> {
         return Ok(());
     }
 
+    // create recovery db
+    let temp_db = if bootstrap.rebuild_db {
+        info!(
+            target: LOG_TARGET,
+            "Node is in recovery mode, it will try to rebuild the db"
+        );
+        match &node_config.db_type {
+            DatabaseType::LMDB(p) => {
+                let _backend = create_recovery_lmdb_database(&p).map_err(|err| {
+                    error!(target: LOG_TARGET, "{}", err);
+                    ExitCodes::UnknownError
+                })?;
+                let new_path = Path::new(p).join("temp_recovery");
+                Some(
+                    create_lmdb_database(&new_path, node_config.db_config.clone(), MmrCacheConfig::default()).map_err(
+                        |e| {
+                            error!(target: LOG_TARGET, "Error opening recovery db: {}", e);
+                            ExitCodes::UnknownError
+                        },
+                    )?,
+                )
+            },
+            _ => {
+                error!(target: LOG_TARGET, "Recovery mode is only available for LMDB");
+                return Ok(());
+            },
+        }
+    } else {
+        None
+    };
     if bootstrap.init {
         info!(target: LOG_TARGET, "Default configuration created. Done.");
         return Ok(());
@@ -184,6 +216,7 @@ fn main_inner() -> Result<(), ExitCodes> {
     let ctx = rt
         .block_on(builder::configure_and_initialize_node(
             &node_config,
+            temp_db,
             node_identity,
             wallet_identity,
             shutdown.to_signal(),
@@ -213,12 +246,34 @@ fn main_inner() -> Result<(), ExitCodes> {
         "Node has been successfully configured and initialized. Starting CLI loop."
     );
 
-    cli_loop(parser, shutdown);
+    if !bootstrap.rebuild_db {
+        cli_loop(parser, shutdown);
+    }
 
     match rt.block_on(base_node_handle) {
         Ok(_) => info!(target: LOG_TARGET, "Node shutdown successfully."),
         Err(e) => error!(target: LOG_TARGET, "Node has crashed: {}", e),
     }
+    // clean recovery db
+    if bootstrap.rebuild_db {
+        info!(
+            target: LOG_TARGET,
+            "Node has completed recovery mode, it will try to cleanup the db"
+        );
+        match &node_config.db_type {
+            DatabaseType::LMDB(p) => {
+                let new_path = Path::new(p).join("temp_recovery");
+                remove_lmdb_database(&new_path).map_err(|e| {
+                    error!(target: LOG_TARGET, "Error removing recovery db: {}", e);
+                    ExitCodes::UnknownError
+                })?;
+            },
+            _ => {
+                error!(target: LOG_TARGET, "Recovery mode is only available for LMDB");
+                return Ok(());
+            },
+        }
+    };
 
     println!("Goodbye!");
     Ok(())
