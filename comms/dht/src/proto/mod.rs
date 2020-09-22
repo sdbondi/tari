@@ -20,7 +20,6 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::proto::{dht::JoinMessage, envelope::Network};
 use rand::{rngs::OsRng, RngCore};
 use std::{convert::TryInto, fmt};
 use tari_comms::{
@@ -31,41 +30,46 @@ use tari_comms::{
 };
 use tari_utilities::{hex::Hex, ByteArray};
 
-#[path = "tari.dht.envelope.rs"]
-pub mod envelope;
+pub mod envelope {
+    include!(concat!(env!("OUT_DIR"), "/tari.dht.envelope.rs"));
+}
 
-#[path = "tari.dht.rs"]
-pub mod dht;
+pub mod dht {
+    include!(concat!(env!("OUT_DIR"), "/tari.dht.rs"));
+}
 
-#[path = "tari.dht.rpc.rs"]
-pub mod rpc;
+pub mod rpc {
+    include!(concat!(env!("OUT_DIR"), "/tari.dht.rpc.rs"));
+}
 
-#[path = "tari.dht.store_forward.rs"]
-pub mod store_forward;
+pub mod store_forward {
+    include!(concat!(env!("OUT_DIR"), "/tari.dht.store_forward.rs"));
+}
 
-#[path = "tari.dht.message_header.rs"]
-pub mod message_header;
+pub mod message_header {
+    include!(concat!(env!("OUT_DIR"), "/tari.dht.message_header.rs"));
+}
 
 //---------------------------------- Network impl --------------------------------------------//
 
 impl envelope::Network {
     pub fn is_mainnet(self) -> bool {
         match self {
-            Network::MainNet => true,
+            Self::MainNet => true,
             _ => false,
         }
     }
 
     pub fn is_testnet(self) -> bool {
         match self {
-            Network::TestNet => true,
+            Self::TestNet => true,
             _ => false,
         }
     }
 
     pub fn is_localtest(self) -> bool {
         match self {
-            Network::LocalTest => true,
+            Self::LocalTest => true,
             _ => false,
         }
     }
@@ -73,7 +77,7 @@ impl envelope::Network {
 
 //---------------------------------- JoinMessage --------------------------------------------//
 
-impl<T: AsRef<NodeIdentity>> From<T> for JoinMessage {
+impl<T: AsRef<NodeIdentity>> From<T> for dht::JoinMessage {
     fn from(identity: T) -> Self {
         let node_identity = identity.as_ref();
         Self {
