@@ -537,14 +537,14 @@ pub fn create_lmdb_database<P: AsRef<Path>>(
 }
 
 pub fn create_recovery_lmdb_database<P: AsRef<Path>>(path: P) -> Result<(), ChainStorageError> {
-    let new_path = Path::new(path.as_ref()).join("temp_recovery");
-    let _ = std::fs::create_dir_all(&new_path);
+    let new_path = path.as_ref().join("temp_recovery");
+    let _ = fs::create_dir_all(&new_path);
 
-    let data_file = Path::new(path.as_ref()).join("data.mdb");
-    let lock_file = Path::new(path.as_ref()).join("lock.mdb");
+    let data_file = path.as_ref().join("data.mdb");
+    let lock_file = path.as_ref().join("lock.mdb");
 
-    let new_data_file = Path::new(&new_path).join("data.mdb");
-    let new_lock_file = Path::new(&new_path).join("lock.mdb");
+    let new_data_file = new_path.join("data.mdb");
+    let new_lock_file = new_path.join("lock.mdb");
 
     fs::rename(data_file, new_data_file)
         .map_err(|err| ChainStorageError::CriticalError(format!("Could not copy LMDB store:{}", err)))?;

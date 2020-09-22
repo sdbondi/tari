@@ -47,10 +47,8 @@ use tokio::runtime;
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::initializer";
 
-pub struct BaseNodeStateMachineInitializer<B, D>
-where
-    B: BlockchainBackend + 'static,
-    D: BlockchainBackend + 'static,
+pub struct BaseNodeStateMachineInitializer<B>
+where B: BlockchainBackend + 'static
 {
     db: BlockchainDatabase<B>,
     rules: ConsensusManager,
@@ -59,13 +57,10 @@ where
     peer_manager: Arc<PeerManager>,
     connectivity_requester: ConnectivityRequester,
     interrupt_signal: ShutdownSignal,
-    temp_db: Option<D>,
 }
 
-impl<B, D> BaseNodeStateMachineInitializer<B, D>
-where
-    B: BlockchainBackend + 'static,
-    D: BlockchainBackend + 'static,
+impl<B> BaseNodeStateMachineInitializer<B>
+where B: BlockchainBackend + 'static
 {
     pub fn new(
         db: BlockchainDatabase<B>,
@@ -75,7 +70,6 @@ where
         peer_manager: Arc<PeerManager>,
         connectivity_requester: ConnectivityRequester,
         interrupt_signal: ShutdownSignal,
-        temp_db: Option<D>,
     ) -> Self
     {
         Self {
@@ -86,15 +80,12 @@ where
             peer_manager,
             connectivity_requester,
             interrupt_signal,
-            temp_db,
         }
     }
 }
 
-impl<B, D> ServiceInitializer for BaseNodeStateMachineInitializer<B, D>
-where
-    B: BlockchainBackend + 'static,
-    D: BlockchainBackend + 'static,
+impl<B> ServiceInitializer for BaseNodeStateMachineInitializer<B>
+where B: BlockchainBackend + 'static
 {
     type Future = impl Future<Output = Result<(), ServiceInitializationError>>;
 
@@ -118,7 +109,6 @@ where
         let connectivity_requester = self.connectivity_requester.clone();
         let rules = self.rules.clone();
         let db = self.db.clone();
-        let temp_db = self.temp_db.take();
         let interrupt_signal = self.interrupt_signal.clone();
         executor.spawn(async move {
             let handles = handles_fut.await;
@@ -155,7 +145,7 @@ where
                 state_event_publisher,
             );
 
-            node.run(temp_db).await;
+            node.run().await;
             info!(target: LOG_TARGET, "Base Node State Machine Service has shut down");
         });
 

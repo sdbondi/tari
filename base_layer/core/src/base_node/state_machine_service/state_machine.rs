@@ -187,15 +187,10 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
     }
 
     /// Start the base node runtime.
-    pub async fn run<D: BlockchainBackend + 'static>(mut self, temp_db: Option<D>) {
+    pub async fn run(mut self) {
         use crate::base_node::state_machine_service::states::BaseNodeState::*;
         let mut state = Starting(states::Starting);
-        if temp_db.is_some() {
-            let _ = self
-                .recover_db(temp_db.unwrap())
-                .map_err(|e| error!(target: LOG_TARGET, "The recovery stopped here: {:?}", e));
-            return;
-        }
+
         loop {
             if let Shutdown(reason) = &state {
                 debug!(
@@ -221,39 +216,6 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
             state = self.transition(state, next_event);
         }
         let _ = self.service_shutdown.trigger();
-    }
-
-    // Function to handle the recovery attempt of the db
-    fn recover_db<D: BlockchainBackend + 'static>(self, temp_db: D) -> Result<(), String> {
-        // We dont care about the values, here, so we just use mock validators, and a mainnet CM.
-        let rules = ConsensusManagerBuilder::new(NetworkType::LocalNet).build();
-        let validators = Validators::new(
-            MockValidator::new(true),
-            MockValidator::new(true),
-            MockValidator::new(true),
-        );
-        let temp_db_backend = BlockchainDatabase::new(temp_db, &rules, validators, BlockchainDatabaseConfig::default())
-            .map_err(|e| e.to_string())?;
-        let max_height = temp_db_backend
-            .get_chain_metadata()
-            .map_err(|e| e.to_string())?
-            .height_of_longest_chain
-            .unwrap_or(0);
-        info!(target: LOG_TARGET, "Starting recovery",);
-        // we start at height 1
-        let mut counter = 1;
-        loop {
-            trace!(target: LOG_TARGET, "Asking for block with height: {}", counter);
-            let block = temp_db_backend.fetch_block(counter).map_err(|e| e.to_string())?.block;
-            trace!(target: LOG_TARGET, "Adding block: {}", block);
-            self.db.add_block(block).map_err(|e| e.to_string())?;
-            counter += 1;
-            if counter > max_height {
-                info!(target: LOG_TARGET, "Done with recovery",);
-                break;
-            }
-        }
-        Ok(())
     }
 
     /// Processes and returns the next `StateEvent`

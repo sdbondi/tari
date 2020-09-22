@@ -89,6 +89,7 @@ use tari_core::{
     validation::{
         accum_difficulty_validators::AccumDifficultyValidator,
         block_validators::{FullConsensusValidator, StatelessBlockValidator},
+        mocks::MockValidator,
         transaction_validators::{FullTxValidator, TxInputAndMaturityValidator},
     },
 };
@@ -398,12 +399,53 @@ where
         .await
         .map_err(|err| err.to_string())?;
 
+    if let Some(tmp) = temp_backend {
+        // Function to handle the recovery attempt of the db
+        fn recover_db<B: BlockchainBackend + 'static, D: BlockchainBackend + 'static>(
+            db: BlockchainDatabase<B>,
+            temp_db: D,
+        ) -> Result<(), String>
+        {
+            // We dont care about the values, here, so we just use mock validators, and a mainnet CM.
+            let rules = ConsensusManagerBuilder::new(NetworkType::LocalNet).build();
+            let validators = Validators::new(
+                MockValidator::new(true),
+                MockValidator::new(true),
+                MockValidator::new(true),
+            );
+            let temp_db_backend =
+                BlockchainDatabase::new(temp_db, &rules, validators, BlockchainDatabaseConfig::default())
+                    .map_err(|e| e.to_string())?;
+            let max_height = temp_db_backend
+                .get_chain_metadata()
+                .map_err(|e| e.to_string())?
+                .height_of_longest_chain
+                .unwrap_or(0);
+            info!(target: LOG_TARGET, "Starting recovery",);
+            // we start at height 1
+            let mut counter = 1;
+            loop {
+                trace!(target: LOG_TARGET, "Asking for block with height: {}", counter);
+                let block = temp_db_backend.fetch_block(counter).map_err(|e| e.to_string())?.block;
+                trace!(target: LOG_TARGET, "Adding block: {}", block);
+                db.add_block(block).map_err(|e| e.to_string())?;
+                counter += 1;
+                if counter > max_height {
+                    info!(target: LOG_TARGET, "Done with recovery",);
+                    break;
+                }
+            }
+            Ok(())
+        }
+
+        recover_db(db.clone(), tmp).unwrap();
+    }
+
     debug!(target: LOG_TARGET, "Registering base node services");
     let base_node_handles = register_base_node_services(
         &base_node_comms,
         &base_node_dht,
         db.clone(),
-        temp_backend,
         base_node_subscriptions.clone(),
         mempool,
         rules.clone(),
@@ -767,11 +809,10 @@ async fn setup_wallet_comms(
 ///
 /// ## Returns
 /// A hashmap of handles wrapped in an atomic reference counter
-async fn register_base_node_services<B, D>(
+async fn register_base_node_services<B>(
     comms: &CommsNode,
     dht: &Dht,
     db: BlockchainDatabase<B>,
-    temp_db: Option<D>,
     subscription_factory: Arc<SubscriptionFactory>,
     mempool: Mempool<B>,
     consensus_manager: ConsensusManager,
@@ -781,7 +822,6 @@ async fn register_base_node_services<B, D>(
 ) -> Arc<ServiceHandles>
 where
     B: BlockchainBackend + 'static,
-    D: BlockchainBackend + 'static,
 {
     let node_config = BaseNodeServiceConfig::default(); // TODO - make this configurable
     let mempool_config = MempoolServiceConfig::default(); // TODO - make this configurable
@@ -818,7 +858,6 @@ where
             comms.peer_manager(),
             comms.connectivity(),
             interrupt_signal,
-            temp_db,
         ))
         .finish()
         .await
