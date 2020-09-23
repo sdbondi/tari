@@ -152,8 +152,8 @@ async fn run() -> Result<(), Error> {
     tokio::signal::ctrl_c().await.expect("ctrl-c failed");
 
     println!("Tor example is shutting down...");
-    comms_node1.shutdown().await;
-    comms_node2.shutdown().await;
+    comms_node1.wait_until_shutdown().await;
+    comms_node2.wait_until_shutdown().await;
 
     handle1.await??;
     handle2.await??;

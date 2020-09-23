@@ -38,8 +38,8 @@ use tari_shutdown::ShutdownSignal;
 /// `event_stream` - Message stream of the publish-subscribe message system
 /// `consensus_manager`- The rules for the blockchain
 /// `num_threads` - The number of threads on which to run the miner
-pub fn build_miner<H: AsRef<ServiceHandles>>(
-    handles: H,
+pub fn build_miner(
+    handles: &ServiceHandles,
     kill_signal: ShutdownSignal,
     node_event_stream: Subscriber<StateEvent>,
     mempool_event_stream: Subscriber<MempoolStateEvent>,
@@ -47,8 +47,7 @@ pub fn build_miner<H: AsRef<ServiceHandles>>(
     num_threads: usize,
 ) -> Miner
 {
-    let handles = handles.as_ref();
-    let node_local_interface = handles.get_handle::<LocalNodeCommsInterface>().unwrap();
+    let node_local_interface = handles.expect_handle::<LocalNodeCommsInterface>();
     let mut miner = Miner::new(kill_signal, consensus_manager, &node_local_interface, num_threads);
     miner.subscribe_to_node_state_events(node_event_stream);
     miner.subscribe_to_mempool_state_events(mempool_event_stream);

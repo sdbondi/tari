@@ -24,15 +24,13 @@ use crate::handles::ServiceHandlesFuture;
 use futures::{Future, FutureExt};
 use std::pin::Pin;
 use tari_shutdown::ShutdownSignal;
-use thiserror::Error;
 use tokio::runtime;
 
-#[derive(Debug, Error)]
-pub enum ServiceInitializationError {
-    #[error("General error for failed initialization: `{0}`")]
-    Failed(String),
-    // Specialized errors should be added and used if appropriate.
-}
+pub type ServiceInitializationError = anyhow::Error;
+// #[error("General error for failed initialization: `{0}`")]
+// Failed(String),
+// Specialized errors should be added and used if appropriate.
+// }
 
 /// Implementors of this trait will initialize a service
 /// The `StackBuilder` builds impls of this trait.

@@ -50,7 +50,7 @@ use tari_comms::{
     types::CommsPublicKey,
     PeerManager,
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tokio::{task, time};
 
 const LOG_TARGET: &str = "comms::dht::storeforward::actor";
@@ -156,7 +156,7 @@ pub struct StoreAndForwardService {
     connection_events: Fuse<ConnectivityEventRx>,
     outbound_requester: OutboundMessageRequester,
     request_rx: Fuse<mpsc::Receiver<StoreAndForwardRequest>>,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
     num_received_saf_responses: Option<usize>,
     num_online_peers: Option<usize>,
     saf_response_signal_rx: Fuse<mpsc::Receiver<()>>,
@@ -173,9 +173,9 @@ impl StoreAndForwardService {
         connectivity: ConnectivityRequester,
         outbound_requester: OutboundMessageRequester,
         request_rx: mpsc::Receiver<StoreAndForwardRequest>,
-        shutdown_signal: ShutdownSignal,
         saf_response_signal_rx: mpsc::Receiver<()>,
         event_publisher: DhtEventSender,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {
@@ -184,7 +184,7 @@ impl StoreAndForwardService {
             peer_manager,
             dht_requester,
             request_rx: request_rx.fuse(),
-            connection_events: connectivity.subscribe_event_stream().fuse(),
+            connection_events: connectivity.get_event_subscription().fuse(),
             outbound_requester,
             shutdown_signal: Some(shutdown_signal),
             num_received_saf_responses: Some(0),

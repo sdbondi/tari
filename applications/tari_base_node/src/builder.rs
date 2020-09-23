@@ -20,11 +20,12 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::miner;
+use crate::{bootstrap::BaseNodeBootstrapper, miner};
+use anyhow::anyhow;
 use futures::future;
 use log::*;
 use std::{
-    path::Path,
+    fs,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -32,40 +33,21 @@ use std::{
     time::Duration,
 };
 use tari_app_utilities::{
-    identity_management::{load_from_json, save_as_json},
-    utilities::{
-        create_peer_db_folder,
-        create_wallet_folder,
-        into_socks_authentication,
-        parse_peer_seeds,
-        setup_wallet_transport_type,
-    },
+    identity_management,
+    identity_management::save_as_json,
+    utilities,
+    utilities::{create_wallet_folder, parse_peer_seeds, setup_wallet_transport_type},
 };
-use tari_common::{CommsTransport, DatabaseType, GlobalConfig, Network, TorControlAuthentication};
+use tari_common::{DatabaseType, GlobalConfig, Network};
 use tari_comms::{
     peer_manager::{NodeIdentity, Peer},
-    protocol::ProtocolExtensions,
-    socks,
-    tor,
-    tor::TorIdentity,
-    transports::SocksConfig,
-    utils::multiaddr::multiaddr_to_socketaddr,
     CommsNode,
     ConnectionManagerEvent,
     PeerManager,
 };
 use tari_comms_dht::{DbConnectionUrl, Dht, DhtConfig};
 use tari_core::{
-    base_node::{
-        chain_metadata_service::ChainMetadataServiceInitializer,
-        service::{BaseNodeServiceConfig, BaseNodeServiceInitializer},
-        state_machine_service::{
-            initializer::BaseNodeStateMachineInitializer,
-            states::{BlockSyncStrategy, StatusInfo},
-        },
-        LocalNodeCommsInterface,
-        StateMachineHandle,
-    },
+    base_node::{state_machine_service::states::StatusInfo, LocalNodeCommsInterface, StateMachineHandle},
     chain_storage::{
         create_lmdb_database,
         BlockchainBackend,
@@ -74,16 +56,8 @@ use tari_core::{
         MemoryDatabase,
         Validators,
     },
-    consensus::{ConsensusManager, ConsensusManagerBuilder, Network as NetworkType},
-    mempool::{
-        service::LocalMempoolService,
-        Mempool,
-        MempoolConfig,
-        MempoolServiceConfig,
-        MempoolServiceInitializer,
-        MempoolSyncProtocolExtension,
-        MempoolValidators,
-    },
+    consensus::{ConsensusManagerBuilder, Network as NetworkType},
+    mempool::{service::LocalMempoolService, Mempool, MempoolConfig, MempoolValidators},
     mining::{Miner, MinerInstruction},
     transactions::types::{CryptoFactories, HashDigest},
     validation::{
@@ -100,7 +74,6 @@ use tari_p2p::{
         comms_outbound::CommsOutboundServiceInitializer,
         liveness::{LivenessConfig, LivenessInitializer},
     },
-    transport::{TorConfig, TransportType},
 };
 use tari_service_framework::{handles::ServiceHandles, StackBuilder};
 use tari_shutdown::ShutdownSignal;
@@ -141,8 +114,8 @@ pub struct BaseNodeContext {
     base_node_comms: CommsNode,
     base_node_dht: Dht,
     wallet_comms: CommsNode,
-    base_node_handles: Arc<ServiceHandles>,
-    wallet_handles: Arc<ServiceHandles>,
+    base_node_handles: ServiceHandles,
+    wallet_handles: ServiceHandles,
     miner: Option<Miner>,
     miner_enabled: Arc<AtomicBool>,
     mining_status: Arc<AtomicBool>,
@@ -153,13 +126,13 @@ pub struct BaseNodeContext {
 impl BaseNodeContext {
     /// Starts the node container. This entails starting the miner and wallet (if `mining_enabled` is true) and then
     /// starting the base node state machine. This call consumes the NodeContainer instance.
-    pub async fn run(mut self, rt: runtime::Handle) {
+    pub async fn run(mut self) {
         info!(target: LOG_TARGET, "Tari base node has STARTED");
         let mut wallet_output_handle = self.output_manager();
         // Start wallet & miner
         let mut miner = self.miner.take().expect("Miner was not constructed");
         let mut rx = miner.get_utxo_receiver_channel();
-        rt.spawn(async move {
+        task::spawn(async move {
             info!(target: LOG_TARGET, " ⚒️ Mining wallet ready to receive coins.");
             while let Some(utxo) = rx.next().await {
                 match wallet_output_handle.add_output(utxo).await {
@@ -170,7 +143,7 @@ impl BaseNodeContext {
                         );
                         // TODO Remove this when the wallet monitors the UTXO's more intelligently
                         let mut oms_handle_clone = wallet_output_handle.clone();
-                        tokio::spawn(async move {
+                        task::spawn(async move {
                             delay_for(Duration::from_secs(240)).await;
                             let _ = oms_handle_clone.validate_utxos(UtxoValidationRetry::UntilSuccess).await;
                         });
@@ -179,7 +152,7 @@ impl BaseNodeContext {
                 }
             }
         });
-        rt.spawn(async move {
+        task::spawn(async move {
             info!(target: LOG_TARGET, "⚒️ Starting miner");
             miner.mine().await;
             info!(target: LOG_TARGET, "⚒️ Miner has shutdown");
@@ -188,7 +161,11 @@ impl BaseNodeContext {
             warn!(target: LOG_TARGET, "Error shutting down Base Node State Machine: {}", e);
         }
         info!(target: LOG_TARGET, "Initiating communications stack shutdown");
-        future::join(self.base_node_comms.shutdown(), self.wallet_comms.shutdown()).await;
+        future::join(
+            self.base_node_comms.wait_until_shutdown(),
+            self.wallet_comms.wait_until_shutdown(),
+        )
+        .await;
     }
 
     /// Returns a handle to the Output Manager
@@ -293,7 +270,7 @@ pub async fn configure_and_initialize_node(
     node_identity: Arc<NodeIdentity>,
     wallet_node_identity: Arc<NodeIdentity>,
     interrupt_signal: ShutdownSignal,
-) -> Result<BaseNodeContext, String>
+) -> Result<BaseNodeContext, anyhow::Error>
 {
     let network = match &config.network {
         Network::MainNet => NetworkType::MainNet,
@@ -314,8 +291,7 @@ pub async fn configure_and_initialize_node(
             ctx
         },
         DatabaseType::LMDB(p) => {
-            let backend = create_lmdb_database(&p, config.db_config.clone(), MmrCacheConfig::default())
-                .map_err(|e| e.to_string())?;
+            let backend = create_lmdb_database(&p, config.db_config.clone(), MmrCacheConfig::default())?;
             let ctx = build_node_context(
                 backend,
                 network,
@@ -349,7 +325,7 @@ async fn build_node_context<B>(
     wallet_node_identity: Arc<NodeIdentity>,
     config: &GlobalConfig,
     interrupt_signal: ShutdownSignal,
-) -> Result<BaseNodeContext, String>
+) -> Result<BaseNodeContext, anyhow::Error>
 where
     B: BlockchainBackend + 'static,
 {
@@ -367,7 +343,7 @@ where
         pruning_horizon: config.pruning_horizon,
         pruning_interval: config.pruned_mode_cleanup_interval,
     };
-    let db = BlockchainDatabase::new(backend, &rules, validators, db_config).map_err(|e| e.to_string())?;
+    let db = BlockchainDatabase::new(backend, &rules, validators, db_config)?;
     let mempool_validator =
         MempoolValidators::new(FullTxValidator::new(factories.clone()), TxInputAndMaturityValidator {});
     let mempool = Mempool::new(db.clone(), MempoolConfig::default(), mempool_validator);
@@ -376,47 +352,60 @@ where
     //---------------------------------- Base Node  --------------------------------------------//
     debug!(target: LOG_TARGET, "Creating base node state machine.");
 
-    let buf_size = std::cmp::max(BASE_NODE_BUFFER_MIN_SIZE, config.buffer_size_base_node);
-    let (publisher, base_node_subscriptions) =
-        pubsub_connector(handle.clone(), buf_size, config.buffer_rate_limit_base_node);
-    let base_node_subscriptions = Arc::new(base_node_subscriptions);
-    create_peer_db_folder(&config.peer_db_path)?;
-
-    let mut protocols = ProtocolExtensions::new();
-    protocols.add(MempoolSyncProtocolExtension::new(Default::default(), mempool.clone()));
-
-    let (base_node_comms, base_node_dht) =
-        setup_base_node_comms(base_node_identity, config, publisher, protocols).await?;
-    base_node_comms
-        .peer_manager()
-        .add_peer(wallet_node_identity.to_peer())
-        .await
-        .map_err(|err| err.to_string())?;
-
-    debug!(target: LOG_TARGET, "Registering base node services");
-    let base_node_handles = register_base_node_services(
-        &base_node_comms,
-        &base_node_dht,
-        db.clone(),
-        base_node_subscriptions.clone(),
+    let seed_peers = utilities::parse_peer_seeds(&config.peer_seeds);
+    let base_node_handles = BaseNodeBootstrapper {
+        config,
+        node_identity: base_node_identity,
+        db,
         mempool,
-        rules.clone(),
-        factories.clone(),
-        config
-            .block_sync_strategy
-            .parse()
-            .expect("Problem reading block sync strategy from config"),
-        interrupt_signal.clone(),
-    )
-    .await;
-    debug!(target: LOG_TARGET, "Base node service registration complete.");
+        rules: rules.clone(),
+        factories: factories.clone(),
+        seed_peers,
+        interrupt_signal: interrupt_signal.clone(),
+    }
+    .bootstrap()
+    .await?;
+
+    let base_node_comms = base_node_handles.expect_handle::<CommsNode>();
+    let base_node_dht = base_node_handles.expect_handle::<Dht>();
+
+    let wallet_peer = wallet_node_identity.to_peer();
+    base_node_comms.peer_manager().add_peer(wallet_peer).await?;
+
+    // Save final node identity after comms has initialized. This is required because the public_address can be changed
+    // by comms during initialization when using tor.
+    identity_management::save_as_json(&config.identity_file, &*base_node_comms.node_identity())
+        .map_err(|e| anyhow!("Failed to save node identity: {:?}", e))?;
+    if let Some(hs) = base_node_comms.hidden_service() {
+        identity_management::save_as_json(&config.tor_identity_file, hs.tor_identity())
+            .map_err(|e| anyhow!("Failed to save tor identity: {:?}", e))?;
+    }
+
+    // let (base_node_comms, base_node_dht) = setup_base_node_comms(base_node_identity, config, publisher,
+    // hooks).await?;
+    //
+    // debug!(target: LOG_TARGET, "Registering base node services");
+    // let base_node_handles = register_base_node_services(
+    //     db.clone(),
+    //     base_node_subscriptions.clone(),
+    //     mempool,
+    //     rules.clone(),
+    //     factories.clone(),
+    //     config
+    //         .block_sync_strategy
+    //         .parse()
+    //         .expect("Problem reading block sync strategy from config"),
+    //     interrupt_signal.clone(),
+    // )
+    // .await;
+    // debug!(target: LOG_TARGET, "Base node service registration complete.");
 
     //---------------------------------- Wallet --------------------------------------------//
     let buf_size = std::cmp::max(BASE_NODE_WALLET_BUFFER_MIN_SIZE, config.buffer_size_base_node_wallet);
     let (publisher, wallet_subscriptions) =
         pubsub_connector(handle.clone(), buf_size, config.buffer_rate_limit_base_node_wallet);
     let wallet_subscriptions = Arc::new(wallet_subscriptions);
-    create_peer_db_folder(&config.wallet_peer_db_path)?;
+    fs::create_dir_all(&config.wallet_peer_db_path)?;
     let (wallet_comms, wallet_dht) = setup_wallet_comms(
         wallet_node_identity,
         config,
@@ -427,8 +416,7 @@ where
     wallet_comms
         .connectivity()
         .add_managed_peers(vec![base_node_comms.node_identity().node_id().clone()])
-        .await
-        .map_err(|err| err.to_string())?;
+        .await?;
 
     task::spawn(sync_peers(
         base_node_comms.subscribe_connection_manager_events(),
@@ -436,14 +424,13 @@ where
         wallet_comms.peer_manager(),
     ));
 
-    create_wallet_folder(
+    fs::create_dir_all(
         &config
             .wallet_db_file
             .parent()
             .expect("wallet_db_file cannot be set to a root directory"),
     )?;
-    let wallet_conn = run_migration_and_create_sqlite_connection(&config.wallet_db_file)
-        .map_err(|e| format!("Could not create wallet: {:?}", e))?;
+    let wallet_conn = run_migration_and_create_sqlite_connection(&config.wallet_db_file)?;
 
     let network = match &config.network {
         Network::MainNet => NetworkType::MainNet,
@@ -520,6 +507,7 @@ where
             }
         }
     });
+
     let mut oms_handle = wallet_handles
         .get_handle::<OutputManagerHandle>()
         .expect("OutputManagerService is not registered");
@@ -580,13 +568,11 @@ where
 }
 
 /// Asynchronously syncs peers with base node, adding peers if the peer is not already known
+///
 /// ## Parameters
 /// `events_rx` - The event stream
 /// `base_node_peer_manager` - The peer manager for the base node wrapped in an atomic reference counter
 /// `wallet_peer_manager` - The peer manager for the base node's wallet wrapped in an atomic reference counter
-///
-/// ## Returns
-/// Nothing is returned
 async fn sync_peers(
     mut events_rx: broadcast::Receiver<Arc<ConnectionManagerEvent>>,
     base_node_peer_manager: Arc<PeerManager>,
@@ -612,134 +598,62 @@ async fn sync_peers(
     }
 }
 
-/// Creates a transport type from the given configuration
-/// /// ## Paramters
-/// `config` - The reference to the configuration in which to set up the comms stack, see [GlobalConfig]
-///
-/// ##Returns
-/// TransportType based on the configuration
-fn setup_transport_type(config: &GlobalConfig) -> TransportType {
-    debug!(target: LOG_TARGET, "Transport is set to '{:?}'", config.comms_transport);
-
-    match config.comms_transport.clone() {
-        CommsTransport::Tcp {
-            listener_address,
-            tor_socks_address,
-            tor_socks_auth,
-        } => TransportType::Tcp {
-            listener_address,
-            tor_socks_config: tor_socks_address.map(|proxy_address| SocksConfig {
-                proxy_address,
-                authentication: tor_socks_auth.map(into_socks_authentication).unwrap_or_default(),
-            }),
-        },
-        CommsTransport::TorHiddenService {
-            control_server_address,
-            socks_address_override,
-            forward_address,
-            auth,
-            onion_port,
-        } => {
-            let tor_identity_path = Path::new(&config.tor_identity_file);
-            let identity = if tor_identity_path.exists() {
-                // If this fails, we can just use another address
-                load_from_json::<_, TorIdentity>(&tor_identity_path).ok()
-            } else {
-                None
-            };
-            info!(
-                target: LOG_TARGET,
-                "Tor identity at path '{}' {:?}",
-                tor_identity_path.to_string_lossy(),
-                identity
-                    .as_ref()
-                    .map(|ident| format!("loaded for address '{}.onion'", ident.service_id))
-                    .or_else(|| Some("not found".to_string()))
-                    .unwrap()
-            );
-
-            let forward_addr = multiaddr_to_socketaddr(&forward_address).expect("Invalid tor forward address");
-            TransportType::Tor(TorConfig {
-                control_server_addr: control_server_address,
-                control_server_auth: {
-                    match auth {
-                        TorControlAuthentication::None => tor::Authentication::None,
-                        TorControlAuthentication::Password(password) => tor::Authentication::HashedPassword(password),
-                    }
-                },
-                identity: identity.map(Box::new),
-                port_mapping: (onion_port, forward_addr).into(),
-                // TODO: make configurable
-                socks_address_override,
-                socks_auth: socks::Authentication::None,
-            })
-        },
-        CommsTransport::Socks5 {
-            proxy_address,
-            listener_address,
-            auth,
-        } => TransportType::Socks {
-            socks_config: SocksConfig {
-                proxy_address,
-                authentication: into_socks_authentication(auth),
-            },
-            listener_address,
-        },
-    }
-}
-
-/// Asynchronously initializes comms for the base node
-/// ## Parameters
-/// `node_identity` - The node identity to initialize the comms stack with, see [NodeIdentity]
-/// `config` - The reference to the configuration in which to set up the comms stack, see [GlobalConfig]
-/// `publisher` - The publisher for the publish-subscribe messaging system
-/// ## Returns
-/// A Result containing the commsnode and dht on success, string will indicate the reason on error
-async fn setup_base_node_comms(
-    node_identity: Arc<NodeIdentity>,
-    config: &GlobalConfig,
-    publisher: PubsubDomainConnector,
-    protocols: ProtocolExtensions,
-) -> Result<(CommsNode, Dht), String>
-{
-    // Ensure that the node identity has the correct public address
-    node_identity.set_public_address(config.public_address.clone());
-    let comms_config = CommsConfig {
-        node_identity,
-        transport_type: setup_transport_type(&config),
-        datastore_path: config.peer_db_path.clone(),
-        peer_database_name: "peers".to_string(),
-        max_concurrent_inbound_tasks: 100,
-        outbound_buffer_size: 100,
-        // TODO - make this configurable
-        dht: DhtConfig {
-            database_url: DbConnectionUrl::File(config.data_dir.join("dht.db")),
-            auto_join: true,
-            ..Default::default()
-        },
-        // TODO: This should be false unless testing locally - make this configurable
-        allow_test_addresses: true,
-        listener_liveness_allowlist_cidrs: config.listener_liveness_allowlist_cidrs.clone(),
-        listener_liveness_max_sessions: config.listnener_liveness_max_sessions,
-        user_agent: format!("tari/basenode/{}", env!("CARGO_PKG_VERSION")),
-    };
-
-    let seed_peers = parse_peer_seeds(&config.peer_seeds);
-    let (comms, dht) = initialize_comms(comms_config, publisher, seed_peers, protocols)
-        .await
-        .map_err(|e| e.to_friendly_string())?;
-
-    // Save final node identity after comms has initialized. This is required because the public_address can be changed
-    // by comms during initialization when using tor.
-    save_as_json(&config.identity_file, &*comms.node_identity())
-        .map_err(|e| format!("Failed to save node identity: {:?}", e))?;
-    if let Some(hs) = comms.hidden_service() {
-        save_as_json(&config.tor_identity_file, hs.tor_identity())
-            .map_err(|e| format!("Failed to save tor identity: {:?}", e))?;
-    }
-
-    Ok((comms, dht))
-}
+// /// Asynchronously initializes comms for the base node
+// /// ## Parameters
+// /// `node_identity` - The node identity to initialize the comms stack with, see [NodeIdentity]
+// /// `config` - The reference to the configuration in which to set up the comms stack, see [GlobalConfig]
+// /// `publisher` - The publisher for the publish-subscribe messaging system
+// /// ## Returns
+// /// A Result containing the commsnode and dht on success, string will indicate the reason on error
+// async fn setup_base_node_comms(
+//     node_identity: Arc<NodeIdentity>,
+//     config: &GlobalConfig,
+//     publisher: PubsubDomainConnector,
+//     mut hooks: P2pInitializationHooks,
+// ) -> Result<(CommsNode, Dht), String>
+// {
+//     // Ensure that the node identity has the correct public address
+//     node_identity.set_public_address(config.public_address.clone());
+//     let comms_config = CommsConfig {
+//         node_identity,
+//         transport_type: setup_transport_type(&config),
+//         datastore_path: config.peer_db_path.clone(),
+//         peer_database_name: "peers".to_string(),
+//         max_concurrent_inbound_tasks: 100,
+//         outbound_buffer_size: 100,
+//         // TODO - make this configurable
+//         dht: DhtConfig {
+//             database_url: DbConnectionUrl::File(config.data_dir.join("dht.db")),
+//             auto_join: true,
+//             ..Default::default()
+//         },
+//         // TODO: This should be false unless testing locally - make this configurable
+//         allow_test_addresses: true,
+//         listener_liveness_allowlist_cidrs: config.listener_liveness_allowlist_cidrs.clone(),
+//         listener_liveness_max_sessions: config.listnener_liveness_max_sessions,
+//         user_agent: format!("tari/basenode/{}", env!("CARGO_PKG_VERSION")),
+//     };
+//
+//     let seed_peers = parse_peer_seeds(&config.peer_seeds);
+//     hooks.before_spawn_fn(move |mut context: BeforeSpawnContext| {
+//         context.add_peers(seed_peers);
+//         future::ready(Ok(context))
+//     });
+//     let (comms, dht) = initialize_comms(comms_config, publisher, hooks)
+//         .await
+//         .map_err(|e| e.to_friendly_string())?;
+//
+//     // Save final node identity after comms has initialized. This is required because the public_address can be
+// changed     // by comms during initialization when using tor.
+//     save_as_json(&config.identity_file, &*comms.node_identity())
+//         .map_err(|e| format!("Failed to save node identity: {:?}", e))?;
+//     if let Some(hs) = comms.hidden_service() {
+//         save_as_json(&config.tor_identity_file, hs.tor_identity())
+//             .map_err(|e| format!("Failed to save tor identity: {:?}", e))?;
+//     }
+//
+//     Ok((comms, dht))
+// }
 
 /// Asynchronously initializes comms for the base node's wallet
 /// ## Parameters
@@ -755,7 +669,7 @@ async fn setup_wallet_comms(
     config: &GlobalConfig,
     publisher: PubsubDomainConnector,
     base_node_peer: Peer,
-) -> Result<(CommsNode, Dht), String>
+) -> Result<(CommsNode, Dht), anyhow::Error>
 {
     let comms_config = CommsConfig {
         node_identity,
@@ -779,89 +693,89 @@ async fn setup_wallet_comms(
 
     let mut seed_peers = parse_peer_seeds(&config.peer_seeds);
     seed_peers.push(base_node_peer);
-    let (comms, dht) = initialize_comms(comms_config, publisher, seed_peers, Default::default())
-        .await
-        .map_err(|e| format!("Could not create comms layer: {:?}", e))?;
+    // let mut hooks = P2pInitializationHooks::new();
+    // hooks.before_spawn_fn(move |mut context: BeforeSpawnContext| {
+    //     context.add_peers(seed_peers);
+    //     future::ready(Ok(context))
+    // });
+    let (comms, dht) = initialize_comms(comms_config, publisher, seed_peers).await?;
 
     // Save final node identity after comms has initialized. This is required because the public_address can be changed
     // by comms during initialization when using tor.
     save_as_json(&config.wallet_identity_file, &*comms.node_identity())
-        .map_err(|e| format!("Failed to save node identity: {:?}", e))?;
+        .map_err(|e| anyhow!("Failed to save node identity: {:?}", e))?;
     if let Some(hs) = comms.hidden_service() {
         save_as_json(&config.wallet_tor_identity_file, hs.tor_identity())
-            .map_err(|e| format!("Failed to save tor identity: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to save tor identity: {:?}", e))?;
     }
 
     Ok((comms, dht))
 }
 
-/// Asynchronously registers services of the base node
-///
-/// ## Parameters
-/// `comms` - A reference to the comms node. This is the communications stack
-/// `db` - The interface to the blockchain database, for all transactions stored in a block
-/// `dht` - A reference to the peer discovery service
-/// `subscription_factory` - The publish-subscribe messaging system, wrapped in an atomic reference counter
-/// `mempool` - The mempool interface, for all transactions not yet included or recently included in a block
-/// `consensus_manager` - The consensus manager for the blockchain
-/// `factories` -  Cryptographic factory based on Pederson Commitments
-///
-/// ## Returns
-/// A hashmap of handles wrapped in an atomic reference counter
-async fn register_base_node_services<B>(
-    comms: &CommsNode,
-    dht: &Dht,
-    db: BlockchainDatabase<B>,
-    subscription_factory: Arc<SubscriptionFactory>,
-    mempool: Mempool<B>,
-    consensus_manager: ConsensusManager,
-    factories: CryptoFactories,
-    sync_strategy: BlockSyncStrategy,
-    interrupt_signal: ShutdownSignal,
-) -> Arc<ServiceHandles>
-where
-    B: BlockchainBackend + 'static,
-{
-    let node_config = BaseNodeServiceConfig::default(); // TODO - make this configurable
-    let mempool_config = MempoolServiceConfig::default(); // TODO - make this configurable
-    StackBuilder::new(runtime::Handle::current(), comms.shutdown_signal())
-        .add_initializer(CommsOutboundServiceInitializer::new(dht.outbound_requester()))
-        .add_initializer(BaseNodeServiceInitializer::new(
-            subscription_factory.clone(),
-            db.clone(),
-            mempool.clone(),
-            consensus_manager.clone(),
-            node_config,
-        ))
-        .add_initializer(MempoolServiceInitializer::new(
-            subscription_factory.clone(),
-            mempool,
-            mempool_config,
-        ))
-        .add_initializer(LivenessInitializer::new(
-            LivenessConfig {
-                auto_ping_interval: Some(Duration::from_secs(30)),
-                refresh_neighbours_interval: Duration::from_secs(3 * 60),
-                random_peer_selection_ratio: 0.4,
-                ..Default::default()
-            },
-            subscription_factory,
-            dht.dht_requester(),
-        ))
-        .add_initializer(ChainMetadataServiceInitializer)
-        .add_initializer(BaseNodeStateMachineInitializer::new(
-            db.clone(),
-            consensus_manager.clone(),
-            factories.clone(),
-            sync_strategy,
-            comms.peer_manager(),
-            comms.connectivity(),
-            interrupt_signal,
-        ))
-        .finish()
-        .await
-        .expect("Service initialization failed")
-}
+// /// Asynchronously registers services of the base node
+// ///
+// /// ## Parameters
+// /// `comms` - A reference to the comms node. This is the communications stack
+// /// `db` - The interface to the blockchain database, for all transactions stored in a block
+// /// `dht` - A reference to the peer discovery service
+// /// `subscription_factory` - The publish-subscribe messaging system, wrapped in an atomic reference counter
+// /// `mempool` - The mempool interface, for all transactions not yet included or recently included in a block
+// /// `consensus_manager` - The consensus manager for the blockchain
+// /// `factories` -  Cryptographic factory based on Pederson Commitments
+// ///
+// /// ## Returns
+// /// A hashmap of handles wrapped in an atomic reference counter
+// async fn register_base_node_services<B>(
+//     db: BlockchainDatabase<B>,
+//     subscription_factory: Arc<SubscriptionFactory>,
+//     mempool: Mempool<B>,
+//     consensus_manager: ConsensusManager,
+//     factories: CryptoFactories,
+//     sync_strategy: BlockSyncStrategy,
+//     interrupt_signal: ShutdownSignal,
+// ) -> Arc<ServiceHandles>
+// where
+//     B: BlockchainBackend + 'static,
+// {
+//     let node_config = BaseNodeServiceConfig::default(); // TODO - make this configurable
+//     let mempool_config = MempoolServiceConfig::default(); // TODO - make this configurable
+//     StackBuilder::new(runtime::Handle::current(), interrupt_signal)
+//         .add_initializer(CommsOutboundServiceInitializer::new(dht.outbound_requester()))
+//         .add_initializer(BaseNodeServiceInitializer::new(
+//             subscription_factory.clone(),
+//             db.clone(),
+//             mempool.clone(),
+//             consensus_manager.clone(),
+//             node_config,
+//         ))
+//         .add_initializer(MempoolServiceInitializer::new(
+//             subscription_factory.clone(),
+//             mempool,
+//             mempool_config,
+//         ))
+//         .add_initializer(LivenessInitializer::new(
+//             LivenessConfig {
+//                 auto_ping_interval: Some(Duration::from_secs(30)),
+//                 refresh_neighbours_interval: Duration::from_secs(3 * 60),
+//                 random_peer_selection_ratio: 0.4,
+//                 ..Default::default()
+//             },
+//             subscription_factory,
+//             dht.dht_requester(),
+//         ))
+//         .add_initializer(ChainMetadataServiceInitializer)
+//         .add_initializer(BaseNodeStateMachineInitializer::new(
+//             db.clone(),
+//             consensus_manager.clone(),
+//             factories.clone(),
+//             sync_strategy,
+//             comms.peer_manager(),
+//             comms.connectivity(),
+//         ))
+//         .finish()
+//         .await
+//         .expect("Service initialization failed")
+// }
 
 /// Asynchronously registers services for the base node's wallet
 /// ## Parameters
@@ -885,12 +799,12 @@ async fn register_wallet_services(
     direct_send_timeout: Duration,
     broadcast_send_timeout: Duration,
     network: NetworkType,
-) -> Arc<ServiceHandles>
+) -> ServiceHandles
 {
     let transaction_db = TransactionServiceSqliteDatabase::new(wallet_db_conn.clone(), None);
     transaction_db.migrate(wallet_comms.node_identity().public_key().clone());
 
-    StackBuilder::new(runtime::Handle::current(), wallet_comms.shutdown_signal())
+    StackBuilder::new(runtime::Handle::current(), wallet_comms.shutdown_signal().clone().take().unwrap())
         .add_initializer(CommsOutboundServiceInitializer::new(wallet_dht.outbound_requester()))
         .add_initializer(LivenessInitializer::new(
             LivenessConfig{
@@ -898,7 +812,6 @@ async fn register_wallet_services(
                 ..Default::default()
             },
             subscription_factory.clone(),
-            wallet_dht.dht_requester(),
     ))
         // Wallet services
         .add_initializer(OutputManagerServiceInitializer::new(

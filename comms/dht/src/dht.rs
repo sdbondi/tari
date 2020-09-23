@@ -50,7 +50,7 @@ use tari_comms::{
     peer_manager::{NodeIdentity, PeerFeatures, PeerManager},
     pipeline::PipelineError,
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tower::{layer::Layer, Service, ServiceBuilder};
@@ -74,6 +74,7 @@ pub enum DhtInitializationError {
 
 /// Responsible for starting the DHT actor, building the DHT middleware stack and as a factory
 /// for producing DHT requesters.
+#[derive(Clone)]
 pub struct Dht {
     /// Node identity of this node
     node_identity: Arc<NodeIdentity>,
@@ -104,7 +105,7 @@ impl Dht {
         peer_manager: Arc<PeerManager>,
         outbound_tx: mpsc::Sender<DhtOutboundRequest>,
         connectivity: ConnectivityRequester,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Result<Self, DhtInitializationError>
     {
         let (dht_sender, dht_receiver) = mpsc::channel(DHT_ACTOR_CHANNEL_SIZE);
@@ -159,7 +160,7 @@ impl Dht {
         &self,
         conn: DbConnection,
         request_receiver: mpsc::Receiver<DhtRequest>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> DhtActor
     {
         DhtActor::new(
@@ -178,7 +179,7 @@ impl Dht {
     fn discovery_service(
         &self,
         request_receiver: mpsc::Receiver<DhtDiscoveryRequest>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> DhtDiscoveryService
     {
         DhtDiscoveryService::new(
@@ -191,7 +192,7 @@ impl Dht {
         )
     }
 
-    fn connectivity_service(&self, shutdown_signal: ShutdownSignal) -> DhtConnectivity {
+    fn connectivity_service(&self, shutdown_signal: OptionalShutdownSignal) -> DhtConnectivity {
         DhtConnectivity::new(
             self.config.clone(),
             self.peer_manager.clone(),
@@ -206,7 +207,7 @@ impl Dht {
         &self,
         conn: DbConnection,
         request_rx: mpsc::Receiver<StoreAndForwardRequest>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
         saf_response_signal_rx: mpsc::Receiver<()>,
     ) -> StoreAndForwardService
     {
@@ -218,9 +219,9 @@ impl Dht {
             self.connectivity.clone(),
             self.outbound_requester(),
             request_rx,
-            shutdown_signal,
             saf_response_signal_rx,
             self.event_publisher.clone(),
+            shutdown_signal,
         )
     }
 

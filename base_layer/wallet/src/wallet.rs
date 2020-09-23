@@ -163,11 +163,14 @@ where
 
         debug!(target: LOG_TARGET, "Initializing Wallet Comms");
 
-        let (comms, dht) = initialize_comms(config.comms_config.clone(), publisher, vec![], Default::default()).await?;
+        let (comms, dht) = initialize_comms(config.comms_config.clone(), publisher, Default::default()).await?;
 
         debug!(target: LOG_TARGET, "Wallet Comms Initialized");
-
-        let fut = StackBuilder::new(runtime::Handle::current(), comms.shutdown_signal())
+        let shutdown_signal = comms
+            .shutdown_signal()
+            .take()
+            .expect("Comms initialized without shutdown_signal");
+        let fut = StackBuilder::new(runtime::Handle::current(), shutdown_signal)
             .add_initializer(CommsOutboundServiceInitializer::new(dht.outbound_requester()))
             .add_initializer(OutputManagerServiceInitializer::new(
                 OutputManagerServiceConfig::default(),
@@ -227,7 +230,7 @@ where
     /// This method consumes the wallet so that the handles are dropped which will result in the services async loops
     /// exiting.
     pub async fn shutdown(self) {
-        self.comms.shutdown().await;
+        self.comms.wait_until_shutdown().await;
     }
 
     /// This function will set the base_node that the wallet uses to broadcast transactions and monitor the blockchain

@@ -234,9 +234,9 @@ async fn dht_join_propagation() {
         .unwrap();
     assert_eq!(node_C_peer.features, node_C.comms.node_identity().features());
 
-    node_A.comms.shutdown().await;
-    node_B.comms.shutdown().await;
-    node_C.comms.shutdown().await;
+    node_A.comms.wait_until_shutdown().await;
+    node_B.comms.wait_until_shutdown().await;
+    node_C.comms.wait_until_shutdown().await;
 }
 
 #[tokio_macros::test]
@@ -294,10 +294,10 @@ async fn dht_discover_propagation() {
     assert!(node_D_peer_manager.exists(node_C.node_identity().public_key()).await);
     assert!(node_D_peer_manager.exists(node_A.node_identity().public_key()).await);
 
-    node_A.comms.shutdown().await;
-    node_B.comms.shutdown().await;
-    node_C.comms.shutdown().await;
-    node_D.comms.shutdown().await;
+    node_A.comms.wait_until_shutdown().await;
+    node_B.comms.wait_until_shutdown().await;
+    node_C.comms.wait_until_shutdown().await;
+    node_D.comms.wait_until_shutdown().await;
 }
 
 #[tokio_macros::test]
@@ -403,9 +403,9 @@ async fn dht_store_forward() {
     let event = collect_stream!(node_C_dht_events, take = 1, timeout = Duration::from_secs(20));
     unpack_enum!(DhtEvent::StoreAndForwardMessagesReceived = &**event.get(0).unwrap().as_ref().unwrap());
 
-    node_A.comms.shutdown().await;
-    node_B.comms.shutdown().await;
-    node_C.comms.shutdown().await;
+    node_A.comms.wait_until_shutdown().await;
+    node_B.comms.wait_until_shutdown().await;
+    node_C.comms.wait_until_shutdown().await;
 }
 
 #[tokio_macros::test]
@@ -491,10 +491,10 @@ async fn dht_propagate_dedup() {
     let node_C_id = node_C.node_identity().node_id().clone();
     let node_D_id = node_D.node_identity().node_id().clone();
 
-    node_A.comms.shutdown().await;
-    node_B.comms.shutdown().await;
-    node_C.comms.shutdown().await;
-    node_D.comms.shutdown().await;
+    node_A.comms.wait_until_shutdown().await;
+    node_B.comms.wait_until_shutdown().await;
+    node_C.comms.wait_until_shutdown().await;
+    node_D.comms.wait_until_shutdown().await;
 
     // Check the message flow BEFORE deduping
     let received = filter_received(collect_stream!(node_A_messaging, timeout = Duration::from_secs(20)));

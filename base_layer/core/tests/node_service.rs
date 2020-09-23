@@ -106,9 +106,9 @@ fn request_response_get_metadata() {
         let received_metadata = alice_node.outbound_nci.get_metadata().await.unwrap();
         assert_eq!(received_metadata.height_of_longest_chain, Some(0));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -150,9 +150,9 @@ fn request_and_response_fetch_headers() {
                 (received_headers.contains(&headerc1) && (received_headers.contains(&headerc2)))
         );
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -190,8 +190,8 @@ fn request_and_response_fetch_headers_with_hashes() {
         assert_eq!(received_headers.len(), 2);
         assert!(received_headers.contains(&header1) && (received_headers.contains(&header2)));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -230,9 +230,9 @@ fn request_and_response_fetch_kernels() {
         assert!(received_kernels.contains(&kernel1));
         assert!(received_kernels.contains(&kernel2));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -268,9 +268,9 @@ fn request_and_response_fetch_utxos() {
         assert!(received_utxos.contains(&utxo1));
         assert!(received_utxos.contains(&utxo2));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -319,9 +319,9 @@ fn request_and_response_fetch_blocks() {
         assert!((*received_blocks[0].block() == blocks[0]) || (*received_blocks[1].block() == blocks[0]));
         assert!((*received_blocks[0].block() == blocks[1]) || (*received_blocks[1].block() == blocks[1]));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -380,9 +380,9 @@ fn request_and_response_fetch_blocks_with_hashes() {
         assert!((*received_blocks[0].block() == blocks[0]) || (*received_blocks[1].block() == blocks[0]));
         assert!((*received_blocks[0].block() == blocks[1]) || (*received_blocks[1].block() == blocks[1]));
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -493,10 +493,10 @@ fn propagate_and_forward_many_valid_blocks() {
             }
         }
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
-        dan_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
+        dan_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -592,9 +592,9 @@ fn propagate_and_forward_invalid_block_hash() {
         let msg_event = event_stream_next(&mut carol_message_events, Duration::from_millis(500)).await;
         assert!(msg_event.is_none());
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -717,10 +717,10 @@ fn propagate_and_forward_invalid_block() {
         }
         assert!(dan_block_event.is_none());
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
-        dan_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
+        dan_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -747,9 +747,9 @@ fn service_request_timeout() {
 
     runtime.block_on(async {
         // Bob should not be reachable
-        bob_node.comms.shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
         unpack_enum!(CommsInterfaceError::RequestTimedOut = alice_node.outbound_nci.get_metadata().await.unwrap_err());
-        alice_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -770,7 +770,7 @@ fn local_get_metadata() {
         assert_eq!(metadata.height_of_longest_chain, Some(2));
         assert_eq!(metadata.best_block, Some(block2.hash()));
 
-        node.comms.shutdown().await;
+        node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -814,7 +814,7 @@ fn local_get_new_block_template_and_get_new_block() {
 
         assert!(node.blockchain_db.add_block(block.clone().into()).is_ok());
 
-        node.comms.shutdown().await;
+        node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -858,7 +858,7 @@ fn local_get_target_difficulty() {
         assert!(monero_target_difficulty1 <= monero_target_difficulty2);
         assert!(blake_target_difficulty1 <= blake_target_difficulty2);
 
-        node.comms.shutdown().await;
+        node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -891,7 +891,7 @@ fn local_submit_block() {
             panic!("Block validation failed");
         }
 
-        node.comms.shutdown().await;
+        node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -1047,7 +1047,7 @@ fn request_and_response_fetch_mmr_node_and_count() {
         assert_eq!(added.len(), 0);
         assert_eq!(deleted.len(), 0);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }

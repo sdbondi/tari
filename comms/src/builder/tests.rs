@@ -47,12 +47,15 @@ use futures::{
     StreamExt,
 };
 use std::{collections::HashSet, convert::identity, hash::Hash, time::Duration};
+use tari_shutdown::{Shutdown, ShutdownSignal};
 use tari_storage::HashmapDatabase;
 use tari_test_utils::{collect_stream, unpack_enum};
 
 async fn spawn_node(
     protocols: Protocols<Substream>,
-) -> (CommsNode, mpsc::Receiver<InboundMessage>, mpsc::Sender<OutboundMessage>) {
+    shutdown_sig: ShutdownSignal,
+) -> (CommsNode, mpsc::Receiver<InboundMessage>, mpsc::Sender<OutboundMessage>)
+{
     let addr = format!("/memory/{}", memsocket::acquire_next_memsocket_port())
         .parse::<Multiaddr>()
         .unwrap();
@@ -65,9 +68,8 @@ async fn spawn_node(
     let comms_node = CommsBuilder::new()
         // These calls are just to get rid of unused function warnings. 
         // <IrrelevantCalls>
-        .with_executor(runtime::current())
         .with_dial_backoff(ConstantBackoff::new(Duration::from_millis(500)))
-        .on_shutdown(|| {})
+        .with_shutdown_signal(shutdown_sig)
         // </IrrelevantCalls>
         .with_listener_address(addr)
         .with_transport(MemoryTransport)
@@ -122,8 +124,9 @@ async fn peer_to_peer_custom_protocols() {
         .add(&[TEST_PROTOCOL], test_sender)
         .add(&[ANOTHER_TEST_PROTOCOL], another_test_sender);
 
-    let (comms_node1, _, _) = spawn_node(protocols1).await;
-    let (comms_node2, _, _) = spawn_node(protocols2).await;
+    let mut shutdown = Shutdown::new();
+    let (comms_node1, _, _) = spawn_node(protocols1, shutdown.to_signal()).await;
+    let (comms_node2, _, _) = spawn_node(protocols2, shutdown.to_signal()).await;
 
     let node_identity1 = comms_node1.node_identity();
     let node_identity2 = comms_node2.node_identity();
@@ -184,8 +187,9 @@ async fn peer_to_peer_custom_protocols() {
     substream.read_exact(&mut buf).await.unwrap();
     assert_eq!(buf, ANOTHER_TEST_MSG);
 
-    comms_node1.shutdown().await;
-    comms_node2.shutdown().await;
+    shutdown.trigger().unwrap();
+    comms_node1.wait_until_shutdown().await;
+    comms_node2.wait_until_shutdown().await;
 }
 
 #[runtime::test_basic]
@@ -261,8 +265,8 @@ async fn peer_to_peer_messaging() {
     assert_eq!(messages2_to_1.len(), NUM_MSGS);
     check_messages(messages2_to_1);
 
-    comms_node1.shutdown().await;
-    comms_node2.shutdown().await;
+    comms_node1.wait_until_shutdown().await;
+    comms_node2.wait_until_shutdown().await;
 }
 
 #[runtime::test_basic]
@@ -345,8 +349,8 @@ async fn peer_to_peer_messaging_simultaneous() {
     drop(o1);
     drop(o2);
 
-    comms_node1.shutdown().await;
-    comms_node2.shutdown().await;
+    comms_node1.wait_until_shutdown().await;
+    comms_node2.wait_until_shutdown().await;
 }
 
 fn has_unique_elements<T>(iter: T) -> bool

@@ -27,7 +27,7 @@ use tari_comms::{
     connectivity::ConnectivityRequester,
     peer_manager::{NodeIdentity, PeerManager},
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 
 pub struct DhtBuilder {
     node_identity: Arc<NodeIdentity>,
@@ -35,7 +35,7 @@ pub struct DhtBuilder {
     config: DhtConfig,
     outbound_tx: mpsc::Sender<DhtOutboundRequest>,
     connectivity: ConnectivityRequester,
-    shutdown_signal: ShutdownSignal,
+    shutdown_signal: OptionalShutdownSignal,
 }
 
 impl DhtBuilder {
@@ -44,7 +44,7 @@ impl DhtBuilder {
         peer_manager: Arc<PeerManager>,
         outbound_tx: mpsc::Sender<DhtOutboundRequest>,
         connectivity: ConnectivityRequester,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {

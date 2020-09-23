@@ -53,7 +53,7 @@ impl<T: BlockchainBackend + 'static> ProtocolExtension for MempoolSyncProtocolEx
             MempoolSyncProtocol::new(
                 self.config,
                 notif_rx,
-                context.connectivity().subscribe_event_stream(),
+                context.connectivity().get_event_subscription(),
                 self.mempool.clone(),
             )
             .run(),

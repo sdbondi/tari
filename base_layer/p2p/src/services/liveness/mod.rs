@@ -52,7 +52,7 @@ use crate::{
 use futures::{future, Future, Stream, StreamExt};
 use log::*;
 use std::sync::Arc;
-use tari_comms_dht::{outbound::OutboundMessageRequester, DhtRequester};
+use tari_comms_dht::{outbound::OutboundMessageRequester, Dht};
 use tari_service_framework::{
     handles::ServiceHandlesFuture,
     reply_channel,
@@ -81,7 +81,6 @@ const LOG_TARGET: &str = "p2p::services::liveness";
 pub struct LivenessInitializer {
     config: Option<LivenessConfig>,
     inbound_message_subscription_factory: Arc<TopicSubscriptionFactory<TariMessageType, Arc<PeerMessage>>>,
-    dht_requester: Option<DhtRequester>,
 }
 
 impl LivenessInitializer {
@@ -89,13 +88,11 @@ impl LivenessInitializer {
     pub fn new(
         config: LivenessConfig,
         inbound_message_subscription_factory: Arc<TopicSubscriptionFactory<TariMessageType, Arc<PeerMessage>>>,
-        dht_requester: DhtRequester,
     ) -> Self
     {
         Self {
             config: Some(config),
             inbound_message_subscription_factory,
-            dht_requester: Some(dht_requester),
         }
     }
 
@@ -113,8 +110,8 @@ impl ServiceInitializer for LivenessInitializer {
 
     fn initialize(
         &mut self,
-        executor: runtime::Handle,
-        handles_fut: ServiceHandlesFuture,
+        _executor: runtime::Handle,
+        handles: ServiceHandlesFuture,
         shutdown: ShutdownSignal,
     ) -> Self::Future
     {
@@ -130,25 +127,18 @@ impl ServiceInitializer for LivenessInitializer {
             .take()
             .expect("Liveness service initialized more than once.");
 
-        let dht_requester = self
-            .dht_requester
-            .take()
-            .expect("Liveness service initialized more than once.");
-
         // Register handle before waiting for handles to be ready
-        handles_fut.register(liveness_handle);
+        handles.register(liveness_handle);
 
         // Create a stream which receives PingPong messages from comms
         let ping_stream = self.ping_stream();
 
         // Spawn the Liveness service on the executor
-        executor.spawn(async move {
-            // Wait for all handles to become available
-            let handles = handles_fut.await;
+        handles.spawn_when_ready(|handles| async move {
+            let dht = handles.expect_handle::<Dht>();
+            let dht_requester = dht.dht_requester();
 
-            let outbound_handle = handles
-                .get_handle::<OutboundMessageRequester>()
-                .expect("Liveness service requires CommsOutbound service handle");
+            let outbound_handle = handles.expect_handle::<OutboundMessageRequester>();
 
             let state = LivenessState::new();
 

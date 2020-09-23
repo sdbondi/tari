@@ -175,8 +175,8 @@ fn test_listening_lagging() {
             _ => assert!(false),
         }
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -232,7 +232,7 @@ fn test_event_channel() {
             },
             _ => assert!(false),
         }
-        node.comms.shutdown().await;
+        node.comms.wait_until_shutdown().await;
     });
     let _ = shutdown.trigger();
 }
@@ -349,8 +349,8 @@ fn test_block_sync() {
 
         assert!(is_bootstrapped);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -457,8 +457,8 @@ fn test_lagging_block_sync() {
             );
         }
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -564,9 +564,9 @@ fn test_block_sync_recovery() {
             );
         }
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -691,8 +691,8 @@ fn test_forked_block_sync() {
             );
         }
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -860,7 +860,7 @@ fn test_sync_peer_banning() {
         assert_eq!(alice_db.get_height().unwrap(), Some(4));
         assert_eq!(bob_db.get_height().unwrap(), Some(6));
 
-        let mut connectivity_events = alice_node.comms.connectivity().subscribe_event_stream();
+        let mut connectivity_events = alice_node.comms.connectivity().get_event_subscription();
         let network_tip = bob_db.get_chain_metadata().unwrap();
         let mut sync_peers = vec![SyncPeer {
             node_id: bob_node.node_identity.node_id().clone(),
@@ -878,7 +878,7 @@ fn test_sync_peer_banning() {
         let peer = alice_peer_manager.find_by_public_key(bob_public_key).await.unwrap();
         assert_eq!(peer.is_banned(), true);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }

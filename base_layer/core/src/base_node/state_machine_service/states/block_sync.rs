@@ -131,9 +131,11 @@ impl FromStr for BlockSyncStrategy {
         match s {
             "ViaBestChainMetadata" => Ok(Self::ViaBestChainMetadata(BestChainMetadataBlockSync)),
             "ViaRandomPeer" => Ok(Self::ViaRandomPeer(ForwardBlockSyncInfo)),
-            _ => Err("Unrecognized value for BlockSyncStrategy. Available values \
-                      are:ViaBestChainMetadata,ViaRandomPeer"
-                .to_string()),
+            _ => Err(format!(
+                "Unrecognized value `{}` for BlockSyncStrategy. Available values are: ViaBestChainMetadata, \
+                 ViaRandomPeer",
+                s
+            )),
         }
     }
 }

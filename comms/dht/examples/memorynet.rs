@@ -68,7 +68,7 @@ use tari_comms::{
     peer_manager::{NodeId, NodeIdentity, Peer, PeerFeatures, PeerStorage},
     pipeline,
     pipeline::SinkService,
-    protocol::messaging::MessagingEvent,
+    protocol::messaging::{MessagingEvent, MessagingEventSender, MessagingProtocolExtension},
     transports::MemoryTransport,
     types::CommsDatabase,
     CommsBuilder,
@@ -89,7 +89,7 @@ use tari_storage::{
     LMDBWrapper,
 };
 use tari_test_utils::{paths::create_temporary_data_path, random};
-use tokio::{runtime, task, time};
+use tokio::{runtime, sync::broadcast, task, time};
 use tower::ServiceBuilder;
 
 type MessagingEventRx = mpsc::UnboundedReceiver<(NodeId, NodeId)>;
@@ -310,7 +310,7 @@ async fn main() {
 }
 
 async fn shutdown_all(nodes: Vec<TestNode>) {
-    let tasks = nodes.into_iter().map(|node| node.comms.shutdown());
+    let tasks = nodes.into_iter().map(|node| node.comms.wait_until_shutdown());
     future::join_all(tasks).await;
 }
 
@@ -638,7 +638,7 @@ async fn do_store_and_forward_message_propagation(
             .join(", ")
     );
     banner!("😴 {} is going offline", wallet);
-    wallet.comms.shutdown().await;
+    wallet.comms.wait_until_shutdown().await;
 
     banner!(
         "🎤 All other wallets are going to attempt to broadcast messages to {} ({})",
@@ -1057,24 +1057,27 @@ async fn setup_comms_dht(
 
     let dht_outbound_layer = dht.outbound_middleware_layer();
 
-    let comms = comms
-        .with_messaging_pipeline(
-            pipeline::Builder::new()
-                .outbound_buffer_size(10)
-                .with_outbound_pipeline(outbound_rx, |sink| {
-                    ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
-                })
-                .max_concurrent_inbound_tasks(10)
-                .with_inbound_pipeline(
-                    ServiceBuilder::new()
-                        .layer(dht.inbound_middleware_layer())
-                        .service(SinkService::new(inbound_tx)),
-                )
-                .finish(),
+    let (event_tx, _) = broadcast::channel(100);
+    let messaging_pipeline = pipeline::Builder::new()
+        .outbound_buffer_size(10)
+        .with_outbound_pipeline(outbound_rx, |sink| {
+            ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
+        })
+        .max_concurrent_inbound_tasks(10)
+        .with_inbound_pipeline(
+            ServiceBuilder::new()
+                .layer(dht.inbound_middleware_layer())
+                .service(SinkService::new(inbound_tx)),
         )
-        .spawn()
-        .await
-        .unwrap();
+        .finish();
+
+    comms.add_protocol_extension(MessagingProtocolExtension::new(
+        event_tx.clone(),
+        messaging_pipeline,
+        comms.shutdown_signal(),
+    ));
+
+    let comms = comms.with_messaging_event_sender(event_tx).spawn().await.unwrap();
 
     (comms, dht)
 }

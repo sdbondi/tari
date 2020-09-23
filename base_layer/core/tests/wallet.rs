@@ -351,5 +351,5 @@ fn wallet_base_node_integration_test() {
     runtime.block_on(alice_wallet.shutdown());
     runtime.block_on(bob_wallet.shutdown());
     let _ = shutdown.trigger();
-    runtime.block_on(base_node.comms.shutdown());
+    runtime.block_on(base_node.comms.wait_until_shutdown());
 }

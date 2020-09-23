@@ -38,9 +38,8 @@ use crate::{
 };
 use futures::{future, Future};
 use log::*;
-use std::sync::Arc;
 use tari_broadcast_channel::{bounded, Publisher, Subscriber};
-use tari_comms::{connectivity::ConnectivityRequester, PeerManager};
+use tari_comms::CommsNode;
 use tari_service_framework::{handles::ServiceHandlesFuture, ServiceInitializationError, ServiceInitializer};
 use tari_shutdown::{Shutdown, ShutdownSignal};
 use tokio::runtime;
@@ -54,9 +53,6 @@ where B: BlockchainBackend + 'static
     rules: ConsensusManager,
     factories: CryptoFactories,
     sync_strategy: BlockSyncStrategy,
-    peer_manager: Arc<PeerManager>,
-    connectivity_requester: ConnectivityRequester,
-    interrupt_signal: ShutdownSignal,
 }
 
 impl<B> BaseNodeStateMachineInitializer<B>
@@ -67,9 +63,6 @@ where B: BlockchainBackend + 'static
         rules: ConsensusManager,
         factories: CryptoFactories,
         sync_strategy: BlockSyncStrategy,
-        peer_manager: Arc<PeerManager>,
-        connectivity_requester: ConnectivityRequester,
-        interrupt_signal: ShutdownSignal,
     ) -> Self
     {
         Self {
@@ -77,9 +70,6 @@ where B: BlockchainBackend + 'static
             rules,
             factories,
             sync_strategy,
-            peer_manager,
-            connectivity_requester,
-            interrupt_signal,
         }
     }
 }
@@ -93,7 +83,7 @@ where B: BlockchainBackend + 'static
         &mut self,
         executor: runtime::Handle,
         handles_fut: ServiceHandlesFuture,
-        _shutdown: ShutdownSignal,
+        interrupt_signal: ShutdownSignal,
     ) -> Self::Future
     {
         let (state_event_publisher, state_event_subscriber): (Publisher<_>, Subscriber<_>) = bounded(10, 3);
@@ -105,23 +95,18 @@ where B: BlockchainBackend + 'static
 
         let factories = self.factories.clone();
         let sync_strategy = self.sync_strategy;
-        let peer_manager = self.peer_manager.clone();
-        let connectivity_requester = self.connectivity_requester.clone();
         let rules = self.rules.clone();
         let db = self.db.clone();
-        let interrupt_signal = self.interrupt_signal.clone();
         executor.spawn(async move {
             let handles = handles_fut.await;
 
-            let outbound_interface = handles
-                .get_handle::<OutboundNodeCommsInterface>()
-                .expect("Problem getting node interface handle.");
-            let chain_metadata_service = handles
-                .get_handle::<ChainMetadataHandle>()
-                .expect("Problem getting chain metadata interface handle.");
-            let node_local_interface = handles
-                .get_handle::<LocalNodeCommsInterface>()
-                .expect("Problem getting node local interface handle.");
+            let comms = handles.expect_handle::<CommsNode>();
+            let outbound_interface = handles.expect_handle::<OutboundNodeCommsInterface>();
+            let chain_metadata_service = handles.expect_handle::<ChainMetadataHandle>();
+            let node_local_interface = handles.expect_handle::<LocalNodeCommsInterface>();
+
+            let peer_manager = comms.peer_manager();
+            let connectivity_requester = comms.connectivity();
 
             let mut state_machine_config = BaseNodeStateMachineConfig::default();
             state_machine_config.block_sync_config.sync_strategy = sync_strategy;

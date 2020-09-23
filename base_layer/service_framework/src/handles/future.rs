@@ -36,6 +36,7 @@ use std::{
     },
     task::Poll,
 };
+use tokio::task;
 
 /// Create a Notifier, ServiceHandlesFuture pair.
 ///
@@ -75,7 +76,7 @@ impl Notifier {
 /// Future which resolves to `ServiceHandles` once it is signaled to
 /// do so.
 pub struct ServiceHandlesFuture {
-    handles: Arc<ServiceHandles>,
+    handles: ServiceHandles,
     ready_flag: Arc<AtomicBool>,
     wake_sender: mpsc::Sender<Arc<AtomicWaker>>,
     waker: Arc<AtomicWaker>,
@@ -88,7 +89,7 @@ impl Clone for ServiceHandlesFuture {
             .send(Arc::clone(&waker))
             .expect("notifier receiver has been dropped");
         Self {
-            handles: Arc::clone(&self.handles),
+            handles: self.handles.clone(),
             ready_flag: Arc::clone(&self.ready_flag),
             wake_sender: self.wake_sender.clone(),
             waker,
@@ -100,7 +101,7 @@ impl ServiceHandlesFuture {
     /// Create a new ServiceHandlesFuture with empty handles
     pub fn new(ready_flag: Arc<AtomicBool>, wake_sender: mpsc::Sender<Arc<AtomicWaker>>) -> Self {
         Self {
-            handles: Arc::new(ServiceHandles::new()),
+            handles: ServiceHandles::new(),
             ready_flag,
             wake_sender,
             waker: Arc::new(AtomicWaker::new()),
@@ -119,23 +120,35 @@ impl ServiceHandlesFuture {
         self.handles.get_handle()
     }
 
-    // /// Call the given function with the final handles once this future is ready (`notify_ready` is called).
+    /// Call the given function with the final handles once this future is ready (`notify_ready` is called).
     pub fn lazy_service<F, S>(&self, service_fn: F) -> LazyService<F, Self, S>
-    where F: FnOnce(Arc<ServiceHandles>) -> S {
+    where F: FnOnce(ServiceHandles) -> S {
         LazyService::new(self.clone(), service_fn)
     }
 
-    pub fn into_inner(self) -> Arc<ServiceHandles> {
+    /// Spawn a task once handles are ready. The resolved handles are passed into this closure.
+    pub fn spawn_when_ready<F, Fut>(self, f: F) -> task::JoinHandle<()>
+    where
+        F: FnOnce(ServiceHandles) -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        task::spawn(async move {
+            let handles = self.await;
+            (f)(handles).await;
+        })
+    }
+
+    pub fn into_inner(self) -> ServiceHandles {
         self.handles
     }
 }
 
 impl Future for ServiceHandlesFuture {
-    type Output = Arc<ServiceHandles>;
+    type Output = ServiceHandles;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if self.ready_flag.load(Ordering::SeqCst) {
-            Poll::Ready(Arc::clone(&self.handles))
+            Poll::Ready(self.handles.clone())
         } else {
             self.waker.register(cx.waker());
             Poll::Pending

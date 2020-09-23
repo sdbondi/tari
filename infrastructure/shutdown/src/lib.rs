@@ -115,6 +115,25 @@ impl OptionalShutdownSignal {
     pub fn none() -> Self {
         Self(None)
     }
+
+    /// Set the shutdown signal. Once set this OptionalShutdownSignal will resolve
+    /// in the same way as the given `ShutdownSignal`.
+    pub fn set(&mut self, signal: ShutdownSignal) -> &mut Self {
+        self.0 = Some(signal);
+        self
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
+
+    pub fn into_signal(self) -> Option<ShutdownSignal> {
+        self.0
+    }
+
+    pub fn take(&mut self) -> Option<ShutdownSignal> {
+        self.0.take()
+    }
 }
 
 impl Future for OptionalShutdownSignal {

@@ -147,7 +147,7 @@ fn mining() {
             interval = Duration::from_secs(1),
         );
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }

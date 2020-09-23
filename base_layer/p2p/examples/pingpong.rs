@@ -178,7 +178,7 @@ mod pingpong {
         };
 
         let (comms, dht) = rt
-            .block_on(initialize_comms(comms_config, publisher, vec![], Default::default()))
+            .block_on(initialize_comms(comms_config, publisher, Default::default()))
             .unwrap();
 
         println!("Comms listening on {}", comms.listening_address());
@@ -233,7 +233,7 @@ mod pingpong {
         app.add_global_callback('q', |s| s.quit());
         app.run();
 
-        rt.block_on(comms.shutdown());
+        rt.block_on(comms.wait_until_shutdown());
     }
 
     fn setup_ui() -> Cursive {

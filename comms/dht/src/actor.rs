@@ -51,7 +51,7 @@ use tari_comms::{
     connectivity::{ConnectivityError, ConnectivityRequester, ConnectivitySelection},
     peer_manager::{NodeId, NodeIdentity, PeerFeatures, PeerManager, PeerManagerError, PeerQuery, PeerQuerySortBy},
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tari_utilities::message_format::{MessageFormat, MessageFormatError};
 use thiserror::Error;
 use tokio::task;
@@ -184,7 +184,7 @@ pub struct DhtActor {
     outbound_requester: OutboundMessageRequester,
     connectivity: ConnectivityRequester,
     config: DhtConfig,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
     request_rx: Fuse<mpsc::Receiver<DhtRequest>>,
     msg_hash_cache: TtlCache<Vec<u8>, ()>,
 }
@@ -199,7 +199,7 @@ impl DhtActor {
         connectivity: ConnectivityRequester,
         outbound_requester: OutboundMessageRequester,
         request_rx: mpsc::Receiver<DhtRequest>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {

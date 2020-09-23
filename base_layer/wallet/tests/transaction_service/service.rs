@@ -548,8 +548,8 @@ fn manage_single_transaction<T: TransactionBackend + Clone + 'static>(
     );
 
     runtime.block_on(async move {
-        alice_comms.shutdown().await;
-        bob_comms.shutdown().await;
+        alice_comms.wait_until_shutdown().await;
+        bob_comms.wait_until_shutdown().await;
     });
 }
 
@@ -814,9 +814,9 @@ fn manage_multiple_transactions<T: TransactionBackend + Clone + 'static>(
     assert_eq!(carol_completed_tx.len(), 1);
 
     runtime.block_on(async move {
-        alice_comms.shutdown().await;
-        bob_comms.shutdown().await;
-        carol_comms.shutdown().await;
+        alice_comms.wait_until_shutdown().await;
+        bob_comms.wait_until_shutdown().await;
+        carol_comms.wait_until_shutdown().await;
     });
 }
 
@@ -1344,8 +1344,8 @@ fn discovery_async_return_test() {
     });
 
     runtime.block_on(async move {
-        alice_comms.shutdown().await;
-        carol_comms.shutdown().await;
+        alice_comms.wait_until_shutdown().await;
+        carol_comms.wait_until_shutdown().await;
     });
 }
 

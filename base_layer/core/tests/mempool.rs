@@ -541,8 +541,8 @@ fn request_response_get_stats() {
         assert_eq!(received_stats.published_txs, 0);
         assert_eq!(received_stats.total_weight, 116);
 
-        alice.comms.shutdown().await;
-        bob.comms.shutdown().await;
+        alice.comms.wait_until_shutdown().await;
+        bob.comms.wait_until_shutdown().await;
     });
 }
 
@@ -614,9 +614,9 @@ fn request_response_get_tx_state_with_excess_sig() {
             TxStorageResponse::OrphanPool
         );
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -719,9 +719,9 @@ fn receive_and_propagate_transaction() {
             expect = TxStorageResponse::NotStored,
         );
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
-        carol_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
+        carol_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -747,14 +747,14 @@ fn service_request_timeout() {
     );
 
     runtime.block_on(async {
-        bob_node.comms.shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
 
         match alice_node.outbound_mp_interface.get_stats().await {
             Err(MempoolServiceError::RequestTimedOut) => assert!(true),
             _ => assert!(false),
         }
 
-        alice_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -906,7 +906,7 @@ fn block_event_and_reorg_event_handling() {
             TxStorageResponse::NotStored
         );
 
-        alice.comms.shutdown().await;
-        bob.comms.shutdown().await;
+        alice.comms.wait_until_shutdown().await;
+        bob.comms.wait_until_shutdown().await;
     });
 }

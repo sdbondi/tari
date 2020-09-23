@@ -45,7 +45,7 @@ use tari_comms::{
     types::CommsPublicKey,
     validate_peer_addresses,
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tari_utilities::{hex::Hex, ByteArray};
 use tokio::{task, time};
 
@@ -73,7 +73,7 @@ pub struct DhtDiscoveryService {
     outbound_requester: OutboundMessageRequester,
     peer_manager: Arc<PeerManager>,
     request_rx: Option<mpsc::Receiver<DhtDiscoveryRequest>>,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
     inflight_discoveries: HashMap<u64, DiscoveryRequestState>,
 }
 
@@ -84,7 +84,7 @@ impl DhtDiscoveryService {
         peer_manager: Arc<PeerManager>,
         outbound_requester: OutboundMessageRequester,
         request_rx: mpsc::Receiver<DhtDiscoveryRequest>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {

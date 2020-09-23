@@ -34,7 +34,7 @@ use tari_comms::{
     PeerConnection,
     PeerManager,
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use thiserror::Error;
 use tokio::{task, task::JoinHandle, time};
 
@@ -74,7 +74,7 @@ pub struct DhtConnectivity {
     random_pool_last_refresh: Option<Instant>,
     ///
     stats: Stats,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
 }
 
 impl DhtConnectivity {
@@ -84,7 +84,7 @@ impl DhtConnectivity {
         node_identity: Arc<NodeIdentity>,
         connectivity: ConnectivityRequester,
         dht_requester: DhtRequester,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {
@@ -104,7 +104,7 @@ impl DhtConnectivity {
     /// Spawn a DhtConnectivity actor. This will immediately subscribe to the connection manager event stream to
     /// prevent unexpected missed events.
     pub fn spawn(self) -> JoinHandle<Result<(), DhtConnectivityError>> {
-        let connectivity_events = self.connectivity.subscribe_event_stream();
+        let connectivity_events = self.connectivity.get_event_subscription();
         task::spawn(async move {
             match self.run(connectivity_events).await {
                 Ok(_) => Ok(()),

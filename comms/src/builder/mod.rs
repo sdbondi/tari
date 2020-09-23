@@ -46,23 +46,10 @@ use crate::protocol::ProtocolExtension;
 
 use crate::{
     backoff::{Backoff, BoxedBackoff, ExponentialBackoff},
-    connection_manager::{
-        ConnectionManager,
-        ConnectionManagerConfig,
-        ConnectionManagerEvent,
-        ConnectionManagerRequest,
-        ConnectionManagerRequester,
-    },
-    connectivity::{
-        ConnectivityConfig,
-        ConnectivityEvent,
-        ConnectivityManager,
-        ConnectivityRequest,
-        ConnectivityRequester,
-    },
+    connection_manager::{ConnectionManagerConfig, ConnectionManagerRequester},
+    connectivity::{ConnectivityConfig, ConnectivityRequester},
     multiaddr::Multiaddr,
     multiplexing::Substream,
-    noise::NoiseConfig,
     peer_manager::{NodeIdentity, PeerManager},
     protocol::{ProtocolExtensions, Protocols},
     tor,
@@ -72,8 +59,8 @@ use crate::{
 use futures::{channel::mpsc, AsyncRead, AsyncWrite};
 use log::*;
 use std::sync::Arc;
-use tari_shutdown::Shutdown;
-use tokio::{runtime, sync::broadcast};
+use tari_shutdown::{OptionalShutdownSignal, ShutdownSignal};
+use tokio::sync::broadcast;
 
 const LOG_TARGET: &str = "comms::builder";
 
@@ -81,16 +68,15 @@ const LOG_TARGET: &str = "comms::builder";
 pub struct CommsBuilder<TTransport> {
     peer_storage: Option<CommsDatabase>,
     node_identity: Option<Arc<NodeIdentity>>,
-    transport: Option<TTransport>,
-    executor: Option<runtime::Handle>,
+    transport: TTransport,
     protocols: Option<Protocols<Substream>>,
-    dial_backoff: Option<BoxedBackoff>,
+    dial_backoff: BoxedBackoff,
     hidden_service_ctl: Option<tor::HiddenServiceController>,
     connection_manager_config: ConnectionManagerConfig,
     connectivity_config: ConnectivityConfig,
     protocol_extensions: ProtocolExtensions,
 
-    shutdown: Shutdown,
+    shutdown_signal: OptionalShutdownSignal,
 }
 
 impl CommsBuilder<TcpTransport> {
@@ -111,15 +97,14 @@ impl Default for CommsBuilder<TcpTransport> {
         Self {
             peer_storage: None,
             node_identity: None,
-            transport: Some(Self::default_tcp_transport()),
-            dial_backoff: Some(Box::new(ExponentialBackoff::default())),
-            executor: None,
+            transport: Self::default_tcp_transport(),
+            dial_backoff: Box::new(ExponentialBackoff::default()),
             protocols: None,
             hidden_service_ctl: None,
             connection_manager_config: ConnectionManagerConfig::default(),
             connectivity_config: ConnectivityConfig::default(),
             protocol_extensions: ProtocolExtensions::new(),
-            shutdown: Shutdown::new(),
+            shutdown_signal: OptionalShutdownSignal::none(),
         }
     }
 }
@@ -129,18 +114,17 @@ where
     TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
     TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    /// Set the runtime handle to use for spawning tasks. If this is not set the handle that is executing
-    /// `CommsBuilder::spawn` will be used, so this will rarely need to be explicitly set.
-    pub fn with_executor(mut self, handle: runtime::Handle) -> Self {
-        self.executor = Some(handle);
-        self
-    }
-
     /// Set the [NodeIdentity] for this comms instance. This is required.
     ///
     /// [OutboundMessagePool]: ../../outbound_message_service/index.html#outbound-message-pool
     pub fn with_node_identity(mut self, node_identity: Arc<NodeIdentity>) -> Self {
         self.node_identity = Some(node_identity);
+        self
+    }
+
+    /// Set the shutdown signal for this comms instance
+    pub fn with_shutdown_signal(mut self, shutdown_signal: ShutdownSignal) -> Self {
+        self.shutdown_signal.set(shutdown_signal);
         self
     }
 
@@ -220,18 +204,17 @@ where
 
         Ok(CommsBuilder {
             // Set the socks transport configured for this hidden service
-            transport: Some(transport),
+            transport,
             // Set the hidden service.
             hidden_service_ctl: Some(hidden_service_ctl),
             peer_storage: self.peer_storage,
             node_identity: self.node_identity,
-            executor: self.executor,
             protocols: self.protocols,
             dial_backoff: self.dial_backoff,
             connection_manager_config: self.connection_manager_config,
             connectivity_config: self.connectivity_config,
             protocol_extensions: self.protocol_extensions,
-            shutdown: self.shutdown,
+            shutdown_signal: self.shutdown_signal,
         })
     }
 
@@ -239,7 +222,7 @@ where
     /// ExponentialBackoff is used. [ConnectionManager]: crate::connection_manager::next::ConnectionManager
     pub fn with_dial_backoff<T>(mut self, backoff: T) -> Self
     where T: Backoff + Send + Sync + 'static {
-        self.dial_backoff = Some(Box::new(backoff));
+        self.dial_backoff = Box::new(backoff);
         self
     }
 
@@ -249,17 +232,16 @@ where
         T::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
     {
         CommsBuilder {
-            transport: Some(transport),
+            transport,
             peer_storage: self.peer_storage,
             node_identity: self.node_identity,
             hidden_service_ctl: self.hidden_service_ctl,
-            executor: self.executor,
             protocols: self.protocols,
             dial_backoff: self.dial_backoff,
             connection_manager_config: self.connection_manager_config,
             connectivity_config: self.connectivity_config,
             protocol_extensions: self.protocol_extensions,
-            shutdown: self.shutdown,
+            shutdown_signal: self.shutdown_signal,
         }
     }
 
@@ -284,12 +266,6 @@ where
         self
     }
 
-    pub fn on_shutdown<F>(mut self, on_shutdown: F) -> Self
-    where F: FnOnce() + Send + Sync + 'static {
-        self.shutdown.on_triggered(on_shutdown);
-        self
-    }
-
     fn make_peer_manager(&mut self) -> Result<Arc<PeerManager>, CommsBuilderError> {
         match self.peer_storage.take() {
             Some(storage) => {
@@ -304,49 +280,6 @@ where
         }
     }
 
-    fn make_connection_manager(
-        &mut self,
-        node_identity: Arc<NodeIdentity>,
-        peer_manager: Arc<PeerManager>,
-        request_rx: mpsc::Receiver<ConnectionManagerRequest>,
-        connection_manager_events_tx: broadcast::Sender<Arc<ConnectionManagerEvent>>,
-    ) -> ConnectionManager<TTransport, BoxedBackoff>
-    {
-        let backoff = self.dial_backoff.take().expect("always set");
-        let noise_config = NoiseConfig::new(Arc::clone(&node_identity));
-        let config = self.connection_manager_config.clone();
-
-        ConnectionManager::new(
-            config,
-            self.transport.take().expect("transport has already been taken"),
-            noise_config,
-            backoff,
-            request_rx,
-            node_identity,
-            peer_manager,
-            connection_manager_events_tx,
-            self.shutdown.to_signal(),
-        )
-    }
-
-    fn make_connectivity_manager(
-        &mut self,
-        connection_manager_requester: ConnectionManagerRequester,
-        peer_manager: Arc<PeerManager>,
-        request_rx: mpsc::Receiver<ConnectivityRequest>,
-        event_tx: broadcast::Sender<Arc<ConnectivityEvent>>,
-    ) -> ConnectivityManager
-    {
-        ConnectivityManager {
-            config: self.connectivity_config,
-            request_rx,
-            event_tx,
-            connection_manager: connection_manager_requester,
-            peer_manager,
-            shutdown_signal: self.shutdown.to_signal(),
-        }
-    }
-
     /// Build the required comms services. Services will not be started.
     pub fn build(mut self) -> Result<BuiltCommsNode<TTransport>, CommsBuilderError> {
         debug!(target: LOG_TARGET, "Building comms");
@@ -357,45 +290,32 @@ where
 
         let peer_manager = self.make_peer_manager()?;
 
-        //---------------------------------- Messaging --------------------------------------------//
-
-        let (conn_man_tx, conn_man_rx) = mpsc::channel(consts::CONNECTION_MANAGER_REQUEST_BUFFER_SIZE);
+        //---------------------------------- Connection Manager --------------------------------------------//
+        let (conn_man_tx, connection_manager_request_rx) =
+            mpsc::channel(consts::CONNECTION_MANAGER_REQUEST_BUFFER_SIZE);
         let (connection_manager_event_tx, _) = broadcast::channel(consts::CONNECTION_MANAGER_EVENTS_BUFFER_SIZE);
-        let connection_manager_requester =
-            ConnectionManagerRequester::new(conn_man_tx, connection_manager_event_tx.clone());
+        let connection_manager_requester = ConnectionManagerRequester::new(conn_man_tx, connection_manager_event_tx);
 
         //---------------------------------- ConnectivityManager --------------------------------------------//
-
         let (connectivity_tx, connectivity_rx) = mpsc::channel(consts::CONNECTIVITY_MANAGER_REQUEST_BUFFER_SIZE);
         let (event_tx, _) = broadcast::channel(consts::CONNECTIVITY_MANAGER_EVENTS_BUFFER_SIZE);
         let connectivity_requester = ConnectivityRequester::new(connectivity_tx, event_tx.clone());
-        let connectivity_manager = self.make_connectivity_manager(
-            connection_manager_requester.clone(),
-            peer_manager.clone(),
-            connectivity_rx,
-            event_tx,
-        );
-
-        //---------------------------------- ConnectionManager --------------------------------------------//
-        let connection_manager = self.make_connection_manager(
-            node_identity.clone(),
-            peer_manager.clone(),
-            conn_man_rx,
-            connection_manager_event_tx.clone(),
-        );
 
         Ok(BuiltCommsNode {
-            connection_manager,
             connection_manager_requester,
-            connection_manager_event_tx,
-            connectivity_manager,
+            connection_manager_request_rx,
+            connection_manager_config: self.connection_manager_config,
             connectivity_requester,
-            messaging_pipeline: None,
+            connectivity_rx,
+            connectivity_config: self.connectivity_config,
+            dial_backoff: self.dial_backoff,
             node_identity,
             peer_manager,
+            transport: self.transport,
             protocol_extensions: self.protocol_extensions,
             hidden_service_ctl: self.hidden_service_ctl,
-            shutdown: self.shutdown,
+            messaging_event_sender: None,
+            shutdown_signal: self.shutdown_signal,
         })
     }
 }

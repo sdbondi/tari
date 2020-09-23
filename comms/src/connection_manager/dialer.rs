@@ -54,7 +54,7 @@ use futures::{
 use log::*;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tari_crypto::tari_utilities::hex::Hex;
-use tari_shutdown::{Shutdown, ShutdownSignal};
+use tari_shutdown::{OptionalShutdownSignal, Shutdown, ShutdownSignal};
 use tokio::time;
 
 const LOG_TARGET: &str = "comms::connection_manager::dialer";
@@ -82,7 +82,7 @@ pub struct Dialer<TTransport, TBackoff> {
     request_rx: Fuse<mpsc::Receiver<DialerRequest>>,
     cancel_signals: HashMap<NodeId, Shutdown>,
     conn_man_notifier: mpsc::Sender<ConnectionManagerEvent>,
-    shutdown: Option<ShutdownSignal>,
+    shutdown: Option<OptionalShutdownSignal>,
     pending_dial_requests: HashMap<NodeId, Vec<oneshot::Sender<Result<PeerConnection, ConnectionManagerError>>>>,
     our_supported_protocols: Vec<ProtocolId>,
 }
@@ -103,7 +103,7 @@ where
         backoff: TBackoff,
         request_rx: mpsc::Receiver<DialerRequest>,
         conn_man_notifier: mpsc::Sender<ConnectionManagerEvent>,
-        shutdown: ShutdownSignal,
+        shutdown: OptionalShutdownSignal,
     ) -> Self
     {
         Self {

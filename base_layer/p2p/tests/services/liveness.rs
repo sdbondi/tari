@@ -173,6 +173,6 @@ async fn end_to_end() {
     assert_eq!(pingcount2, 8);
     assert_eq!(pongcount2, 10);
 
-    comms_1.shutdown().await;
-    comms_2.shutdown().await;
+    comms_1.wait_until_shutdown().await;
+    comms_2.wait_until_shutdown().await;
 }

@@ -11,13 +11,7 @@ use std::{io::Stdout, net::SocketAddr, sync::Arc};
 use structopt::StructOpt;
 use tari_app_utilities::{
     identity_management::setup_node_identity,
-    utilities::{
-        create_peer_db_folder,
-        create_wallet_folder,
-        parse_peer_seeds,
-        setup_wallet_transport_type,
-        ExitCodes,
-    },
+    utilities::{create_dir, create_wallet_folder, parse_peer_seeds, setup_wallet_transport_type, ExitCodes},
 };
 use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, GlobalConfig, Network};
 use tari_comms::{peer_manager::PeerFeatures, NodeIdentity};
@@ -152,7 +146,7 @@ async fn setup_wallet(config: &GlobalConfig, node_identity: Arc<NodeIdentity>) -
             .expect("wallet_db_file cannot be set to a root directory"),
     )
     .map_err(|e| ExitCodes::WalletError(format!("Error creating Wallet folder. {}", e)))?;
-    create_peer_db_folder(&config.wallet_peer_db_path)
+    create_dir(&config.wallet_peer_db_path)
         .map_err(|e| ExitCodes::WalletError(format!("Error creating peer db folder. {}", e)))?;
 
     debug!(target: LOG_TARGET, "Running Wallet database migrations");

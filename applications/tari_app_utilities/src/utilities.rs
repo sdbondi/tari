@@ -212,30 +212,29 @@ pub fn create_wallet_folder<P: AsRef<Path>>(wallet_path: P) -> Result<(), String
     }
 }
 
-/// Creates the directory to store the peer database
-/// ## Parameters
-/// `peer_db_path` - Reference to a file path
-///
-/// ## Returns
-/// A Result to determine if it was successful or not, string will indicate the reason on error
-pub fn create_peer_db_folder<P: AsRef<Path>>(peer_db_path: P) -> Result<(), String> {
-    let path = peer_db_path.as_ref();
-    match fs::create_dir_all(path) {
-        Ok(_) => {
-            info!(
-                target: LOG_TARGET,
-                "Peer database directory has been created in {}",
-                path.display()
-            );
-            Ok(())
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            info!(target: LOG_TARGET, "Peer database already exists in {}", path.display());
-            Ok(())
-        },
-        Err(e) => Err(format!("could not create peer db path: {}", e)),
-    }
-}
+// /// Creates the directory to store the peer database
+// /// ## Parameters
+// /// `peer_db_path` - Reference to a file path
+// ///
+// /// ## Returns
+// /// A Result to determine if it was successful or not, string will indicate the reason on error
+// pub fn create_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
+//     match fs::create_dir_all(path) {
+//         Ok(_) => {
+//             info!(
+//                 target: LOG_TARGET,
+//                 "Peer database directory has been created in {}",
+//                 path.as_ref().display()
+//             );
+//             Ok(())
+//         },
+//         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+//             info!(target: LOG_TARGET, "Peer database already exists in {}", path.display());
+//             Ok(())
+//         },
+//         Err(e) => Err(format!("could not create peer db path: {}", e)),
+//     }
+// }
 
 /// Sets up the tokio runtime based on the configuration
 /// ## Parameters

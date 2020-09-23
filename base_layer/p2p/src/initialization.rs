@@ -21,19 +21,19 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
-    comms_connector::{InboundDomainConnector, PeerMessage},
+    comms_connector::{InboundDomainConnector, PeerMessage, PubsubDomainConnector},
     transport::{TorConfig, TransportType},
 };
 use futures::{channel::mpsc, AsyncRead, AsyncWrite, Sink};
 use log::*;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use std::{error::Error, iter, path::PathBuf, sync::Arc, time::Duration};
+use std::{error::Error, future::Future, iter, path::PathBuf, sync::Arc, time::Duration};
 use tari_comms::{
     backoff::ConstantBackoff,
     peer_manager::{NodeIdentity, Peer, PeerFeatures, PeerManagerError},
     pipeline,
     pipeline::SinkService,
-    protocol::{rpc::RpcServer, ProtocolExtensions},
+    protocol::{messaging::MessagingProtocolExtension, rpc::RpcServer},
     tor,
     transports::{MemoryTransport, SocksTransport, TcpWithTorTransport, Transport},
     utils::cidr::parse_cidrs,
@@ -43,12 +43,20 @@ use tari_comms::{
     PeerManager,
 };
 use tari_comms_dht::{Dht, DhtBuilder, DhtConfig, DhtInitializationError};
+use tari_service_framework::{handles::ServiceHandlesFuture, ServiceInitializationError, ServiceInitializer};
+use tari_shutdown::ShutdownSignal;
 use tari_storage::{
     lmdb_store::{LMDBBuilder, LMDBConfig},
     LMDBWrapper,
 };
 use thiserror::Error;
+use tokio::{runtime::Handle, sync::broadcast};
 use tower::ServiceBuilder;
+
+/// Buffer size of the messaging event channel. The size should allow more than enough "time" for slow subscribers to
+/// read the events while not being wasteful. An MessageReceived event is published per message, which could happen
+/// quite a lot, so a little more room to buffer here is recommended.
+pub const MESSAGING_EVENTS_BUFFER_SIZE: usize = 100;
 
 const LOG_TARGET: &str = "p2p::initialization";
 
@@ -159,7 +167,7 @@ where
         .with_min_connectivity(1.0)
         .build()?;
 
-    add_peers_to_comms(&comms.peer_manager, &comms.node_identity, seed_peers).await?;
+    add_all_peers(&comms.peer_manager, &comms.node_identity, seed_peers).await?;
 
     // Create outbound channel
     let (outbound_tx, outbound_rx) = mpsc::channel(10);
@@ -177,22 +185,23 @@ where
     .await?;
 
     let dht_outbound_layer = dht.outbound_middleware_layer();
+    let (event_sender, _) = broadcast::channel(1);
+    let pipeline = pipeline::Builder::new()
+        .outbound_buffer_size(10)
+        .with_outbound_pipeline(outbound_rx, |sink| {
+            ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
+        })
+        .max_concurrent_inbound_tasks(10)
+        .with_inbound_pipeline(
+            ServiceBuilder::new()
+                .layer(dht.inbound_middleware_layer())
+                .service(SinkService::new(connector)),
+        )
+        .finish();
 
     let comms = comms
-        .with_messaging_pipeline(
-            pipeline::Builder::new()
-                .outbound_buffer_size(10)
-                .with_outbound_pipeline(outbound_rx, |sink| {
-                    ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
-                })
-                .max_concurrent_inbound_tasks(10)
-                .with_inbound_pipeline(
-                    ServiceBuilder::new()
-                        .layer(dht.inbound_middleware_layer())
-                        .service(SinkService::new(connector)),
-                )
-                .finish(),
-        )
+        .add_protocol_extension(MessagingProtocolExtension::new(event_sender.clone(), pipeline))
+        .with_messaging_event_sender(event_sender)
         .spawn()
         .await?;
 
@@ -204,14 +213,12 @@ pub async fn initialize_comms<TSink>(
     config: CommsConfig,
     connector: InboundDomainConnector<TSink>,
     seed_peers: Vec<Peer>,
-    protocols: ProtocolExtensions,
 ) -> Result<(CommsNode, Dht), CommsInitializationError>
 where
     TSink: Sink<Arc<PeerMessage>> + Unpin + Clone + Send + Sync + 'static,
     TSink::Error: Error + Send + Sync,
 {
     let mut builder = CommsBuilder::new()
-        .add_protocol_extensions(protocols)
         .with_node_identity(config.node_identity.clone())
         .with_user_agent(&config.user_agent);
     if config.allow_test_addresses {
@@ -322,8 +329,6 @@ where
         .with_peer_storage(peer_database)
         .build()?;
 
-    add_peers_to_comms(&comms.peer_manager, &comms.node_identity, seed_peers).await?;
-
     // Create outbound channel
     let (outbound_tx, outbound_rx) = mpsc::channel(config.outbound_buffer_size);
 
@@ -334,14 +339,15 @@ where
         comms.connectivity(),
         comms.shutdown_signal(),
     )
-    .with_config(config.dht)
+    .with_config(config.dht.clone())
     .finish()
     .await?;
+
+    add_all_peers(&comms.peer_manager, &comms.node_identity, seed_peers).await?;
 
     let dht_outbound_layer = dht.outbound_middleware_layer();
 
     // DHT RPC service is only available for communication nodes
-    // TODO: (sdbondi) PeerFeatures should be simplified to PeerRole
     if comms
         .node_identity()
         .has_peer_features(PeerFeatures::COMMUNICATION_NODE)
@@ -349,23 +355,31 @@ where
         comms = comms.add_rpc(RpcServer::new().add_service(dht.rpc_service()));
     }
 
-    let comms = comms
-        .with_messaging_pipeline(
-            pipeline::Builder::new()
-                .outbound_buffer_size(config.outbound_buffer_size)
-                .with_outbound_pipeline(outbound_rx, |sink| {
-                    ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
-                })
-                .max_concurrent_inbound_tasks(config.max_concurrent_inbound_tasks)
-                .with_inbound_pipeline(
-                    ServiceBuilder::new()
-                        .layer(dht.inbound_middleware_layer())
-                        .service(SinkService::new(connector)),
-                )
-                .finish(),
+    // Hook up DHT messaging middlewares
+    let (messaging_events_sender, _) = broadcast::channel(MESSAGING_EVENTS_BUFFER_SIZE);
+    let messaging_pipeline = pipeline::Builder::new()
+        .outbound_buffer_size(config.outbound_buffer_size)
+        .with_outbound_pipeline(outbound_rx, |sink| {
+            ServiceBuilder::new().layer(dht_outbound_layer).service(sink)
+        })
+        .max_concurrent_inbound_tasks(config.max_concurrent_inbound_tasks)
+        .with_inbound_pipeline(
+            ServiceBuilder::new()
+                .layer(dht.inbound_middleware_layer())
+                .service(SinkService::new(connector)),
         )
-        .spawn()
-        .await?;
+        .finish();
+
+    comms = comms.add_protocol_extension(MessagingProtocolExtension::new(
+        messaging_events_sender.clone(),
+        messaging_pipeline,
+    ));
+
+    let comms = comms
+        // TODO: Since the messaging protocol is decoupled from comms, obtaining the messaging events subscription
+        //       should not be part of the comms node.
+        .with_messaging_event_sender(messaging_events_sender)
+        .spawn().await?;
 
     Ok((comms, dht))
 }
@@ -378,7 +392,7 @@ where
 ///
 /// ## Returns
 /// A Result to determine if the call was successful or not, string will indicate the reason on error
-async fn add_peers_to_comms(
+async fn add_all_peers(
     peer_manager: &PeerManager,
     node_identity: &NodeIdentity,
     peers: Vec<Peer>,
@@ -402,4 +416,104 @@ async fn add_peers_to_comms(
             .map_err(CommsInitializationError::FailedToAddSeedPeer)?;
     }
     Ok(())
+}
+
+pub struct P2pInitializer {
+    config: CommsConfig,
+    connector: PubsubDomainConnector,
+    seed_peers: Vec<Peer>,
+}
+
+impl P2pInitializer {
+    pub fn new(config: CommsConfig, connector: PubsubDomainConnector, seed_peers: Vec<Peer>) -> Self {
+        Self {
+            config,
+            connector,
+            seed_peers,
+        }
+    }
+}
+
+impl ServiceInitializer for P2pInitializer {
+    type Future = impl Future<Output = Result<(), ServiceInitializationError>>;
+
+    fn initialize(
+        &mut self,
+        _executor: Handle,
+        handles: ServiceHandlesFuture,
+        shutdown: ShutdownSignal,
+    ) -> Self::Future
+    {
+        let config = self.config.clone();
+        let connector = self.connector.clone();
+        let seed_peers = self.seed_peers.drain(..).collect::<Vec<_>>();
+
+        async move {
+            let mut builder = CommsBuilder::new()
+                .with_shutdown_signal(shutdown)
+                .with_node_identity(config.node_identity.clone())
+                .with_user_agent(&config.user_agent);
+            if config.allow_test_addresses {
+                builder = builder.allow_test_addresses();
+            }
+
+            let (comms, dht) = match &config.transport_type {
+                TransportType::Memory { listener_address } => {
+                    debug!(target: LOG_TARGET, "Building in-memory comms stack");
+                    let comms = builder
+                        .with_transport(MemoryTransport)
+                        .with_listener_address(listener_address.clone());
+                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                },
+                TransportType::Tcp {
+                    listener_address,
+                    tor_socks_config,
+                } => {
+                    debug!(
+                        target: LOG_TARGET,
+                        "Building TCP comms stack{}",
+                        tor_socks_config.as_ref().map(|_| " with Tor support").unwrap_or("")
+                    );
+                    let mut transport = TcpWithTorTransport::new();
+                    if let Some(config) = tor_socks_config {
+                        transport.set_tor_socks_proxy(config.clone());
+                    }
+                    let comms = builder
+                        .with_transport(transport)
+                        .with_listener_address(listener_address.clone());
+                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                },
+                TransportType::Tor(tor_config) => {
+                    debug!(target: LOG_TARGET, "Building TOR comms stack ({})", tor_config);
+                    let hidden_service_ctl = initialize_hidden_service(tor_config.clone()).await?;
+                    let comms = builder.configure_from_hidden_service(hidden_service_ctl).await?;
+                    let (comms, dht) = configure_comms_and_dht(comms, config, connector, seed_peers).await?;
+                    debug!(target: LOG_TARGET, "Comms and DHT configured");
+                    // Set the public address to the onion address that comms is using
+                    comms.node_identity().set_public_address(
+                        comms
+                            .hidden_service()
+                            .expect("hidden_service must be set because a tor hidden service is set")
+                            .get_onion_address(),
+                    );
+                    (comms, dht)
+                },
+                TransportType::Socks {
+                    socks_config,
+                    listener_address,
+                } => {
+                    debug!(target: LOG_TARGET, "Building SOCKS5 comms stack");
+                    let comms = builder
+                        .with_transport(SocksTransport::new(socks_config.clone()))
+                        .with_listener_address(listener_address.clone());
+                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                },
+            };
+
+            handles.register(comms);
+            handles.register(dht);
+
+            Ok(())
+        }
+    }
 }

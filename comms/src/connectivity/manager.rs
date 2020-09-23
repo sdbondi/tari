@@ -46,7 +46,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tokio::{sync::broadcast, task::JoinHandle, time};
 
 const LOG_TARGET: &str = "comms::connectivity::manager";
@@ -69,7 +69,7 @@ pub struct ConnectivityManager {
     pub event_tx: broadcast::Sender<Arc<ConnectivityEvent>>,
     pub connection_manager: ConnectionManagerRequester,
     pub peer_manager: Arc<PeerManager>,
-    pub shutdown_signal: ShutdownSignal,
+    pub shutdown_signal: OptionalShutdownSignal,
 }
 
 impl ConnectivityManager {
@@ -99,17 +99,6 @@ pub enum ConnectivityStatus {
     Offline,
 }
 
-macro_rules! is_fn {
-    ($name: ident, $($enum_key:ident)::+) => {
-        pub fn $name(&self) -> bool {
-            match self {
-                $($enum_key)::+ => true,
-                _ => false
-            }
-        }
-    }
-}
-
 impl ConnectivityStatus {
     is_fn!(is_initializing, ConnectivityStatus::Initializing);
 
@@ -131,7 +120,7 @@ pub struct ConnectivityManagerActor {
     status: ConnectivityStatus,
     request_rx: Fuse<mpsc::Receiver<ConnectivityRequest>>,
     connection_manager: ConnectionManagerRequester,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
     peer_manager: Arc<PeerManager>,
     event_tx: broadcast::Sender<Arc<ConnectivityEvent>>,
     connection_stats: HashMap<NodeId, PeerConnectionStats>,

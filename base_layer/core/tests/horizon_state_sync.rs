@@ -194,8 +194,8 @@ fn test_pruned_mode_sync_with_future_horizon_sync_height() {
 
         check_final_state(&alice_db, &bob_db);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -360,8 +360,8 @@ fn test_pruned_mode_sync_with_spent_utxos() {
 
         check_final_state(&alice_db, &bob_db);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -507,8 +507,8 @@ fn test_pruned_mode_sync_with_spent_faucet_utxo_before_horizon() {
 
         check_final_state(&alice_db, &bob_db);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }
 
@@ -772,7 +772,7 @@ fn test_pruned_mode_sync_fail_final_validation() {
 
         check_final_state(&alice_db, &bob_db);
 
-        alice_node.comms.shutdown().await;
-        bob_node.comms.shutdown().await;
+        alice_node.comms.wait_until_shutdown().await;
+        bob_node.comms.wait_until_shutdown().await;
     });
 }

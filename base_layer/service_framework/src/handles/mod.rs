@@ -23,6 +23,7 @@
 mod future;
 mod lazy_service;
 use std::{
+    any,
     any::{Any, TypeId},
     collections::HashMap,
     sync::Mutex,
@@ -30,6 +31,7 @@ use std::{
 
 pub use self::{future::ServiceHandlesFuture, lazy_service::LazyService};
 pub(crate) use future::handle_notifier_pair;
+use std::sync::Arc;
 
 /// This macro unlocks a Mutex or RwLock. If the lock is
 /// poisoned (i.e. panic while unlocked) the last value
@@ -50,9 +52,9 @@ macro_rules! acquire_lock {
 }
 
 /// Simple collection for named handles
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ServiceHandles {
-    handles: Mutex<HashMap<TypeId, Box<dyn Any + Sync + Send>>>,
+    handles: Arc<Mutex<HashMap<TypeId, Box<dyn Any + Sync + Send>>>>,
 }
 
 impl ServiceHandles {
@@ -74,6 +76,16 @@ impl ServiceHandles {
     pub fn get_handle<H>(&self) -> Option<H>
     where H: Clone + 'static {
         self.get_handle_by_type_id(TypeId::of::<H>())
+    }
+
+    /// Get a handle from the given type (`TypeId`) and downcast it to a type `H`.
+    /// If the item does not exist or the downcast fails, a panic occurs
+    pub fn expect_handle<H>(&self) -> H
+    where H: Clone + 'static {
+        match self.get_handle_by_type_id(TypeId::of::<H>()) {
+            Some(h) => h,
+            None => panic!("Handle `{}` was never registered", any::type_name::<H>()),
+        }
     }
 
     /// Get a ServiceHandle by name and downcast it to a type `H`. If the item

@@ -25,7 +25,6 @@ use crate::{
     initializer::{BoxedServiceInitializer, ServiceInitializationError, ServiceInitializer},
 };
 use futures::future::join_all;
-use std::sync::Arc;
 use tari_shutdown::ShutdownSignal;
 use tokio::runtime;
 
@@ -67,7 +66,7 @@ impl StackBuilder {
     /// Concurrently initialize the services. Once all service have been initialized, `notify_ready`
     /// is called, which completes initialization for those services. The resulting service handles are
     /// returned. If ANY of the services fail to initialize, an error is returned.
-    pub async fn finish(self) -> Result<Arc<ServiceHandles>, ServiceInitializationError> {
+    pub async fn finish(self) -> Result<ServiceHandles, ServiceInitializationError> {
         let (notifier, handles_fut) = handle_notifier_pair();
 
         let StackBuilder {

@@ -50,9 +50,9 @@ use futures::{
 use log::*;
 use multiaddr::Multiaddr;
 use std::{collections::HashMap, fmt, sync::Arc};
-use tari_shutdown::{Shutdown, ShutdownSignal};
+use tari_shutdown::{OptionalShutdownSignal, Shutdown, ShutdownSignal};
 use time::Duration;
-use tokio::{sync::broadcast, time};
+use tokio::{sync::broadcast, task, time};
 
 const LOG_TARGET: &str = "comms::connection_manager::manager";
 
@@ -156,7 +156,7 @@ pub struct ConnectionManager<TTransport, TBackoff> {
     peer_manager: Arc<PeerManager>,
     node_identity: Arc<NodeIdentity>,
     active_connections: HashMap<NodeId, PeerConnection>,
-    shutdown_signal: Option<ShutdownSignal>,
+    shutdown_signal: Option<OptionalShutdownSignal>,
     protocols: Protocols<Substream>,
     listener_address: Option<Multiaddr>,
     listening_notifiers: Vec<oneshot::Sender<Multiaddr>>,
@@ -180,7 +180,7 @@ where
         node_identity: Arc<NodeIdentity>,
         peer_manager: Arc<PeerManager>,
         connection_manager_events_tx: broadcast::Sender<Arc<ConnectionManagerEvent>>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         let (internal_event_tx, internal_event_rx) = mpsc::channel(EVENT_CHANNEL_SIZE);
@@ -234,6 +234,10 @@ where
 
     pub fn complete_signal(&self) -> ShutdownSignal {
         self.complete_trigger.to_signal()
+    }
+
+    pub fn spawn(self) -> task::JoinHandle<()> {
+        task::spawn(self.run())
     }
 
     pub async fn run(mut self) {

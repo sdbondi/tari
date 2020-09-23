@@ -24,7 +24,7 @@ use crate::bounded_executor::BoundedExecutor;
 use futures::{future::FusedFuture, stream::FusedStream, Stream, StreamExt};
 use log::*;
 use std::fmt::Debug;
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tower::{Service, ServiceExt};
 
 const LOG_TARGET: &str = "comms::pipeline::inbound";
@@ -37,7 +37,7 @@ pub struct Inbound<TSvc, TStream> {
     executor: BoundedExecutor,
     service: TSvc,
     stream: TStream,
-    shutdown_signal: ShutdownSignal,
+    shutdown_signal: OptionalShutdownSignal,
 }
 
 impl<TSvc, TStream> Inbound<TSvc, TStream>
@@ -48,7 +48,13 @@ where
     TSvc::Error: Debug + Send,
     TSvc::Future: Send,
 {
-    pub fn new(executor: BoundedExecutor, stream: TStream, service: TSvc, shutdown_signal: ShutdownSignal) -> Self {
+    pub fn new(
+        executor: BoundedExecutor,
+        stream: TStream,
+        service: TSvc,
+        shutdown_signal: OptionalShutdownSignal,
+    ) -> Self
+    {
         Self {
             executor,
             stream,

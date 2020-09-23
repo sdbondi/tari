@@ -53,7 +53,7 @@ use std::{
     time::Duration,
 };
 use tari_crypto::tari_utilities::hex::Hex;
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::OptionalShutdownSignal;
 use tokio::time;
 
 const LOG_TARGET: &str = "comms::connection_manager::listener";
@@ -62,7 +62,7 @@ pub struct PeerListener<TTransport> {
     config: ConnectionManagerConfig,
     bounded_executor: BoundedExecutor,
     conn_man_notifier: mpsc::Sender<ConnectionManagerEvent>,
-    shutdown_signal: ShutdownSignal,
+    shutdown_signal: OptionalShutdownSignal,
     transport: TTransport,
     noise_config: NoiseConfig,
     peer_manager: Arc<PeerManager>,
@@ -85,7 +85,7 @@ where
         conn_man_notifier: mpsc::Sender<ConnectionManagerEvent>,
         peer_manager: Arc<PeerManager>,
         node_identity: Arc<NodeIdentity>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     ) -> Self
     {
         Self {
@@ -181,7 +181,7 @@ where
     async fn spawn_liveness_session(
         socket: TTransport::Output,
         permit: Arc<AtomicUsize>,
-        shutdown_signal: ShutdownSignal,
+        shutdown_signal: OptionalShutdownSignal,
     )
     {
         permit.fetch_sub(1, Ordering::SeqCst);

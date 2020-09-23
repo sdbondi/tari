@@ -26,6 +26,8 @@
 #![deny(unused_must_use)]
 #![deny(unreachable_patterns)]
 #![deny(unknown_lints)]
+// Enable 'impl Trait' type aliases
+#![feature(type_alias_impl_trait)]
 
 /// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣶⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 /// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣾⣿⡿⠋⠀⠀⠀⠀⠉⠛⠿⣿⣿⣶⣤⣀⠀⠀⠀⠀⠀⠀⢰⣿⣾⣾⣾⣾⣾⣾⣾⣾⣾⣿⠀⠀⠀⣾⣾⣾⡀⠀⠀⠀⠀⢰⣾⣾⣾⣾⣿⣶⣶⡀⠀⠀⠀⢸⣾⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -84,6 +86,8 @@
 #[macro_use]
 mod table;
 
+/// Base node bootstrap code
+mod bootstrap;
 /// Utilities and helpers for building the base node instance
 mod builder;
 /// The command line interface definition and configuration
@@ -206,7 +210,7 @@ fn main_inner() -> Result<(), ExitCodes> {
 
         rt.spawn(run_grpc(grpc, node_config.grpc_address));
     }
-    let base_node_handle = rt.spawn(ctx.run(rt.handle().clone()));
+    let base_node_handle = rt.spawn(ctx.run());
 
     info!(
         target: LOG_TARGET,
