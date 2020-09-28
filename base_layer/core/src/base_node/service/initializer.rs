@@ -36,7 +36,8 @@ use crate::{
 use futures::{channel::mpsc::unbounded as futures_mpsc_channel_unbounded, future, Future, Stream, StreamExt};
 use log::*;
 use std::{convert::TryFrom, sync::Arc};
-use tari_comms_dht::outbound::OutboundMessageRequester;
+use tari_comms::CommsNode;
+use tari_comms_dht::{outbound::OutboundMessageRequester, Dht};
 use tari_p2p::{
     comms_connector::{PeerMessage, SubscriptionFactory},
     domain_message::DomainMessage,
@@ -186,9 +187,8 @@ where T: BlockchainBackend + 'static
         executor.spawn(async move {
             let handles = handles_fut.await;
 
-            let outbound_message_service = handles
-                .get_handle::<OutboundMessageRequester>()
-                .expect("OutboundMessageRequester handle required for BaseNodeService");
+            let dht = handles.expect_handle::<Dht>();
+            let outbound_message_service = dht.outbound_requester();
 
             let state_machine = handles
                 .get_handle::<StateMachineHandle>()

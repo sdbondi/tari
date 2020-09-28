@@ -26,22 +26,19 @@ use crate::{
 };
 use futures::future::join_all;
 use tari_shutdown::ShutdownSignal;
-use tokio::runtime;
 
 /// Responsible for building and collecting handles and (usually long-running) service futures.
 /// `finish` is an async function which resolves once all the services are initialized, or returns
 /// an error if any one of the services fails to initialize.
 pub struct StackBuilder {
     initializers: Vec<BoxedServiceInitializer>,
-    executor: runtime::Handle,
     shutdown_signal: ShutdownSignal,
 }
 
 impl StackBuilder {
-    pub fn new(executor: runtime::Handle, shutdown_signal: ShutdownSignal) -> Self {
+    pub fn new(shutdown_signal: ShutdownSignal) -> Self {
         Self {
             initializers: Vec::new(),
-            executor,
             shutdown_signal,
         }
     }
@@ -70,20 +67,14 @@ impl StackBuilder {
         let (notifier, handles_fut) = handle_notifier_pair();
 
         let StackBuilder {
-            executor,
             shutdown_signal,
             initializers,
         } = self;
 
         // Collect all the initialization futures
-        let init_futures = initializers.into_iter().map(|mut init| {
-            ServiceInitializer::initialize(
-                &mut init,
-                executor.clone(),
-                handles_fut.clone(),
-                shutdown_signal.clone(),
-            )
-        });
+        let init_futures = initializers
+            .into_iter()
+            .map(|mut init| ServiceInitializer::initialize(&mut init, handles_fut.clone(), shutdown_signal.clone()));
 
         // Run all the initializers concurrently and check each Result returning an error
         // on the first one that failed.

@@ -22,6 +22,7 @@
 
 use crate::{
     comms_connector::{InboundDomainConnector, PeerMessage, PubsubDomainConnector},
+    hooks::{BeforeSpawnContext, P2pInitializationHooks},
     transport::{TorConfig, TransportType},
 };
 use futures::{channel::mpsc, AsyncRead, AsyncWrite, Sink};
@@ -33,10 +34,15 @@ use tari_comms::{
     peer_manager::{NodeIdentity, Peer, PeerFeatures, PeerManagerError},
     pipeline,
     pipeline::SinkService,
-    protocol::{messaging::MessagingProtocolExtension, rpc::RpcServer},
+    protocol::{
+        messaging::{MessagingEventSender, MessagingProtocolExtension},
+        rpc::RpcServer,
+        ProtocolExtensions,
+    },
     tor,
     transports::{MemoryTransport, SocksTransport, TcpWithTorTransport, Transport},
     utils::cidr::parse_cidrs,
+    BuiltCommsNode,
     CommsBuilder,
     CommsBuilderError,
     CommsNode,
@@ -213,12 +219,16 @@ pub async fn initialize_comms<TSink>(
     config: CommsConfig,
     connector: InboundDomainConnector<TSink>,
     seed_peers: Vec<Peer>,
+    protocols: ProtocolExtensions,
+    shutdown_signal: ShutdownSignal,
 ) -> Result<(CommsNode, Dht), CommsInitializationError>
 where
     TSink: Sink<Arc<PeerMessage>> + Unpin + Clone + Send + Sync + 'static,
     TSink::Error: Error + Send + Sync,
 {
     let mut builder = CommsBuilder::new()
+        .with_shutdown_signal(shutdown_signal)
+        .add_protocol_extensions(protocols)
         .with_node_identity(config.node_identity.clone())
         .with_user_agent(&config.user_agent);
     if config.allow_test_addresses {
@@ -301,8 +311,7 @@ async fn configure_comms_and_dht<TTransport, TSink>(
     builder: CommsBuilder<TTransport>,
     config: CommsConfig,
     connector: InboundDomainConnector<TSink>,
-    seed_peers: Vec<Peer>,
-) -> Result<(CommsNode, Dht), CommsInitializationError>
+) -> Result<(BuiltCommsNode<TTransport>, Dht, MessagingEventSender), CommsInitializationError>
 where
     TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
     TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
@@ -343,8 +352,6 @@ where
     .finish()
     .await?;
 
-    add_all_peers(&comms.peer_manager, &comms.node_identity, seed_peers).await?;
-
     let dht_outbound_layer = dht.outbound_middleware_layer();
 
     // DHT RPC service is only available for communication nodes
@@ -375,13 +382,20 @@ where
         messaging_pipeline,
     ));
 
+    // Process before spawn hook
+    let context = BeforeSpawnContext::new(node_identity, dht.outbound_requester());
+    let context = hooks.call_before_spawn(context).await?;
+    add_all_peers(&comms.peer_manager, &comms.node_identity, context.peers).await?;
     let comms = comms
+        .add_protocol_extensions(context.protocols)
         // TODO: Since the messaging protocol is decoupled from comms, obtaining the messaging events subscription
         //       should not be part of the comms node.
         .with_messaging_event_sender(messaging_events_sender)
-        .spawn().await?;
+        .spawn_with_transport(
+            transport
+        ).await?;
 
-    Ok((comms, dht))
+    Ok((comms, dht, messaging_events_sender))
 }
 
 /// Adds a new peer to the base node
@@ -421,15 +435,15 @@ async fn add_all_peers(
 pub struct P2pInitializer {
     config: CommsConfig,
     connector: PubsubDomainConnector,
-    seed_peers: Vec<Peer>,
+    hooks: Option<P2pInitializationHooks>,
 }
 
 impl P2pInitializer {
-    pub fn new(config: CommsConfig, connector: PubsubDomainConnector, seed_peers: Vec<Peer>) -> Self {
+    pub fn new(config: CommsConfig, connector: PubsubDomainConnector, hooks: P2pInitializationHooks) -> Self {
         Self {
             config,
             connector,
-            seed_peers,
+            hooks: Some(hooks),
         }
     }
 }
@@ -437,22 +451,18 @@ impl P2pInitializer {
 impl ServiceInitializer for P2pInitializer {
     type Future = impl Future<Output = Result<(), ServiceInitializationError>>;
 
-    fn initialize(
-        &mut self,
-        _executor: Handle,
-        handles: ServiceHandlesFuture,
-        shutdown: ShutdownSignal,
-    ) -> Self::Future
-    {
+    fn initialize(&mut self, handles: ServiceHandlesFuture, shutdown_signal: ShutdownSignal) -> Self::Future {
         let config = self.config.clone();
         let connector = self.connector.clone();
-        let seed_peers = self.seed_peers.drain(..).collect::<Vec<_>>();
+        let mut hooks = self.hooks.take().expect("P2pInitializer created with hooks = None");
 
         async move {
+            hooks.call_before_build().await?;
             let mut builder = CommsBuilder::new()
-                .with_shutdown_signal(shutdown)
+                .with_shutdown_signal(shutdown_signal)
                 .with_node_identity(config.node_identity.clone())
                 .with_user_agent(&config.user_agent);
+
             if config.allow_test_addresses {
                 builder = builder.allow_test_addresses();
             }
@@ -463,7 +473,7 @@ impl ServiceInitializer for P2pInitializer {
                     let comms = builder
                         .with_transport(MemoryTransport)
                         .with_listener_address(listener_address.clone());
-                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                    configure_comms_and_dht(comms, config, connector, hooks).await?
                 },
                 TransportType::Tcp {
                     listener_address,
@@ -481,13 +491,14 @@ impl ServiceInitializer for P2pInitializer {
                     let comms = builder
                         .with_transport(transport)
                         .with_listener_address(listener_address.clone());
-                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                    configure_comms_and_dht(comms, config, connector, hooks).await?
                 },
                 TransportType::Tor(tor_config) => {
                     debug!(target: LOG_TARGET, "Building TOR comms stack ({})", tor_config);
                     let hidden_service_ctl = initialize_hidden_service(tor_config.clone()).await?;
                     let comms = builder.configure_from_hidden_service(hidden_service_ctl).await?;
-                    let (comms, dht) = configure_comms_and_dht(comms, config, connector, seed_peers).await?;
+                    let (comms, dht, messaging_events_sender) =
+                        configure_comms_and_dht(comms, config, connector, hooks).await?;
                     debug!(target: LOG_TARGET, "Comms and DHT configured");
                     // Set the public address to the onion address that comms is using
                     comms.node_identity().set_public_address(
@@ -506,7 +517,7 @@ impl ServiceInitializer for P2pInitializer {
                     let comms = builder
                         .with_transport(SocksTransport::new(socks_config.clone()))
                         .with_listener_address(listener_address.clone());
-                    configure_comms_and_dht(comms, config, connector, seed_peers).await?
+                    configure_comms_and_dht(comms, config, connector, hooks).await?
                 },
             };
 
@@ -516,4 +527,31 @@ impl ServiceInitializer for P2pInitializer {
             Ok(())
         }
     }
+}
+
+fn spawn_comms<TTransport>(
+    comms: BuiltCommsNode,
+    dht: Dht,
+    transport: TTransport,
+    messaging_events_sender: MessagingEventSender,
+    mut hooks: P2pInitializationHooks,
+) -> Result<(CommsNode, Dht), ServiceInitializationError>
+where
+    TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
+    TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+{
+    // Process before spawn hook
+    let context = BeforeSpawnContext::new(node_identity, dht.outbound_requester());
+    let context = hooks.call_before_spawn(context).await?;
+    add_all_peers(&comms.peer_manager, &comms.node_identity, context.peers).await?;
+    let comms = comms
+        .add_protocol_extensions(context.protocols)
+        // TODO: Since the messaging protocol is decoupled from comms, obtaining the messaging events subscription
+        //       should not be part of the comms node.
+        .with_messaging_event_sender(messaging_events_sender)
+        .spawn_with_transport(
+            transport
+        ).await?;
+
+    Ok((comms, dht))
 }

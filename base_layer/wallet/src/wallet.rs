@@ -73,6 +73,7 @@ use tari_p2p::{
     services::comms_outbound::CommsOutboundServiceInitializer,
 };
 use tari_service_framework::StackBuilder;
+use tari_shutdown::Shutdown;
 use tokio::runtime;
 
 const LOG_TARGET: &str = "wallet";
@@ -118,6 +119,7 @@ where
     W: ContactsBackend + 'static,
 {
     pub comms: CommsNode,
+    pub shutdown: Shutdown,
     pub dht_service: Dht,
     pub store_and_forward_requester: StoreAndForwardRequester,
     pub output_manager_service: OutputManagerHandle,
@@ -147,6 +149,7 @@ where
         contacts_backend: W,
     ) -> Result<Wallet<T, U, V, W>, WalletError>
     {
+        let shutdown = Shutdown::new();
         let db = WalletDatabase::new(wallet_backend);
 
         // Persist the Comms Private Key provided to this function
@@ -163,14 +166,17 @@ where
 
         debug!(target: LOG_TARGET, "Initializing Wallet Comms");
 
-        let (comms, dht) = initialize_comms(config.comms_config.clone(), publisher, Default::default()).await?;
+        let (comms, dht) = initialize_comms(
+            config.comms_config.clone(),
+            publisher,
+            vec![],
+            Default::default(),
+            shutdown.to_signal(),
+        )
+        .await?;
 
         debug!(target: LOG_TARGET, "Wallet Comms Initialized");
-        let shutdown_signal = comms
-            .shutdown_signal()
-            .take()
-            .expect("Comms initialized without shutdown_signal");
-        let fut = StackBuilder::new(runtime::Handle::current(), shutdown_signal)
+        let fut = StackBuilder::new(runtime::Handle::current(), shutdown.to_signal())
             .add_initializer(CommsOutboundServiceInitializer::new(dht.outbound_requester()))
             .add_initializer(OutputManagerServiceInitializer::new(
                 OutputManagerServiceConfig::default(),
@@ -212,6 +218,7 @@ where
 
         Ok(Wallet {
             comms,
+            shutdown,
             dht_service: dht,
             store_and_forward_requester,
             output_manager_service: output_manager_handle,
@@ -229,7 +236,11 @@ where
 
     /// This method consumes the wallet so that the handles are dropped which will result in the services async loops
     /// exiting.
-    pub async fn shutdown(self) {
+    pub async fn shutdown(mut self) {
+        self.shutdown.trigger().expect(
+            "No one is listening for shutdown trigger. If you are seeing this error then the shutdown signals have \
+             not been wired up correctly.",
+        );
         self.comms.wait_until_shutdown().await;
     }
 

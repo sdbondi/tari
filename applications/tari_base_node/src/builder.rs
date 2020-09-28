@@ -76,7 +76,7 @@ use tari_p2p::{
     },
 };
 use tari_service_framework::{handles::ServiceHandles, StackBuilder};
-use tari_shutdown::ShutdownSignal;
+use tari_shutdown::{Shutdown, ShutdownSignal};
 use tari_wallet::{
     output_manager_service::{
         config::OutputManagerServiceConfig,
@@ -411,6 +411,7 @@ where
         config,
         publisher,
         base_node_comms.node_identity().to_peer(),
+        interrupt_signal.clone(),
     )
     .await?;
     wallet_comms
@@ -449,6 +450,7 @@ where
         config.transaction_direct_send_timeout,
         config.transaction_broadcast_send_timeout,
         network,
+        interrupt_signal.clone(),
     )
     .await;
 
@@ -669,6 +671,7 @@ async fn setup_wallet_comms(
     config: &GlobalConfig,
     publisher: PubsubDomainConnector,
     base_node_peer: Peer,
+    shutdown_signal: ShutdownSignal,
 ) -> Result<(CommsNode, Dht), anyhow::Error>
 {
     let comms_config = CommsConfig {
@@ -698,7 +701,8 @@ async fn setup_wallet_comms(
     //     context.add_peers(seed_peers);
     //     future::ready(Ok(context))
     // });
-    let (comms, dht) = initialize_comms(comms_config, publisher, seed_peers).await?;
+    let (comms, dht) =
+        initialize_comms(comms_config, publisher, seed_peers, Default::default(), shutdown_signal).await?;
 
     // Save final node identity after comms has initialized. This is required because the public_address can be changed
     // by comms during initialization when using tor.
@@ -799,12 +803,13 @@ async fn register_wallet_services(
     direct_send_timeout: Duration,
     broadcast_send_timeout: Duration,
     network: NetworkType,
+    interrupt_signal: ShutdownSignal,
 ) -> ServiceHandles
 {
     let transaction_db = TransactionServiceSqliteDatabase::new(wallet_db_conn.clone(), None);
     transaction_db.migrate(wallet_comms.node_identity().public_key().clone());
 
-    StackBuilder::new(runtime::Handle::current(), wallet_comms.shutdown_signal().clone().take().unwrap())
+    StackBuilder::new(runtime::Handle::current(), interrupt_signal)
         .add_initializer(CommsOutboundServiceInitializer::new(wallet_dht.outbound_requester()))
         .add_initializer(LivenessInitializer::new(
             LivenessConfig{

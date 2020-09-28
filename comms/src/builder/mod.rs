@@ -53,10 +53,9 @@ use crate::{
     peer_manager::{NodeIdentity, PeerManager},
     protocol::{ProtocolExtensions, Protocols},
     tor,
-    transports::{SocksTransport, TcpTransport, Transport},
     types::CommsDatabase,
 };
-use futures::{channel::mpsc, AsyncRead, AsyncWrite};
+use futures::channel::mpsc;
 use log::*;
 use std::sync::Arc;
 use tari_shutdown::{OptionalShutdownSignal, ShutdownSignal};
@@ -65,11 +64,9 @@ use tokio::sync::broadcast;
 const LOG_TARGET: &str = "comms::builder";
 
 /// The `CommsBuilder` provides a simple builder API for getting Tari comms p2p messaging up and running.
-pub struct CommsBuilder<TTransport> {
+pub struct CommsBuilder {
     peer_storage: Option<CommsDatabase>,
     node_identity: Option<Arc<NodeIdentity>>,
-    transport: TTransport,
-    protocols: Option<Protocols<Substream>>,
     dial_backoff: BoxedBackoff,
     hidden_service_ctl: Option<tor::HiddenServiceController>,
     connection_manager_config: ConnectionManagerConfig,
@@ -79,27 +76,12 @@ pub struct CommsBuilder<TTransport> {
     shutdown_signal: OptionalShutdownSignal,
 }
 
-impl CommsBuilder<TcpTransport> {
-    /// Create a new CommsBuilder
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    fn default_tcp_transport() -> TcpTransport {
-        let mut transport = TcpTransport::new();
-        transport.set_nodelay(true);
-        transport
-    }
-}
-
-impl Default for CommsBuilder<TcpTransport> {
+impl Default for CommsBuilder {
     fn default() -> Self {
         Self {
             peer_storage: None,
             node_identity: None,
-            transport: Self::default_tcp_transport(),
             dial_backoff: Box::new(ExponentialBackoff::default()),
-            protocols: None,
             hidden_service_ctl: None,
             connection_manager_config: ConnectionManagerConfig::default(),
             connectivity_config: ConnectivityConfig::default(),
@@ -109,11 +91,7 @@ impl Default for CommsBuilder<TcpTransport> {
     }
 }
 
-impl<TTransport> CommsBuilder<TTransport>
-where
-    TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
-    TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
-{
+impl CommsBuilder {
     /// Set the [NodeIdentity] for this comms instance. This is required.
     ///
     /// [OutboundMessagePool]: ../../outbound_message_service/index.html#outbound-message-pool
@@ -192,31 +170,31 @@ where
         self
     }
 
-    /// Configure the `CommsBuilder` to build a node which communicates using the given `tor::HiddenService`.
-    pub async fn configure_from_hidden_service(
-        mut self,
-        mut hidden_service_ctl: tor::HiddenServiceController,
-    ) -> Result<CommsBuilder<SocksTransport>, CommsBuilderError>
-    {
-        // Set the listener address to be the address (usually local) to which tor will forward all traffic
-        self.connection_manager_config.listener_address = hidden_service_ctl.proxied_address();
-        let transport = hidden_service_ctl.get_transport().await?;
-
-        Ok(CommsBuilder {
-            // Set the socks transport configured for this hidden service
-            transport,
-            // Set the hidden service.
-            hidden_service_ctl: Some(hidden_service_ctl),
-            peer_storage: self.peer_storage,
-            node_identity: self.node_identity,
-            protocols: self.protocols,
-            dial_backoff: self.dial_backoff,
-            connection_manager_config: self.connection_manager_config,
-            connectivity_config: self.connectivity_config,
-            protocol_extensions: self.protocol_extensions,
-            shutdown_signal: self.shutdown_signal,
-        })
-    }
+    // /// Configure the `CommsBuilder` to build a node which communicates using the given `tor::HiddenService`.
+    // pub async fn configure_from_hidden_service(
+    //     mut self,
+    //     mut hidden_service_ctl: tor::HiddenServiceController,
+    // ) -> Result<CommsBuilder<SocksTransport>, CommsBuilderError>
+    // {
+    //     // Set the listener address to be the address (usually local) to which tor will forward all traffic
+    //     self.connection_manager_config.listener_address = hidden_service_ctl.proxied_address();
+    //     let transport = hidden_service_ctl.get_transport().await?;
+    //
+    //     Ok(CommsBuilder {
+    //         // Set the socks transport configured for this hidden service
+    //         transport,
+    //         // Set the hidden service.
+    //         hidden_service_ctl: Some(hidden_service_ctl),
+    //         peer_storage: self.peer_storage,
+    //         node_identity: self.node_identity,
+    //         protocols: self.protocols,
+    //         dial_backoff: self.dial_backoff,
+    //         connection_manager_config: self.connection_manager_config,
+    //         connectivity_config: self.connectivity_config,
+    //         protocol_extensions: self.protocol_extensions,
+    //         shutdown_signal: self.shutdown_signal,
+    //     })
+    // }
 
     /// Set the backoff that [ConnectionManager] uses when dialing peers. This is optional. If omitted the default
     /// ExponentialBackoff is used. [ConnectionManager]: crate::connection_manager::next::ConnectionManager
@@ -224,25 +202,6 @@ where
     where T: Backoff + Send + Sync + 'static {
         self.dial_backoff = Box::new(backoff);
         self
-    }
-
-    pub fn with_transport<T>(self, transport: T) -> CommsBuilder<T>
-    where
-        T: Transport + Unpin + Send + Sync + Clone + 'static,
-        T::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
-    {
-        CommsBuilder {
-            transport,
-            peer_storage: self.peer_storage,
-            node_identity: self.node_identity,
-            hidden_service_ctl: self.hidden_service_ctl,
-            protocols: self.protocols,
-            dial_backoff: self.dial_backoff,
-            connection_manager_config: self.connection_manager_config,
-            connectivity_config: self.connectivity_config,
-            protocol_extensions: self.protocol_extensions,
-            shutdown_signal: self.shutdown_signal,
-        }
     }
 
     /// Add an RPC server/router in this instance of Tari comms.
@@ -281,7 +240,7 @@ where
     }
 
     /// Build the required comms services. Services will not be started.
-    pub fn build(mut self) -> Result<BuiltCommsNode<TTransport>, CommsBuilderError> {
+    pub fn build(mut self) -> Result<BuiltCommsNode, CommsBuilderError> {
         debug!(target: LOG_TARGET, "Building comms");
         let node_identity = self
             .node_identity
@@ -311,7 +270,6 @@ where
             dial_backoff: self.dial_backoff,
             node_identity,
             peer_manager,
-            transport: self.transport,
             protocol_extensions: self.protocol_extensions,
             hidden_service_ctl: self.hidden_service_ctl,
             messaging_event_sender: None,

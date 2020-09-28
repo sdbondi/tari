@@ -39,7 +39,7 @@ mod test_utils;
 
 pub mod comms_connector;
 pub mod domain_message;
-// pub mod hooks;
+pub mod hooks;
 pub mod initialization;
 pub mod peer;
 pub mod proto;

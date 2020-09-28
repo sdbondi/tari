@@ -50,7 +50,7 @@ use futures::channel::mpsc;
 const LOG_TARGET: &str = "comms::node";
 
 /// Contains the built comms services
-pub struct BuiltCommsNode<TTransport> {
+pub struct BuiltCommsNode {
     pub connection_manager_request_rx: mpsc::Receiver<ConnectionManagerRequest>,
     pub connection_manager_requester: ConnectionManagerRequester,
     pub connection_manager_config: ConnectionManagerConfig,
@@ -62,16 +62,11 @@ pub struct BuiltCommsNode<TTransport> {
     pub hidden_service_ctl: Option<tor::HiddenServiceController>,
     pub peer_manager: Arc<PeerManager>,
     pub protocol_extensions: ProtocolExtensions,
-    pub transport: TTransport,
     pub messaging_event_sender: Option<MessagingEventSender>,
     pub shutdown_signal: OptionalShutdownSignal,
 }
 
-impl<TTransport> BuiltCommsNode<TTransport>
-where
-    TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
-    TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
-{
+impl BuiltCommsNode {
     /// Add an RPC server/router in this instance of Tari comms.
     ///
     /// ```compile_fail
@@ -100,11 +95,11 @@ where
         self
     }
 
-    pub async fn add_peers<I: IntoIterator<Item = Peer>>(self, peers: I) -> Result<Self, CommsBuilderError> {
+    pub async fn add_peers<I: IntoIterator<Item = Peer>>(&self, peers: I) -> Result<(), CommsBuilderError> {
         for peer in peers.into_iter() {
             self.peer_manager.add_peer(peer).await?;
         }
-        Ok(self)
+        Ok(())
     }
 
     /// Wait until the ConnectionManager emits a Listening event. This is the signal that comms is ready.
@@ -126,7 +121,30 @@ where
         }
     }
 
-    pub async fn spawn(self) -> Result<CommsNode, CommsBuilderError> {
+    // pub fn with_transport<T>(self, transport: T) -> CommsBuilder<T>
+    //     where
+    //         T: Transport + Unpin + Send + Sync + Clone + 'static,
+    //         T::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+    // {
+    //     CommsBuilder {
+    //         transport,
+    //         peer_storage: self.peer_storage,
+    //         node_identity: self.node_identity,
+    //         hidden_service_ctl: self.hidden_service_ctl,
+    //         protocols: self.protocols,
+    //         dial_backoff: self.dial_backoff,
+    //         connection_manager_config: self.connection_manager_config,
+    //         connectivity_config: self.connectivity_config,
+    //         protocol_extensions: self.protocol_extensions,
+    //         shutdown_signal: self.shutdown_signal,
+    //     }
+    // }
+
+    pub async fn spawn_with_transport<TTransport>(self, transport: TTransport) -> Result<CommsNode, CommsBuilderError>
+    where
+        TTransport: Transport + Unpin + Send + Sync + Clone + 'static,
+        TTransport::Output: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+    {
         let BuiltCommsNode {
             connection_manager_requester,
             connection_manager_request_rx,
@@ -136,7 +154,6 @@ where
             connectivity_config,
             dial_backoff,
             node_identity,
-            transport,
             peer_manager,
             protocol_extensions,
             messaging_event_sender,

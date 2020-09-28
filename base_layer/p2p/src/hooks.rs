@@ -118,7 +118,7 @@ impl<T> BoxedAsyncHook<T> {
     }
 }
 
-pub trait BoxAsyncHook<T> {
+pub trait BoxAsyncHook<T>: Send + Sync {
     fn call(&mut self, context: T) -> BoxFuture<'static, Result<T, InitializationHookError>>;
 }
 

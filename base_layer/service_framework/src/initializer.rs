@@ -24,13 +24,8 @@ use crate::handles::ServiceHandlesFuture;
 use futures::{Future, FutureExt};
 use std::pin::Pin;
 use tari_shutdown::ShutdownSignal;
-use tokio::runtime;
 
 pub type ServiceInitializationError = anyhow::Error;
-// #[error("General error for failed initialization: `{0}`")]
-// Failed(String),
-// Specialized errors should be added and used if appropriate.
-// }
 
 /// Implementors of this trait will initialize a service
 /// The `StackBuilder` builds impls of this trait.
@@ -39,12 +34,7 @@ pub trait ServiceInitializer {
     type Future: Future<Output = Result<(), ServiceInitializationError>>;
 
     /// Async initialization code for a service
-    fn initialize(
-        &mut self,
-        executor: runtime::Handle,
-        handles_fut: ServiceHandlesFuture,
-        shutdown: ShutdownSignal,
-    ) -> Self::Future;
+    fn initialize(&mut self, handles_fut: ServiceHandlesFuture, shutdown: ShutdownSignal) -> Self::Future;
 
     /// Create a boxed version of this ServiceInitializer.
     fn boxed(self) -> BoxedServiceInitializer
@@ -69,19 +59,13 @@ pub trait ServiceInitializer {
 /// ```
 impl<TFunc, TFut> ServiceInitializer for TFunc
 where
-    TFunc: FnMut(runtime::Handle, ServiceHandlesFuture, ShutdownSignal) -> TFut,
+    TFunc: FnMut(ServiceHandlesFuture, ShutdownSignal) -> TFut,
     TFut: Future<Output = Result<(), ServiceInitializationError>>,
 {
     type Future = TFut;
 
-    fn initialize(
-        &mut self,
-        executor: runtime::Handle,
-        handles: ServiceHandlesFuture,
-        shutdown: ShutdownSignal,
-    ) -> Self::Future
-    {
-        (self)(executor, handles, shutdown)
+    fn initialize(&mut self, handles: ServiceHandlesFuture, shutdown: ShutdownSignal) -> Self::Future {
+        (self)(handles, shutdown)
     }
 }
 
@@ -100,7 +84,6 @@ type ServiceInitializationFuture = Pin<Box<dyn Future<Output = Result<(), Servic
 pub trait AbstractServiceInitializer {
     fn initialize(
         &mut self,
-        executor: runtime::Handle,
         handles_fut: ServiceHandlesFuture,
         shutdown: ShutdownSignal,
     ) -> ServiceInitializationFuture;
@@ -112,14 +95,8 @@ where
     T: ServiceInitializer,
     T::Future: Send + 'static,
 {
-    fn initialize(
-        &mut self,
-        executor: runtime::Handle,
-        handles: ServiceHandlesFuture,
-        shutdown: ShutdownSignal,
-    ) -> ServiceInitializationFuture
-    {
-        let initialization = self.initialize(executor, handles, shutdown);
+    fn initialize(&mut self, handles: ServiceHandlesFuture, shutdown: ShutdownSignal) -> ServiceInitializationFuture {
+        let initialization = self.initialize(handles, shutdown);
         initialization.boxed() as ServiceInitializationFuture
     }
 }
@@ -146,13 +123,7 @@ impl BoxedServiceInitializer {
 impl ServiceInitializer for BoxedServiceInitializer {
     type Future = ServiceInitializationFuture;
 
-    fn initialize(
-        &mut self,
-        executor: runtime::Handle,
-        handles_fut: ServiceHandlesFuture,
-        shutdown: ShutdownSignal,
-    ) -> Self::Future
-    {
-        self.inner.initialize(executor, handles_fut, shutdown)
+    fn initialize(&mut self, handles_fut: ServiceHandlesFuture, shutdown: ShutdownSignal) -> Self::Future {
+        self.inner.initialize(handles_fut, shutdown)
     }
 }
