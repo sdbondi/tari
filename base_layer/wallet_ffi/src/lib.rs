@@ -2809,13 +2809,13 @@ pub unsafe extern "C" fn wallet_create(
         let encoder = PatternEncoder::new("{d(%Y-%m-%d %H:%M:%S.%f)} [{t}] {l:5} {m}{n}");
         let log_appender: Box<dyn Append> = if num_rolling_log_files != 0 && size_per_log_file_bytes != 0 {
             let mut pattern;
-            let split_str: Vec<&str> = path.split('.').collect();
+            let split_str = path.split('.').collect::<Vec<_>>();
             if split_str.len() <= 1 {
-                pattern = format!("{}{}", path.clone(), "{}");
+                pattern = format!("{}{}", path, "{}");
             } else {
                 pattern = split_str[0].to_string();
-                for i in 1..split_str.len() - 1 {
-                    pattern = format!("{}.{}", pattern, split_str[i]);
+                for s in split_str.iter().skip(1) {
+                    pattern = format!("{}.{}", pattern, s);
                 }
 
                 pattern = format!("{}{}", pattern, ".{}.");
@@ -3456,7 +3456,7 @@ pub unsafe extern "C" fn wallet_add_base_node_peer(
         return false;
     }
 
-    return true;
+    true
 }
 
 /// Upserts a TariContact to the TariWallet. If the contact does not exist it will be Inserted. If it does exist the
