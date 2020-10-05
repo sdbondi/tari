@@ -408,7 +408,7 @@ where
 
         debug!(
             target: LOG_TARGET,
-            "[ThisNode={}] Peer '{}' added to peer list.",
+            "[ThisNode={}] Creating peer connection for peer '{}'.",
             node_identity.node_id().short_str(),
             peer_node_id.short_str()
         );

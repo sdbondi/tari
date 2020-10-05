@@ -67,11 +67,6 @@ pub fn create(
     our_supported_protocols: Vec<ProtocolId>,
 ) -> Result<PeerConnection, ConnectionManagerError>
 {
-    trace!(
-        target: LOG_TARGET,
-        "(Peer={}) Socket successfully upgraded to multiplexed socket",
-        peer_node_id.short_str()
-    );
     let (peer_tx, peer_rx) = mpsc::channel(PEER_REQUEST_BUFFER_SIZE);
     let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed); // Monotonic
     let substream_counter = connection.substream_counter();
