@@ -20,28 +20,14 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod connection_stats;
+use std::net::SocketAddr;
 
-mod config;
-pub use config::ConnectivityConfig;
+pub struct DnsSeedResolver {
+    a: (),
+}
 
-mod connection_pool;
-
-mod dns_seed;
-
-mod error;
-pub use error::ConnectivityError;
-
-mod manager;
-pub(crate) use manager::ConnectivityManager;
-pub use manager::ConnectivityStatus;
-
-mod requester;
-pub(crate) use requester::ConnectivityRequest;
-pub use requester::{ConnectivityEvent, ConnectivityEventRx, ConnectivityEventTx, ConnectivityRequester};
-
-mod selection;
-pub use selection::ConnectivitySelection;
-
-#[cfg(test)]
-mod test;
+impl DnsSeedResolver {
+    pub fn new(seeds: Vec<SocketAddr>) -> Self {
+        Self { a: () }
+    }
+}

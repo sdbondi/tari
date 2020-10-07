@@ -29,6 +29,7 @@ use super::{
 };
 use crate::{
     connection_manager::{ConnectionManagerError, ConnectionManagerRequester},
+    connectivity::dns_seed::DnsSeedResolver,
     peer_manager::NodeId,
     runtime::task,
     utils::datetime::format_duration,
@@ -187,11 +188,11 @@ impl ConnectivityManagerActor {
         use ConnectivityRequest::*;
         trace!(target: LOG_TARGET, "Request: {:?}", req);
         match req {
-            GetConnectivityStatus(reply_tx) => {
-                let _ = reply_tx.send(self.status);
+            GetConnectivityStatus(reply) => {
+                let _ = reply.send(self.status);
             },
-            DialPeer(node_id, reply_tx) => {
-                if let Err(err) = self.connection_manager.send_dial_peer(node_id, reply_tx).await {
+            DialPeer(node_id, reply) => {
+                if let Err(err) = self.connection_manager.send_dial_peer(node_id, reply).await {
                     error!(
                         target: LOG_TARGET,
                         "Failed to send dial request to connection manager: {:?}", err
@@ -212,11 +213,11 @@ impl ConnectivityManagerActor {
                     );
                 },
             },
-            SelectConnections(selection, reply_tx) => {
-                let _ = reply_tx.send(self.select_connections(selection).await);
+            SelectConnections(selection, reply) => {
+                let _ = reply.send(self.select_connections(selection).await);
             },
-            GetConnection(node_id, reply_tx) => {
-                let _ = reply_tx.send(
+            GetConnection(node_id, reply) => {
+                let _ = reply.send(
                     self.pool
                         .get(&node_id)
                         .filter(|c| c.status() == ConnectionStatus::Connected)
@@ -225,13 +226,21 @@ impl ConnectivityManagerActor {
                         .cloned(),
                 );
             },
-            GetAllConnectionStates(reply_tx) => {
-                let _ = reply_tx.send(self.pool.all().into_iter().cloned().collect());
+            GetAllConnectionStates(reply) => {
+                let _ = reply.send(self.pool.all().into_iter().cloned().collect());
             },
             BanPeer(node_id, duration, reason) => {
                 if let Err(err) = self.ban_peer(&node_id, duration, reason).await {
                     error!(target: LOG_TARGET, "Error when banning peer: {:?}", err);
                 }
+            },
+            ResolveDnsSeed(hostname, reply) => {
+                unimplemented!();
+                // let connection_manager = self.connection_manager.clone();
+                // task::spawn(async move {
+                //     let mut resolver = DnsSeedResolver::new(hostname, connection_manager);
+                //     let _ = reply.send(resolver.resolve().await);
+                // });
             },
         }
     }

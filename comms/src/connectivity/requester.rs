@@ -26,7 +26,11 @@ use super::{
     manager::ConnectivityStatus,
     ConnectivitySelection,
 };
-use crate::{connection_manager::ConnectionManagerError, peer_manager::NodeId, PeerConnection};
+use crate::{
+    connection_manager::ConnectionManagerError,
+    peer_manager::{NodeId, Peer},
+    PeerConnection,
+};
 use futures::{
     channel::{mpsc, oneshot},
     SinkExt,
@@ -90,6 +94,7 @@ pub enum ConnectivityRequest {
         ConnectivitySelection,
         oneshot::Sender<Result<Vec<PeerConnection>, ConnectivityError>>,
     ),
+    ResolveDnsSeed(String, oneshot::Sender<Result<Vec<Peer>, ConnectivityError>>),
     GetConnection(NodeId, oneshot::Sender<Option<PeerConnection>>),
     GetAllConnectionStates(oneshot::Sender<Vec<PeerConnectionState>>),
     BanPeer(NodeId, Duration, String),
@@ -195,6 +200,15 @@ impl ConnectivityRequester {
             .await
             .map_err(|_| ConnectivityError::ActorDisconnected)?;
         Ok(())
+    }
+
+    pub async fn resolve_dns_seed(&mut self, hostname: String) -> Result<Vec<Peer>, ConnectivityError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.sender
+            .send(ConnectivityRequest::ResolveDnsSeed(hostname, reply_tx))
+            .await
+            .map_err(|_| ConnectivityError::ActorDisconnected)?;
+        reply_rx.await.map_err(|_| ConnectivityError::ActorResponseCancelled)?
     }
 
     /// Waits for the node to get at least one connection.
