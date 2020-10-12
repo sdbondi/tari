@@ -5,18 +5,19 @@
 #![deny(unused_must_use)]
 #![deny(unreachable_patterns)]
 #![deny(unknown_lints)]
+
 use log::*;
-use std::{fs, sync::Arc};
+use std::{fs, str::FromStr, sync::Arc};
 use structopt::StructOpt;
 use tari_app_utilities::{
     identity_management::setup_node_identity,
-    utilities::{parse_peer_seeds, setup_wallet_transport_type, ExitCodes},
+    utilities::{setup_wallet_transport_type, ExitCodes},
 };
 use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, GlobalConfig, Network};
 use tari_comms::{peer_manager::PeerFeatures, NodeIdentity};
 use tari_comms_dht::{DbConnectionUrl, DhtConfig};
 use tari_core::{consensus::Network as NetworkType, transactions::types::CryptoFactories};
-use tari_p2p::initialization::CommsConfig;
+use tari_p2p::{initialization::CommsConfig, seed_peer::SeedPeer, DEFAULT_DNS_SEED_RESOLVER};
 use tari_shutdown::{Shutdown, ShutdownSignal};
 use tari_wallet::{
     error::WalletError,
@@ -194,6 +195,9 @@ async fn setup_wallet(
         allow_test_addresses: true,
         listener_liveness_allowlist_cidrs: Vec::new(),
         listener_liveness_max_sessions: 0,
+        dns_seed_name_server: DEFAULT_DNS_SEED_RESOLVER.parse().unwrap(),
+        peer_seeds: Default::default(),
+        dns_seeds: Default::default(),
     };
 
     let network = match &config.network {
@@ -235,7 +239,12 @@ async fn setup_wallet(
 
     // TODO update this to come from an explicit config field. This will be replaced by gRPC interface.
     if !config.peer_seeds.is_empty() {
-        let seed_peers = parse_peer_seeds(&config.peer_seeds);
+        let seed_peers = config
+            .peer_seeds
+            .iter()
+            .map(|s| SeedPeer::from_str(s))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| ExitCodes::ConfigError(format!("Seed peers failed to parse: {}", e)))?;
         wallet
             .set_base_node_peer(
                 seed_peers[0].public_key.clone(),

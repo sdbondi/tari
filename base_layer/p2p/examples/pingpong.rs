@@ -68,6 +68,7 @@ mod pingpong {
         initialization::{CommsConfig, P2pInitializer},
         services::liveness::{LivenessConfig, LivenessEvent, LivenessHandle, LivenessInitializer},
         transport::{TorConfig, TransportType},
+        DEFAULT_DNS_SEED_RESOLVER,
     };
     use tari_service_framework::StackBuilder;
     use tari_shutdown::{Shutdown, ShutdownSignal};
@@ -172,6 +173,9 @@ mod pingpong {
             listener_liveness_allowlist_cidrs: Vec::new(),
             listener_liveness_max_sessions: 0,
             user_agent: "tari/pingpong/1.0.0".to_string(),
+            dns_seed_name_server: DEFAULT_DNS_SEED_RESOLVER.parse().unwrap(),
+            peer_seeds: Default::default(),
+            dns_seeds: Default::default(),
         };
         let mut shutdown = Shutdown::new();
         let shutdown_signal = shutdown.to_signal();
@@ -179,7 +183,7 @@ mod pingpong {
         let transport_type = comms_config.transport_type.clone();
 
         let mut handles = StackBuilder::new(shutdown.to_signal())
-            .add_initializer(P2pInitializer::new(comms_config, publisher, vec![]))
+            .add_initializer(P2pInitializer::new(comms_config, publisher))
             .add_initializer(LivenessInitializer::new(
                 LivenessConfig {
                     auto_ping_interval: None, // Some(Duration::from_secs(5)),

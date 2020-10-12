@@ -11,12 +11,10 @@ pub use trust_dns_client::{
     rr::{IntoName, Name},
 };
 
+use crate::seed_peer::SeedPeer;
 use futures::future;
-use log::*;
-use std::{future::Future, net::SocketAddr, str::FromStr};
-use tari_comms::{multiaddr::Multiaddr, types::CommsPublicKey};
-use tari_shutdown::ShutdownSignal;
-use tari_utilities::hex::Hex;
+use std::{future::Future, net::SocketAddr, sync::Arc};
+use tari_shutdown::Shutdown;
 use tokio::{net::UdpSocket, task};
 use trust_dns_client::{
     client::AsyncClient,
@@ -26,8 +24,6 @@ use trust_dns_client::{
     serialize::binary::BinEncoder,
     udp::UdpClientStream,
 };
-
-const LOG_TARGET: &str = "p2p::dns_seed";
 
 /// Resolves DNS TXT records and parses them into [`SeedPeer`]s.
 ///
@@ -39,15 +35,32 @@ pub struct DnsSeedResolver<R>
 where R: Future<Output = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static
 {
     client: AsyncClient<R>,
+    shutdown: Arc<Shutdown>,
 }
 
 impl DnsSeedResolver<UdpResponse> {
-    pub async fn connect(name_server: SocketAddr, shutdown_signal: ShutdownSignal) -> Result<Self, DnsSeedError> {
+    pub async fn connect(name_server: SocketAddr) -> Result<Self, DnsSeedError> {
+        let shutdown = Shutdown::new();
         let stream = UdpClientStream::<UdpSocket>::new(name_server);
         let (client, background) = AsyncClient::connect(stream).await?;
-        task::spawn(future::select(shutdown_signal, background));
+        task::spawn(future::select(shutdown.to_signal(), background));
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            shutdown: Arc::new(shutdown),
+        })
+    }
+}
+
+// Cannot use #[derive(Clone)] because of the (unnecessary) trait bound on the AsyncClient struct
+impl<R> Clone for DnsSeedResolver<R>
+where R: Future<Output = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static
+{
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            shutdown: self.shutdown.clone(),
+        }
     }
 }
 
@@ -77,29 +90,12 @@ where R: Future<Output = Result<DnsResponse, ProtoError>> + Send + Unpin + 'stat
                 if txt.is_empty() {
                     return None;
                 }
+                // Exclude the first length octet from the string result
                 let txt = String::from_utf8_lossy(&txt[1..]);
-                trace!(target: LOG_TARGET, "Processing TXT record {}", txt);
-                let mut parts = txt.split("::");
-                let public_key = parts.next()?;
-                trace!(target: LOG_TARGET, "TXT record has a first part");
-                let public_key = CommsPublicKey::from_hex(&public_key).ok()?;
-                trace!(target: LOG_TARGET, "TXT record has valid public key `{}`", public_key);
-                let addresses = parts.map(Multiaddr::from_str).collect::<Result<Vec<_>, _>>().ok()?;
-                if addresses.is_empty() || addresses.iter().any(|a| a.len() == 0) {
-                    return None;
-                }
-                trace!(target: LOG_TARGET, "TXT record has {} valid addresses", addresses.len());
-                Some(SeedPeer { public_key, addresses })
+                txt.parse().ok()
             })
             .collect();
 
         Ok(peers)
     }
-}
-
-/// Parsed information from a DNS seed record
-#[derive(Debug, Clone)]
-pub struct SeedPeer {
-    pub public_key: CommsPublicKey,
-    pub addresses: Vec<Multiaddr>,
 }

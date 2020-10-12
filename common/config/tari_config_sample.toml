@@ -193,6 +193,12 @@ peer_seeds = [
     "b81b4071f72418cc410166d9baf0c6ef7a8c309e64671fafbbed88f7e1ee7709::/onion3/lwwcv4nq7epgem5vdcawom4mquqsw2odbwfcjzv3j6sksx4gr24e52ad:18141"
 ]
 
+# DNS seeds
+# The DNS records in these hostnames should provide TXT records as per https://github.com/tari-project/tari/pull/2319
+dns_seeds = []
+# The name server used to resolve DNS seeds
+# dns_seed_name_server = "1.1.1.1:53"
+
 # Determines the method of syncing blocks when the node is lagging. If you are not struggling with syncing, then
 # it is recommended to leave this setting as it. Available values are ViaBestChainMetadata and ViaRandomPeer.
 #block_sync_strategy="ViaBestChainMetadata"
@@ -293,6 +299,13 @@ wallet_tor_identity_file = "./wallet-tor.json" # or ".\\wallet-tor.json"
 # new nodes can use to introduce themselves to the network.
 # peer_seeds = ["public_key1::address1", "public_key2::address2",... ]
 peer_seeds = []
+
+# DNS seeds
+# The DNS records in these hostnames should provide TXT records as per https://github.com/tari-project/tari/pull/2319
+# e.g. seeds.tari.com
+dns_seeds = []
+# The name server used to resolve DNS seeds
+# dns_seed_name_server = "1.1.1.1:53"
 
 # Configure the number of threads to spawn for long-running tasks, like block and transaction validation. A good choice
 # for this value is somewhere between n/2 and n - 1, where n is the number of cores on your machine.

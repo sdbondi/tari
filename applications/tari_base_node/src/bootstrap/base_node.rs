@@ -100,10 +100,8 @@ where B: BlockchainBackend + 'static
 
         let sync_strategy = config.block_sync_strategy.parse().unwrap();
 
-        let seed_peers = utilities::parse_peer_seeds(&config.peer_seeds);
-
         let mut handles = StackBuilder::new(self.interrupt_signal)
-            .add_initializer(P2pInitializer::new(comms_config, publisher, seed_peers))
+            .add_initializer(P2pInitializer::new(comms_config, publisher))
             .add_initializer(BaseNodeServiceInitializer::new(
                 peer_message_subscriptions.clone(),
                 self.db.clone(),
@@ -187,6 +185,9 @@ where B: BlockchainBackend + 'static
             listener_liveness_allowlist_cidrs: self.config.listener_liveness_allowlist_cidrs.clone(),
             listener_liveness_max_sessions: self.config.listnener_liveness_max_sessions,
             user_agent: format!("tari/basenode/{}", env!("CARGO_PKG_VERSION")),
+            peer_seeds: self.config.peer_seeds.clone(),
+            dns_seeds: self.config.dns_seeds.clone(),
+            dns_seed_name_server: self.config.dns_seed_name_server,
         }
     }
 

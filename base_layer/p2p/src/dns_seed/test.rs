@@ -21,7 +21,6 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use super::DnsSeedResolver;
-use tari_shutdown::Shutdown;
 use tari_utilities::hex::Hex;
 use trust_dns_client::rr::{rdata, RData, Record, RecordType};
 
@@ -29,10 +28,7 @@ use trust_dns_client::rr::{rdata, RData, Record, RecordType};
 #[ignore]
 #[tokio_macros::test]
 async fn it_returns_an_empty_vec_if_all_seeds_are_invalid() {
-    let shutdown = Shutdown::new();
-    let mut resolver = DnsSeedResolver::connect("8.8.8.8:53".parse().unwrap(), shutdown.to_signal())
-        .await
-        .unwrap();
+    let mut resolver = DnsSeedResolver::connect("1.1.1.1:53".parse().unwrap()).await.unwrap();
     let seeds = resolver.resolve("tari.com").await.unwrap();
     assert!(seeds.is_empty());
 }
@@ -103,8 +99,10 @@ mod mock {
         fmt::Display,
         net::SocketAddr,
         pin::Pin,
+        sync::Arc,
         task::{Context, Poll},
     };
+    use tari_shutdown::Shutdown;
     use tokio::task;
     use trust_dns_client::{
         client::AsyncClient,
@@ -155,9 +153,13 @@ mod mock {
             let (tx, rx) = mpsc::unbounded();
             let stream = future::ready(Ok(MockStream { receiver: rx, answers }));
             let (client, background) = AsyncClient::new(stream, Box::new(StreamHandle::new(tx)), None).await?;
-            task::spawn(background);
 
-            Ok(Self { client })
+            let shutdown = Shutdown::new();
+            task::spawn(future::select(shutdown.to_signal(), background));
+            Ok(Self {
+                client,
+                shutdown: Arc::new(shutdown),
+            })
         }
     }
 }
