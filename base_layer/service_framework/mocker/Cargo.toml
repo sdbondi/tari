@@ -1,0 +1,17 @@
+[package]
+name = "tari_service_mocks"
+description = "Mock derive macro for services"
+authors = ["The Tari Development Community"]
+repository = "https://github.com/tari-project/tari"
+homepage = "https://tari.com"
+readme = "README.md"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.7"
+syn = {version = "1.0.38", features = ["fold"]}
