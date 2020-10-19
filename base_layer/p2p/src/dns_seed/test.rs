@@ -105,7 +105,7 @@ mod mock {
     use tari_shutdown::Shutdown;
     use tokio::task;
     use trust_dns_client::{
-        client::AsyncClient,
+        client::{AsyncClient, AsyncDnssecClient, AsyncSecureClientConnect},
         op::Message,
         proto::{
             error::ProtoError,
@@ -148,7 +148,7 @@ mod mock {
         }
     }
 
-    impl DnsSeedResolver<DnsMultiplexerSerialResponse> {
+    impl DnsSeedResolver<AsyncClient<DnsMultiplexerSerialResponse>> {
         pub async fn connect_test(answers: Vec<Record>) -> Result<Self, ProtoError> {
             let (tx, rx) = mpsc::unbounded();
             let stream = future::ready(Ok(MockStream { receiver: rx, answers }));
