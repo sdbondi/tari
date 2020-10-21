@@ -1,7 +1,11 @@
 const assert = require('assert');
+const expect = require("chai").expect;
 const grpc = require('grpc');
 const protoLoader = require('@grpc/proto-loader');
 const grpc_promise = require('grpc-promise');
+const BaseNodeClient = require('../helpers/baseNodeClient');
+const TransactionBuilder = require('../helpers/transactionBuilder');
+
 let client;
 let walletClient;
 
@@ -36,34 +40,40 @@ walletClient = new tariWallet.Wallet('127.0.0.1:50061', grpc.credentials.createI
 grpc_promise.promisifyAll(walletClient);
 
 describe('Base Node', function () {
-    this.timeout(10000); // five minutes
-    describe('GetVersion', function () {
+    this.timeout(10000);
+    describe('As a user I want to get the version', function () {
         it('should return', function () {
 
             return client.getVersion()
                 .sendMessage({}).then(constants => {
-                    console.log("returned");
-                    console.log(constants);
+                    expect(constants.value).to.match(/\d+\.\d+\.\d+/);
                 });
         });
     });
 
-    describe('GetBlockTemplate', function () {
-        it('Should return', function () {
-            return client.getNewBlockTemplate().sendMessage({}).then(result => {
-
-                console.log(result);
-            });
+    describe('As a user I want to get the chain metadata', function () {
+        it('should return', function () {
+            return client.getTipInfo()
+                .sendMessage({})
+                .then(tip => {
+                    expect(tip.metadata.height_of_longest_chain).to.match(/\d+/);
+                })
         })
-    });
+    })
 
-    describe('Miner', function () {
-        it('As a miner I want to mine a block', function () {
+    describe('As a miner I want to mine a Blake block', function () {
+        it('As a miner I want to mine a Blake block', function () {
             let block;
-            return client.getNewBlockTemplate()
-                .sendMessage({pow_algo: 1})
+            let curr_height;
+
+            return client.getTipInfo()
+                .sendMessage({})
+                .then(tip => {
+                    curr_height = parseInt(tip.metadata.height_of_longest_chain);
+                    return client.getNewBlockTemplate()
+                        .sendMessage({pow_algo: 1});
+                })
                 .then(template => {
-                    console.log(template);
                     block = template.new_block_template;
                     return walletClient.getCoinbase()
                         .sendMessage({
@@ -72,27 +82,47 @@ describe('Base Node', function () {
                             "height": block.header.height
                         });
                 }).then(coinbase => {
-
-                        console.log("Coinbase:", coinbase);
                         const cb = coinbase.transaction;
                         block.body.outputs = block.body.outputs.concat(cb.body.outputs);
                         block.body.kernels = block.body.kernels.concat(cb.body.kernels);
                         return client.getNewBlock().sendMessage(block);
                     }
                 ).then(b => {
-                        console.log("Block:" , b);
                         return client.submitBlock().sendMessage(b.block);
                     }
                 ).then(empty => {
-                        console.log(empty);
-
                         return client.getTipInfo().sendMessage({});
                     }
                 ).then(tipInfo => {
-
-                    console.log(tipInfo);
-                    assert.equal(tipInfo.metadata.height_of_longest_chain, 1);
+                    expect(tipInfo.metadata.height_of_longest_chain).to.equal((curr_height + 1) + "");
                 });
         })
+    });
+
+    describe('As a user I want to submit a transaction' , function() {
+        it('test', async function() {
+            let baseNode = new BaseNodeClient(client);
+            let builder = new TransactionBuilder();
+            const privateKey = builder.generatePrivateKey("test");
+            let blockTemplate = await baseNode.getBlockTemplate();
+            let transaction = builder.generateCoinbase(blockTemplate.block_reward, privateKey, 60);
+            return baseNode.submitBlockWithCoinbase(blockTemplate.block, transaction).then(async () =>
+            {
+                let tip = await baseNode.getTipHeight();
+                console.log("Tip:", tip);
+                expect(tip).to.equal(blockTemplate.block.height);
+            });
+        });
+    });
+
+    describe('Create a really long chain', function () {
+        this.timeout(600000);
+        it('describe', async function () {
+            let b = new BaseNodeClient(client);
+            for (var i=0;i<3000;i++) {
+                await b.mineBlock(walletClient);
+            }
+        })
+
     });
 });

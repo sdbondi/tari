@@ -194,11 +194,13 @@ fn test_target_block_interval() {
     algos.insert(PowAlgorithm::Blake, PowAlgorithmConstants {
         max_target_time: 240 * 6,
         min_difficulty: 60_000_000.into(),
+        max_difficulty: 60_000_000.into(),
         target_time: 240,
     });
     algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
         max_target_time: 240 * 6,
         min_difficulty: 60_000_000.into(),
+        max_difficulty: 60_000_000.into(),
         target_time: 240,
     });
     let constants_2_equal = ConsensusConstantsBuilder::new(Network::LocalNet)
@@ -209,11 +211,13 @@ fn test_target_block_interval() {
     algos.insert(PowAlgorithm::Blake, PowAlgorithmConstants {
         max_target_time: 300 * 6,
         min_difficulty: 60_000_000.into(),
+        max_difficulty: 60_000_000.into(),
         target_time: 300,
     });
     algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
         max_target_time: 200 * 6,
         min_difficulty: 60_000_000.into(),
+        max_difficulty: 60_000_000.into(),
         target_time: 200,
     });
     let constants_2_split = ConsensusConstantsBuilder::new(Network::LocalNet)
@@ -224,6 +228,7 @@ fn test_target_block_interval() {
     algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
         max_target_time: 120 * 6,
         min_difficulty: 60_000_000.into(),
+        max_difficulty: 60_000_000.into(),
         target_time: 120,
     });
     let constants_1 = ConsensusConstantsBuilder::new(Network::LocalNet)
