@@ -5,6 +5,8 @@ const protoLoader = require('@grpc/proto-loader');
 const grpc_promise = require('grpc-promise');
 const BaseNodeClient = require('../helpers/baseNodeClient');
 const TransactionBuilder = require('../helpers/transactionBuilder');
+const BaseNodeProcess = require('../helpers/baseNodeProcess');
+const {sleep} = require("../helpers/util");
 
 let client;
 let walletClient;
@@ -125,4 +127,35 @@ describe('Base Node', function () {
         })
 
     });
+
+    describe('Start miner and seed nodes', function() {
+        this.timeout(20000);
+        it("block is propagated", async function(){
+            var seeds = [];
+            var proc = new BaseNodeProcess();
+            await proc.startNew();
+            seeds.push(proc);
+
+            var miner = new BaseNodeProcess();
+            miner.setPeerSeeds([seeds[0].peerAddress()]);
+            await miner.startNew();
+
+            var minerClient = miner.createGrpcClient();
+            let tip = await minerClient.getTipHeight();
+            expect(tip).to.equal(0);
+
+            var seedClient = seeds[0].createGrpcClient();
+            tip = await seedClient.getTipHeight();
+            expect(tip).to.equal(0);
+
+            await minerClient.mineBlock(walletClient);
+            await sleep(3000);
+            expect(await minerClient.getTipHeight()).to.equal(1);
+
+            // propagate
+            await sleep(3000);
+            expect(await seedClient.getTipHeight()).to.equal(1);
+
+        });
+    })
 });

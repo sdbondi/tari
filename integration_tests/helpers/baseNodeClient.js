@@ -1,9 +1,35 @@
 const expect = require('chai').expect;
+const grpc = require('grpc');
+const protoLoader = require('@grpc/proto-loader');
+const grpc_promise = require('grpc-promise');
 
 class BaseNodeClient {
 
-    constructor(client) {
-        this.client = client;
+    constructor(clientOrPort) {
+        if (typeof(clientOrPort)==="number") {
+            this.client = this.createGrpcClient(clientOrPort);
+        }
+        else {
+            this.client = clientOrPort;
+        }
+    }
+
+    createGrpcClient(port) {
+        const PROTO_PATH = __dirname + '/../../applications/tari_app_grpc/proto/base_node.proto';
+        const packageDefinition = protoLoader.loadSync(
+            PROTO_PATH,
+            {
+                keepCase: true,
+                longs: String,
+                enums: String,
+                defaults: true,
+                oneofs: true
+            });
+        const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+        const tari = protoDescriptor.tari.rpc;
+        let client = new tari.BaseNode('127.0.0.1:' + port, grpc.credentials.createInsecure());
+        grpc_promise.promisifyAll(client);
+        return client;
     }
 
     getBlockTemplate() {
