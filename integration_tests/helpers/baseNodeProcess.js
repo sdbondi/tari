@@ -131,7 +131,7 @@ class BaseNodeProcess {
 
     async start() {
         var ps = this.run("~/.cargo/bin/cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
-        await sleep(1000);
+        await sleep(1500);
         return ps;
     }
 

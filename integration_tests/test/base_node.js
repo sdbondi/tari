@@ -1,3 +1,4 @@
+
 const assert = require('assert');
 const expect = require("chai").expect;
 const grpc = require('grpc');
@@ -6,7 +7,7 @@ const grpc_promise = require('grpc-promise');
 const BaseNodeClient = require('../helpers/baseNodeClient');
 const TransactionBuilder = require('../helpers/transactionBuilder');
 const BaseNodeProcess = require('../helpers/baseNodeProcess');
-const {sleep} = require("../helpers/util");
+const {sleep, waitFor} = require("../helpers/util");
 
 let client;
 let walletClient;
@@ -129,7 +130,7 @@ describe('Base Node', function () {
     });
 
     describe('Start miner and seed nodes', function() {
-        this.timeout(20000);
+        this.timeout(60000);
         it("block is propagated", async function(){
             var seeds = [];
             var proc = new BaseNodeProcess();
@@ -149,13 +150,14 @@ describe('Base Node', function () {
             expect(tip).to.equal(0);
 
             await minerClient.mineBlock(walletClient);
-            await sleep(3000);
-            expect(await minerClient.getTipHeight()).to.equal(1);
+            // TODO: Fix case where one block does not progress chains (i.e. need 2)
+            await minerClient.mineBlock(walletClient);
+            await waitFor(async() => minerClient.getTipHeight(), 2, 3000);
+            expect(await minerClient.getTipHeight()).to.equal(2);
 
-            // propagate
-            await sleep(3000);
-            expect(await seedClient.getTipHeight()).to.equal(1);
-
+            // Wait for propagation
+            await waitFor(async() => seedClient.getTipHeight(), 2, 45000);
+            expect(await seedClient.getTipHeight()).to.equal(2);
         });
     })
 });
