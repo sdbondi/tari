@@ -1,31 +1,32 @@
 const {spawnSync, spawn, execSync} = require('child_process');
 const {expect} = require('chai');
-var fs = require('fs');
+const fs = require('fs');
 const BaseNodeClient = require("./baseNodeClient");
 const {sleep, getRandomInt} = require("./util");
 
 class BaseNodeProcess {
     constructor(name, nodeFile) {
-        this.port = getRandomInt(19000, 20000);
-        this.grpcPort = getRandomInt(50000, 51000);
+        this.port = 18142;//getRandomInt(19000, 20000);
+        this.grpcPort = 18142;//getRandomInt(50000, 51000);
         this.name = name || "Basenode" + this.port;
         this.nodeFile = nodeFile || "newnode_id.json";
 
-        this.baseDir = "./temp/base_nodes/" + this.name;
+        this.baseDir = "";//"./temp/base_nodes/" + this.name;
+        console.log("file:", this.nodeFile);
         console.log("POrt:", this.port);
         console.log("GRPC:", this.grpcPort);
     }
 
 
     init() {
-        return this.runSync("~/.cargo/bin/cargo",
+        return this.runSync("cargo",
 
             ["run", "--release", "--bin", "tari_base_node", "--", "--base-path", ".", "--create-id", "--init"]);
     }
 
 
     ensureNodeInfo() {
-        this.nodeInfo = JSON.parse(fs.readFileSync(this.baseDir + "/" + this.nodeFile, 'utf8'));
+        this.nodeInfo = JSON.parse(fs.readFileSync(this.nodeFile, 'utf8'));
     }
 
     peerAddress() {
@@ -58,7 +59,7 @@ class BaseNodeProcess {
             TARI_BASE_NODE__LOCALNET__TRANSPORT: "tcp",
             TARI_BASE_NODE__LOCALNET__TCP_LISTENER_ADDRESS: "/ip4/0.0.0.0/tcp/" + this.port,
             TARI_BASE_NODE__LOCALNET__ALLOW_TEST_ADDRESSES: 'true',
-            TARI_BASE_NODE__LOCALNET__PUBLIC_ADDRESS: "/ip4/10.0.0.102/tcp/" + this.port,
+            TARI_BASE_NODE__LOCALNET__PUBLIC_ADDRESS: `/ip4/192.168.0.100/tcp/${this.port}`,
             TARI_BASE_NODE__LOCALNET__GRPC_ENABLED: "true",
             TARI_BASE_NODE__LOCALNET__GRPC_ADDRESS: "127.0.0.1:" + this.grpcPort,
             TARI_BASE_NODE__LOCALNET__BLOCK_SYNC_STRATEGY: "ViaBestChainMetadata",
@@ -85,10 +86,10 @@ class BaseNodeProcess {
         if (!fs.existsSync(this.baseDir)) {
             fs.mkdirSync(this.baseDir, {recursive: true});
         }
-        var ps = spawnSync(cmd, args, {
+        const ps = spawnSync(cmd, args, {
             cwd: this.baseDir,
             shell: true,
-            env: this.createEnvs()
+            env: {...process.env, ...this.createEnvs()}
         });
 
         expect(ps.error).to.be.an('undefined');
@@ -101,10 +102,10 @@ class BaseNodeProcess {
         if (!fs.existsSync(this.baseDir)) {
             fs.mkdirSync(this.baseDir, {recursive: true});
         }
-        var ps = spawn(cmd, args, {
+        const ps = spawn(cmd, args, {
             cwd: this.baseDir,
             shell: true,
-            env: this.createEnvs()
+            env: {...process.env, ...this.createEnvs()}
         });
 
         ps.stdout.on('data', (data) => {
@@ -125,13 +126,13 @@ class BaseNodeProcess {
     }
 
     async startNew() {
-        await this.init();
-        return this.start();
+        // await this.init();
+        // return this.start();
     }
 
     async start() {
-        var ps = this.run("~/.cargo/bin/cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
-        await sleep(1000);
+        const ps = this.run("cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
+        await sleep(1500);
         return ps;
     }
 

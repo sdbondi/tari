@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-rm -rf temp/data/integration-test-base-node
+#rm -rf temp/data/integration-test-base-node
 mkdir -p  temp/data/integration-test-base-node
 export TARI_BASE_NODE__NETWORK=localnet
 export TARI_BASE_NODE__LOCALNET__DATA_DIR=localnet
@@ -17,7 +17,7 @@ export TARI_BASE_NODE__LOCALNET__WALLET_TOR_IDENTITY_FILE=wallet_tor_id.json
 export TARI_BASE_NODE__LOCALNET__TRANSPORT=tcp
 export TARI_BASE_NODE__LOCALNET__TCP_LISTENER_ADDRESS=/ip4/0.0.0.0/tcp/18189
 export TARI_BASE_NODE__LOCALNET__ALLOW_TEST_ADDRESSES=true
-export TARI_BASE_NODE__LOCALNET__PUBLIC_ADDRESS=/ip4/10.0.0.102/tcp/18189
+export TARI_BASE_NODE__LOCALNET__PUBLIC_ADDRESS=/ip4/192.168.0.100/tcp/18189
 #export TARI_BASE_NODE__LOCALNET__TOR_CONTROL_ADDRESS=/ip4/127.0.0.1/tcp/9051
 #export TARI_BASE_NODE__LOCALNET__TOR_CONTROL_AUTH=none
 #export TARI_BASE_NODE__LOCALNET__TOR_FORWARD_ADDRESS=/ip4/127.0.0.1/tcp/0
@@ -41,6 +41,6 @@ export TARI_MERGE_MINING_PROXY__LOCALNET__PROXY_HOST_ADDRESS=127.0.0.1:50071
 
 
 cd temp/data/integration-test-base-node
-cargo run --release --bin tari_base_node -- --base-path . --create-id --init
-cargo run --release --bin tari_base_node -- --base-path .
+cargo run --bin tari_base_node -- --base-path . --create-id --init
+cargo run --bin tari_base_node -- --base-path .
 

@@ -9,7 +9,18 @@ function sleep(ms) {
     });
 }
 
+async function waitFor(asyncTestFn, toBe, maxTime) {
+    var now = new Date();
+
+    while (new Date() - now < maxTime)  {
+        const value = await asyncTestFn();
+        if (value === toBe ) break;
+        await sleep(100);
+    }
+}
+
 module.exports = {
     getRandomInt,
-    sleep
+    sleep,
+    waitFor
 };
