@@ -18,7 +18,7 @@ class BaseNodeProcess {
 
 
     init() {
-        return this.runSync("~/.cargo/bin/cargo",
+        return this.runSync("cargo",
 
             ["run", "--release", "--bin", "tari_base_node", "--", "--base-path", ".", "--create-id", "--init"]);
     }
@@ -88,7 +88,7 @@ class BaseNodeProcess {
         var ps = spawnSync(cmd, args, {
             cwd: this.baseDir,
             shell: true,
-            env: this.createEnvs()
+            env: {...process.env, ...this.createEnvs()}
         });
 
         expect(ps.error).to.be.an('undefined');
@@ -104,7 +104,7 @@ class BaseNodeProcess {
         var ps = spawn(cmd, args, {
             cwd: this.baseDir,
             shell: true,
-            env: this.createEnvs()
+            env: {...process.env, ...this.createEnvs()}
         });
 
         ps.stdout.on('data', (data) => {
@@ -130,7 +130,7 @@ class BaseNodeProcess {
     }
 
     async start() {
-        var ps = this.run("~/.cargo/bin/cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
+        var ps = this.run("cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
         await sleep(1500);
         return ps;
     }
