@@ -39,16 +39,16 @@ pub struct HeaderIter<'a, B> {
 }
 
 impl<'a, B> HeaderIter<'a, B> {
-    pub fn new(db: &'a BlockchainDatabase<B>, height: u64, chunk_size: usize) -> Self {
-        Self {
-            db,
-            chunk_size,
-            cursor: 0,
-            is_error: false,
-            height,
-            chunk: Vec::with_capacity(chunk_size),
-        }
-    }
+    // pub fn new(db: &'a BlockchainDatabase<B>, height: u64, chunk_size: usize) -> Self {
+    //     Self {
+    //         db,
+    //         chunk_size,
+    //         cursor: 0,
+    //         is_error: false,
+    //         height,
+    //         chunk: Vec::with_capacity(chunk_size),
+    //     }
+    // }
 
     fn next_chunk(&self) -> (u64, u64) {
         let upper_bound = cmp::min(self.cursor + self.chunk_size, self.height as usize);

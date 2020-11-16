@@ -466,8 +466,8 @@ async fn find_chain_split_height<B: BlockchainBackend + 'static>(
         .await?;
         for header in headers {
             // Check if header is linked to local chain
-            if let Ok(prev_header) =
-                async_db::fetch_header_by_block_hash(shared.db.clone(), header.prev_hash.clone()).await
+            if let Some(prev_header) =
+                async_db::fetch_header_by_block_hash(shared.db.clone(), header.prev_hash.clone()).await?
             {
                 return if prev_header.height + 1 == header.height {
                     Ok(header.height)

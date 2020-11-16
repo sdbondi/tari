@@ -49,7 +49,6 @@ use tari_core::{
         mocks::MockValidator,
     },
 };
-use tari_mmr::MmrCacheConfig;
 pub const LOG_TARGET: &str = "base_node::app";
 
 pub fn initiate_recover_db(node_config: &GlobalConfig) -> Result<(), ExitCodes> {
@@ -73,18 +72,16 @@ pub async fn run_recovery(node_config: &GlobalConfig) -> Result<(), anyhow::Erro
     println!("Starting recovery mode");
     let (temp_db, main_db) = match &node_config.db_type {
         DatabaseType::LMDB(p) => {
-            let backend =
-                create_lmdb_database(&p, node_config.db_config.clone(), MmrCacheConfig::default()).map_err(|e| {
-                    error!(target: LOG_TARGET, "Error opening db: {}", e);
-                    anyhow!("Could not open DB: {}", e)
-                })?;
+            let backend = create_lmdb_database(&p, node_config.db_config.clone()).map_err(|e| {
+                error!(target: LOG_TARGET, "Error opening db: {}", e);
+                anyhow!("Could not open DB: {}", e)
+            })?;
             let new_path = Path::new(&p).join("temp_recovery");
 
-            let temp = create_lmdb_database(&new_path, node_config.db_config.clone(), MmrCacheConfig::default())
-                .map_err(|e| {
-                    error!(target: LOG_TARGET, "Error opening recovery db: {}", e);
-                    anyhow!("Could not open recovery DB: {}", e)
-                })?;
+            let temp = create_lmdb_database(&new_path, node_config.db_config.clone()).map_err(|e| {
+                error!(target: LOG_TARGET, "Error opening recovery db: {}", e);
+                anyhow!("Could not open recovery DB: {}", e)
+            })?;
             (temp, backend)
         },
         _ => {

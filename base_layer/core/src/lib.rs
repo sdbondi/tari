@@ -52,8 +52,8 @@ pub mod proof_of_work;
 #[cfg(feature = "base_node")]
 pub mod validation;
 
-#[cfg(all(test, feature = "base_node"))]
-mod test_helpers;
+// #[cfg(all(test, feature = "base_node"))]
+pub mod test_helpers;
 
 #[cfg(any(feature = "base_node", feature = "base_node_proto"))]
 pub mod base_node;

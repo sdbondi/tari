@@ -44,7 +44,7 @@ use tonic::{Request, Response, Status};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const LOG_TARGET: &str = "base_node::grpc";
+const LOG_TARGET: &str = "tari::base_node::grpc";
 const GET_TOKENS_IN_CIRCULATION_MAX_HEIGHTS: usize = 1_000_000;
 const GET_TOKENS_IN_CIRCULATION_PAGE_SIZE: usize = 1_000;
 // The maximum number of difficulty ints that can be requested at a time. These will be streamed to the
@@ -309,10 +309,14 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
             .map_err(|_| Status::invalid_argument("No valid pow algo selected".to_string()))?;
         let mut handler = self.node_service.clone();
 
-        let new_template = handler
-            .get_new_block_template(algo)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+        let new_template = handler.get_new_block_template(algo).await.map_err(|e| {
+            warn!(
+                target: LOG_TARGET,
+                "Could not get new block template: {}",
+                e.to_string()
+            );
+            return Status::internal(e.to_string());
+        })?;
 
         let height = new_template.header.height;
 

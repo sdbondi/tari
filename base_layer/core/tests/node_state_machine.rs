@@ -34,7 +34,6 @@ use helpers::{
         find_header_with_achieved_difficulty,
     },
     chain_metadata::{random_peer_metadata, MockChainMetadata},
-    database::create_mem_db,
     nodes::{
         create_network_with_2_base_nodes_with_config,
         create_network_with_3_base_nodes_with_config,
@@ -43,6 +42,7 @@ use helpers::{
         BaseNodeBuilder,
     },
 };
+// use crate::helpers::database::create_store;
 use rand::{rngs::OsRng, RngCore};
 use std::{thread, time::Duration};
 use tari_core::{
@@ -71,6 +71,7 @@ use tari_core::{
     chain_storage::BlockchainDatabaseConfig,
     consensus::{ConsensusConstantsBuilder, ConsensusManagerBuilder, Network},
     mempool::MempoolServiceConfig,
+    test_helpers::blockchain::create_store,
     transactions::{helpers::spend_utxos, types::CryptoFactories},
     txn_schema,
     validation::{block_validators::MockStatelessBlockValidator, mocks::MockValidator},
@@ -85,6 +86,7 @@ use tokio::{
     sync::{broadcast, watch},
     time,
 };
+
 static EMISSION: [u64; 2] = [10, 10];
 #[test]
 fn test_listening_lagging() {
@@ -169,7 +171,7 @@ fn test_event_channel() {
     let (node, consensus_manager) =
         BaseNodeBuilder::new(Network::Rincewind).start(&mut runtime, temp_dir.path().to_str().unwrap());
     // let shutdown = Shutdown::new();
-    let db = create_mem_db(&consensus_manager);
+    let db = create_store();
     let shutdown = Shutdown::new();
     let mut mock = MockChainMetadata::new();
     let (state_change_event_publisher, mut state_change_event_subscriber) = broadcast::channel(10);

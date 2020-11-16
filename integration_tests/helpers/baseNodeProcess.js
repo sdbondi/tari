@@ -2,25 +2,35 @@ const {spawnSync, spawn, execSync} = require('child_process');
 const {expect} = require('chai');
 var fs = require('fs');
 const BaseNodeClient = require("./baseNodeClient");
-const {sleep, getRandomInt} = require("./util");
+const {getFreePort} = require("./util");
+const dateFormat = require('dateformat');
 
 class BaseNodeProcess {
     constructor(name, nodeFile) {
-        this.port = getRandomInt(19000, 20000);
-        this.grpcPort = getRandomInt(50000, 51000);
-        this.name = name || "Basenode" + this.port;
-        this.nodeFile = nodeFile || "newnode_id.json";
-
-        this.baseDir = "./temp/base_nodes/" + this.name;
-        console.log("POrt:", this.port);
-        console.log("GRPC:", this.grpcPort);
+        this.name = name;
+        this.nodeFile= nodeFile;
+        // this.port = getFreePort(19000, 20000);
+        // this.grpcPort = getFreePort(50000, 51000);
+        // this.name = `Basenode${this.port}-${name}`;
+        // this.nodeFile = nodeFile || "newnode_id.json";
+        // this.baseDir = `./temp/base_nodes/${dateFormat(new Date(), "yyyymmddhhMM")}/${this.name}`;
+        // console.log("POrt:", this.port);
+        // console.log("GRPC:", this.grpcPort);
     }
 
 
-    init() {
-        return this.runSync("cargo",
+    async init() {
+                this.port = await getFreePort(19000, 20000);
+                this.grpcPort = await getFreePort(50000, 51000);
+                this.name = `Basenode${this.port}-${this.name}`;
+                this.nodeFile = this.nodeFile || "newnode_id.json";
+                this.baseDir = `./temp/base_nodes/${dateFormat(new Date(), "yyyymmddhhMM")}/${this.name}`;
+                // console.log("POrt:", this.port);
+                // console.log("GRPC:", this.grpcPort);
+        console.log(`Starting node ${this.name}...`);
+        await this.run("cargo",
 
-            ["run", "--release", "--bin", "tari_base_node", "--", "--base-path", ".", "--create-id", "--init"]);
+            ["run", "--bin", "tari_base_node", "--", "--base-path", ".", "--create-id", "--init"]);
     }
 
 
@@ -31,7 +41,7 @@ class BaseNodeProcess {
     peerAddress() {
         this.ensureNodeInfo();
         const addr = this.nodeInfo.public_key + "::" + this.nodeInfo.public_address;
-        console.log("Peer:", addr);
+        // console.log("Peer:", addr);
         return addr;
     }
 
@@ -42,7 +52,7 @@ class BaseNodeProcess {
 
     createEnvs() {
         let envs = {
-
+            RUST_BACKTRACE:1,
             TARI_BASE_NODE__NETWORK: "localnet",
             TARI_BASE_NODE__LOCALNET__DATA_DIR: "localnet",
             TARI_BASE_NODE__LOCALNET__DB_TYPE: "lmdb",
@@ -60,7 +70,7 @@ class BaseNodeProcess {
             TARI_BASE_NODE__LOCALNET__ALLOW_TEST_ADDRESSES: 'true',
             TARI_BASE_NODE__LOCALNET__PUBLIC_ADDRESS: "/ip4/10.0.0.104/tcp/" + this.port,
             TARI_BASE_NODE__LOCALNET__GRPC_ENABLED: "true",
-            TARI_BASE_NODE__LOCALNET__ENABLE_WALLET: true,
+            TARI_BASE_NODE__LOCALNET__ENABLE_WALLET: false,
             TARI_BASE_NODE__LOCALNET__GRPC_ADDRESS: "127.0.0.1:" + this.grpcPort,
             TARI_BASE_NODE__LOCALNET__BLOCK_SYNC_STRATEGY: "ViaBestChainMetadata",
             TARI_BASE_NODE__LOCALNET__ENABLE_MINING: "false",
@@ -80,49 +90,62 @@ class BaseNodeProcess {
         return envs;
     }
 
-
-    runSync(cmd, args) {
-
-        if (!fs.existsSync(this.baseDir)) {
-            fs.mkdirSync(this.baseDir, {recursive: true});
-        }
-        var ps = spawnSync(cmd, args, {
-            cwd: this.baseDir,
-            shell: true,
-            env: {...process.env, ...this.createEnvs()}
-        });
-
-        expect(ps.error).to.be.an('undefined');
-
-        return ps;
-
-    }
+    //
+    // runSync(cmd, args) {
+    //
+    //     if (!fs.existsSync(this.baseDir)) {
+    //         fs.mkdirSync(this.baseDir, {recursive: true});
+    //     }
+    //     var ps = spawnSync(cmd, args, {
+    //         cwd: this.baseDir,
+    //         shell: true,
+    //         env: {...process.env, ...this.createEnvs()}
+    //     });
+    //
+    //     expect(ps.error).to.be.an('undefined');
+    //
+    //     this.ps = ps;
+    //     return ps;
+    //
+    // }
 
     run(cmd, args) {
-        if (!fs.existsSync(this.baseDir)) {
-            fs.mkdirSync(this.baseDir, {recursive: true});
-        }
-        var ps = spawn(cmd, args, {
-            cwd: this.baseDir,
-            shell: true,
-            env: {...process.env, ...this.createEnvs()}
+        return new Promise((resolve, reject) => {
+            if (!fs.existsSync(this.baseDir)) {
+                fs.mkdirSync(this.baseDir, {recursive: true});
+                fs.mkdirSync(this.baseDir + "/log", {recursive: true});
+            }
+            var ps = spawn(cmd, args, {
+                cwd: this.baseDir,
+                shell: true,
+                env: {...process.env, ...this.createEnvs()}
+            });
+
+            ps.stdout.on('data', (data) => {
+                //console.log(`stdout: ${data}`);
+                fs.appendFileSync(`${this.baseDir}/log/stdout.log`, data.toString());
+                if (data.toString().match(/Copyright 2019-2020. The Tari Development Community/)) {
+                    resolve(ps);
+                }
+            });
+
+            ps.stderr.on('data', (data) => {
+               // console.error(`stderr: ${data}`);
+                fs.appendFileSync(`${this.baseDir}/log/stderr.log`, data.toString());
+            });
+
+            ps.on('close', (code) => {
+                if (code) {
+                    console.log(`child process exited with code ${code}`);
+                    reject(`child process exited with code ${code}`);
+                } else {
+                    resolve(ps);
+                }
+            });
+
+            expect(ps.error).to.be.an('undefined');
+            this.ps = ps;
         });
-
-        ps.stdout.on('data', (data) => {
-            //console.log(`stdout: ${data}`);
-        });
-
-        ps.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
-
-        ps.on('close', (code) => {
-            console.log(`child process exited with code ${code}`);
-        });
-
-        expect(ps.error).to.be.an('undefined');
-        return ps;
-
     }
 
     async startNew() {
@@ -135,10 +158,12 @@ class BaseNodeProcess {
         return this.createGrpcClient();
     }
 
-    async start() {
-        var ps = this.run("cargo", ["run", "--release", "--bin tari_base_node", "--", "--base-path", "."]);
-        await sleep(6000);
-        return ps;
+    start() {
+        return this.run("cargo", ["run","--bin tari_base_node", "--", "--base-path", "."]);
+    }
+
+    stop() {
+        this.ps.kill("SIGINT");
     }
 
     createGrpcClient() {

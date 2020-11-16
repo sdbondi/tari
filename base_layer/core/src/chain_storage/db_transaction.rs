@@ -21,7 +21,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use crate::{
     blocks::{blockheader::BlockHash, Block, BlockHeader},
-    chain_storage::{error::ChainStorageError, InProgressHorizonSyncState},
+    chain_storage::{error::ChainStorageError, BlockHeaderAccumulatedData, InProgressHorizonSyncState, MmrPeakData},
     transactions::{
         transaction::{TransactionInput, TransactionKernel, TransactionOutput},
         types::HashOutput,
@@ -90,10 +90,17 @@ impl DbTransaction {
         self.operations.push(WriteOperation::Delete(delete));
     }
 
+    pub fn delete_block(&mut self, block_hash: HashOutput) {
+        self.operations.push(WriteOperation::DeleteBlock(block_hash));
+    }
+
     /// Inserts a transaction kernel into the current transaction.
-    pub fn insert_kernel(&mut self, kernel: TransactionKernel) {
-        let hash = kernel.hash();
-        self.insert(DbKeyValuePair::TransactionKernel(hash, Box::new(kernel)));
+    pub fn insert_kernel(&mut self, kernel: TransactionKernel, header_hash: HashOutput, mmr_position: u32) {
+        self.operations.push(WriteOperation::InsertKernel {
+            header_hash,
+            kernel: Box::new(kernel),
+            mmr_position,
+        });
     }
 
     /// Inserts a block header into the current transaction.
@@ -102,17 +109,35 @@ impl DbTransaction {
         self.insert(DbKeyValuePair::BlockHeader(height, Box::new(header)));
     }
 
+    pub fn insert_header_accumulated_data(&mut self, accumulated_data: BlockHeaderAccumulatedData) {
+        self.operations
+            .push(WriteOperation::InsertHeaderAccumulatedData(Box::new(accumulated_data)))
+    }
+
     /// Adds a UTXO into the current transaction and update the TXO MMR.
-    pub fn insert_utxo(&mut self, utxo: TransactionOutput) {
-        let hash = utxo.hash();
-        self.insert(DbKeyValuePair::UnspentOutput(hash, Box::new(utxo)));
+    pub fn insert_utxo(&mut self, utxo: TransactionOutput, header_hash: HashOutput, mmr_position: u32) {
+        // et hash = utxo.hash();
+        //  self.insert(DbKeyValuePair::UnspentOutput(hash, Box::new(utxo)));
+        self.operations.push(WriteOperation::InsertOutput {
+            header_hash,
+            output: Box::new(utxo),
+            mmr_position,
+        });
+    }
+
+    pub fn insert_input(&mut self, input: TransactionInput, header_hash: HashOutput, mmr_position: u32) {
+        self.operations.push(WriteOperation::InsertInput {
+            header_hash,
+            input: Box::new(input),
+            mmr_position,
+        });
     }
 
     /// Adds a UTXO into the current transaction and update the TXO MMR. This is a test only function used to ensure we
     /// block duplicate entries. This function does not calculate the hash function but accepts one as a variable.
-    pub fn insert_utxo_with_hash(&mut self, hash: Vec<u8>, utxo: TransactionOutput) {
-        self.insert(DbKeyValuePair::UnspentOutput(hash, Box::new(utxo)));
-    }
+    // pub fn insert_utxo_with_hash(&mut self, hash: Vec<u8>, utxo: TransactionOutput) {
+    //     self.insert(DbKeyValuePair::UnspentOutput(hash, Box::new(utxo)));
+    // }
 
     /// Stores an orphan block. No checks are made as to whether this is actually an orphan. That responsibility lies
     /// with the calling function.
@@ -121,85 +146,44 @@ impl DbTransaction {
         self.insert(DbKeyValuePair::OrphanBlock(hash, orphan));
     }
 
-    /// Moves a UTXO to the STXO set and mark it as spent on the MRR. If the UTXO is not in the UTXO set, the
-    /// transaction will fail with an `UnspendableOutput` error.
-    pub fn spend_utxo(&mut self, utxo_hash: HashOutput) {
-        self.operations
-            .push(WriteOperation::Spend(DbKey::UnspentOutput(utxo_hash)));
+    pub fn remove_orphan_chain_tip(&mut self, hash: HashOutput) {
+        self.operations.push(WriteOperation::DeleteOrphanChainTip(hash))
     }
 
-    /// Moves a STXO to the UTXO set.  If the STXO is not in the STXO set, the transaction will fail with an
-    /// `UnspendError`.
-    // TODO: unspend_utxo in memory_db doesn't unmark the node in the roaring bitmap.0
-    pub fn unspend_stxo(&mut self, stxo_hash: HashOutput) {
-        self.operations
-            .push(WriteOperation::UnSpend(DbKey::SpentOutput(stxo_hash)));
+    pub fn insert_orphan_chain_tip(&mut self, hash: HashOutput) {
+        self.operations.push(WriteOperation::InsertOrphanChainTip(hash))
     }
 
-    /// Moves the given set of transaction inputs from the UTXO set to the STXO set. All the inputs *must* currently
-    /// exist in the UTXO set, or the transaction will error with `ChainStorageError::UnspendableOutput`
-    pub fn spend_inputs(&mut self, inputs: &[TransactionInput]) {
-        for input in inputs {
-            let input_hash = input.hash();
-            self.spend_utxo(input_hash);
-        }
-    }
-
-    /// Adds a marker operation that allows the database to perform any additional work after adding a new block to
-    /// the database.
-    pub fn commit_block(&mut self) {
-        self.create_mmr_checkpoint(MmrTree::Kernel);
-        self.create_mmr_checkpoint(MmrTree::Utxo);
-        self.create_mmr_checkpoint(MmrTree::RangeProof);
-    }
-
-    /// Create an MMR checkpoint for the given Mmrtree
-    pub fn create_mmr_checkpoint(&mut self, tree: MmrTree) {
-        self.operations.push(WriteOperation::CreateMmrCheckpoint(tree));
-    }
-
-    /// Rewinds the Kernel MMR state by the given number of Checkpoints.
-    pub fn rewind_kernel_mmr(&mut self, steps_back: usize) {
+    pub fn set_mmr_peak_data(&mut self, header_hash: HashOutput, data: MmrPeakData) {
         self.operations
-            .push(WriteOperation::RewindMmr(MmrTree::Kernel, steps_back));
-    }
-
-    /// Rewinds the UTXO MMR state by the given number of Checkpoints.
-    pub fn rewind_utxo_mmr(&mut self, steps_back: usize) {
-        self.operations
-            .push(WriteOperation::RewindMmr(MmrTree::Utxo, steps_back));
-    }
-
-    /// Rewinds the RangeProof MMR state by the given number of Checkpoints.
-    pub fn rewind_rangeproof_mmr(&mut self, steps_back: usize) {
-        self.operations
-            .push(WriteOperation::RewindMmr(MmrTree::RangeProof, steps_back));
-    }
-
-    /// Merge checkpoints to ensure that only a specific number of checkpoints remain.
-    pub fn merge_checkpoints(&mut self, max_cp_count: usize) {
-        self.operations
-            .push(WriteOperation::MergeMmrCheckpoints(MmrTree::Kernel, max_cp_count));
-        self.operations
-            .push(WriteOperation::MergeMmrCheckpoints(MmrTree::Utxo, max_cp_count));
-        self.operations
-            .push(WriteOperation::MergeMmrCheckpoints(MmrTree::RangeProof, max_cp_count));
+            .push(WriteOperation::UpdateMmrPeakData(header_hash, data));
     }
 }
 
 #[derive(Debug)]
 pub enum WriteOperation {
     Insert(DbKeyValuePair),
+    InsertInput {
+        header_hash: HashOutput,
+        input: Box<TransactionInput>,
+        mmr_position: u32,
+    },
+    InsertKernel {
+        header_hash: HashOutput,
+        kernel: Box<TransactionKernel>,
+        mmr_position: u32,
+    },
+    InsertOutput {
+        header_hash: HashOutput,
+        output: Box<TransactionOutput>,
+        mmr_position: u32,
+    },
+    InsertHeaderAccumulatedData(Box<BlockHeaderAccumulatedData>),
     Delete(DbKey),
-    Spend(DbKey),
-    UnSpend(DbKey),
-    CreateMmrCheckpoint(MmrTree),
-    /// Rewind the given MMR tree. The first tuple element is the MmrTree to rewind, the second is the number of steps
-    /// to go back.
-    RewindMmr(MmrTree, usize),
-    /// Merge the checkpoints for a given MMR tree. The first tuple element is the `MmrTree` to merge, the second is
-    /// the number of checkpoints that should remain after the merge.
-    MergeMmrCheckpoints(MmrTree, usize),
+    DeleteBlock(HashOutput),
+    UpdateMmrPeakData(HashOutput, MmrPeakData),
+    DeleteOrphanChainTip(HashOutput),
+    InsertOrphanChainTip(HashOutput),
 }
 
 impl fmt::Display for WriteOperation {
@@ -207,14 +191,45 @@ impl fmt::Display for WriteOperation {
         use WriteOperation::*;
         match self {
             Insert(pair) => write!(f, "Insert({})", pair),
+            InsertKernel {
+                header_hash,
+                kernel,
+                mmr_position,
+            } => write!(
+                f,
+                "Insert kernel {} in block:{} position: {}",
+                kernel.hash().to_hex(),
+                header_hash.to_hex(),
+                mmr_position
+            ),
+            InsertOutput {
+                header_hash,
+                output,
+                mmr_position,
+            } => write!(
+                f,
+                "Insert output {} in block:{} position: {}",
+                output.hash().to_hex(),
+                header_hash.to_hex(),
+                mmr_position
+            ),
+            InsertInput {
+                header_hash,
+                input,
+                mmr_position,
+            } => write!(
+                f,
+                "Insert input {} in block: {} position: {}",
+                input.hash().to_hex(),
+                header_hash.to_hex(),
+                mmr_position
+            ),
             Delete(key) => write!(f, "Delete({})", key),
-            Spend(key) => write!(f, "Spend({})", key),
-            UnSpend(key) => write!(f, "Unspend({})", key),
-            CreateMmrCheckpoint(tree) => write!(f, "CreateMmrCheckpoint({})", tree),
-            RewindMmr(tree, steps_back) => write!(f, "RewindMmr({}, steps_back = {})", tree, steps_back),
-            MergeMmrCheckpoints(tree, max_cp_count) => {
-                write!(f, "MergeMmrCheckpoints({}, max_cp_count = {})", tree, max_cp_count)
-            },
+            UpdateMmrPeakData(header_hash, _) => write!(f, "UpdateMmrPeakData({})", header_hash.to_hex()),
+            DeleteOrphanChainTip(hash) => write!(f, "DeleteOrphanChainTip({})", hash.to_hex()),
+            InsertOrphanChainTip(hash) => write!(f, "InsertOrphanChainTip({})", hash.to_hex()),
+            DeleteBlock(hash) => write!(f, "DeleteBlock({})", hash.to_hex()),
+            InsertHeaderAccumulatedData(data) => write!(f, "InsertHeaderAccumulatedData({})", data.hash.to_hex()),
         }
     }
 }
@@ -224,8 +239,8 @@ impl fmt::Display for WriteOperation {
 pub enum DbKeyValuePair {
     Metadata(MetadataKey, MetadataValue),
     BlockHeader(u64, Box<BlockHeader>),
-    UnspentOutput(HashOutput, Box<TransactionOutput>),
-    TransactionKernel(HashOutput, Box<TransactionKernel>),
+    // UnspentOutput(HashOutput, Box<TransactionOutput>),
+    // TransactionKernel(HashOutput, Box<TransactionKernel>),
     OrphanBlock(HashOutput, Arc<Block>),
 }
 
@@ -291,7 +306,7 @@ pub enum DbKey {
     Metadata(MetadataKey),
     BlockHeader(u64),
     BlockHash(BlockHash),
-    UnspentOutput(HashOutput),
+    // UnspentOutput(HashOutput),
     SpentOutput(HashOutput),
     TransactionKernel(HashOutput),
     OrphanBlock(HashOutput),
@@ -303,7 +318,7 @@ impl DbKey {
             DbKey::Metadata(key) => ("MetaData".to_string(), key.to_string(), "".to_string()),
             DbKey::BlockHeader(v) => ("BlockHeader".to_string(), "Height".to_string(), v.to_string()),
             DbKey::BlockHash(v) => ("Block".to_string(), "Hash".to_string(), v.to_hex()),
-            DbKey::UnspentOutput(v) => ("Utxo".to_string(), "Hash".to_string(), v.to_hex()),
+            // DbKey::UnspentOutput(v) => ("Utxo".to_string(), "Hash".to_string(), v.to_hex()),
             DbKey::SpentOutput(v) => ("Stxo".to_string(), "Hash".to_string(), v.to_hex()),
             DbKey::TransactionKernel(v) => ("Kernel".to_string(), "Hash".to_string(), v.to_hex()),
             DbKey::OrphanBlock(v) => ("Orphan".to_string(), "Hash".to_string(), v.to_hex()),
@@ -343,7 +358,7 @@ impl Display for DbKey {
             DbKey::Metadata(key) => key.fmt(f),
             DbKey::BlockHeader(v) => f.write_str(&format!("Block header (#{})", v)),
             DbKey::BlockHash(v) => f.write_str(&format!("Block hash (#{})", to_hex(v))),
-            DbKey::UnspentOutput(v) => f.write_str(&format!("Unspent output ({})", to_hex(v))),
+            // DbKey::UnspentOutput(v) => f.write_str(&format!("Unspent output ({})", to_hex(v))),
             DbKey::SpentOutput(v) => f.write_str(&format!("Spent output ({})", to_hex(v))),
             DbKey::TransactionKernel(v) => f.write_str(&format!("Transaction kernel ({})", to_hex(v))),
             DbKey::OrphanBlock(v) => f.write_str(&format!("Orphan block hash ({})", to_hex(v))),
