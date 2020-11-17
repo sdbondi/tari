@@ -51,7 +51,7 @@ class CustomWorld {
         for (const property in this.nodes) {
             promises.push(f(this.getClient(property), property));
         }
-        await Promises.all(promises);
+        await Promise.all(promises);
     }
 
     stopNode(name) {
