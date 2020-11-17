@@ -88,7 +88,7 @@ where
     V: Serialize,
 {
     let val_buf = serialize(val)?;
-    txn.access().put(&db, key, &val_buf, put::APPENDDUP).map_err(|e| {
+    txn.access().put(&db, key, &val_buf, put::Flags::empty()).map_err(|e| {
         error!(
             target: LOG_TARGET,
             "Could not add insert value into lmdb transaction: {:?}", e

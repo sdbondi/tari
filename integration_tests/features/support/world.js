@@ -1,4 +1,4 @@
-const { setWorldConstructor, After } = require("cucumber");
+const { setWorldConstructor, After,Before } = require("cucumber");
 
 // const BaseNodeClient = require('../helpers/baseNodeClient');
 // const TransactionBuilder = require('../helpers/transactionBuilder');
@@ -15,11 +15,12 @@ class CustomWorld {
     }
 
     async createSeedNode(name) {
-        let proc =  new BaseNodeProcess(name);
+        let proc =  new BaseNodeProcess(`seed-${name}`);
         await proc.startNew();
         this.seeds[name] = proc;
         this.clients[name] = proc.createGrpcClient();
     }
+
 
     seedAddresses() {
         let res = [];
@@ -67,7 +68,6 @@ class CustomWorld {
 
 setWorldConstructor(CustomWorld);
 
-
 After(function () {
     console.log('Stopping nodes');
     for (const property in this.seeds) {
@@ -79,3 +79,4 @@ After(function () {
         this.stopNode(property);
     }
 });
+

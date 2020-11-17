@@ -231,7 +231,7 @@ where T: BlockchainBackend + 'static
                 //                 // for hash in utxo_hashes {
                 //                 //     // Not finding a requested UTXO is not an error; UTXO validation depends on
                 // this                 //     if let Ok(utxo) =
-                // async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await {               
+                // async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await {
                 // //         utxos.push(utxo);                 //     }
                 //                 // }
                 //                 // Ok(NodeCommsResponse::TransXO is not an error; UTXO validation depends on this
@@ -399,16 +399,16 @@ where T: BlockchainBackend + 'static
             },
             NodeCommsRequest::GetNewBlock(block_template) => {
                 let metadata = async_db::get_chain_metadata(self.blockchain_db.clone()).await?;
-                if Some(&block_template.header.prev_hash) != metadata.best_block.as_ref() {
-                    return Ok(NodeCommsResponse::NewBlock {
-                        success: false,
-                        error: Some(
-                            "Cannot calculate MMR roots for this block as it is no longer at the tip of this node"
-                                .to_string(),
-                        ),
-                        block: None,
-                    });
-                }
+                // if Some(&block_template.header.prev_hash) != metadata.best_block.as_ref() {
+                //     return Ok(NodeCommsResponse::NewBlock {
+                //         success: false,
+                //         error: Some(
+                //             "Cannot calculate MMR roots for this block as it is no longer at the tip of this node"
+                //                 .to_string(),
+                //         ),
+                //         block: None,
+                //     });
+                // }
 
                 let block = async_db::calculate_mmr_roots(self.blockchain_db.clone(), block_template.clone()).await?;
                 Ok(NodeCommsResponse::NewBlock {

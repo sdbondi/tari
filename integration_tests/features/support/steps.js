@@ -49,11 +49,12 @@ Given('I have {int} base nodes connected to all seed nodes',{timeout: 190*1000},
 });
 
 
-When(/I mine (\d+) blocks on (.*)/, {timeout: 20*1000}, async function (numBlocks, name) {
-    for(let i=0;i<numBlocks;i++) {
+When(/I mine (\d+) blocks on (.*)/, {timeout: 600*1000}, async function (numBlocks, name) {
+   for(let i=0;i<numBlocks;i++) {
         await this.mineBlock(name);
     }
 });
+
 When(/I start (.*)/, {timeout: 20*1000}, async function (name) {
     await this.startNode(name);
 });
@@ -96,15 +97,9 @@ Then(/node (.*) is at tip (.*)/, async function (node, name) {
 When(/I mine a block on (.*) based on height (\d+)/, async function (node, atHeight) {
     let client = this.getClient(node);
     let template = client.getPreviousBlockTemplate(atHeight);
-    // console.log("Candidate before: ", template);
     let candidate = await client.getMinedCandidateBlock(template);
-    // console.log("Candidate for mining:", candidate);
 
     await client.submitBlock(candidate, block => {
-        // console.log("Candidate:", block);
-        // block.block.header.output_mr[0] = 1;
-        // block.block.header.height = atHeight + 1;
-        // block.block.header.prev_hash = candidate.header.hash;
         return block;
     }, error => {
         // Expect an error
@@ -122,7 +117,7 @@ When(/I mine a block on (.*) at height (\d+) with an invalid MMR/, async functio
 
     await client.submitBlock(candidate, block => {
         // console.log("Candidate:", block);
-        // block.block.header.output_mr[0] = 1;
+        block.block.header.output_mr[0] = 1;
         // block.block.header.height = atHeight + 1;
         // block.block.header.prev_hash = candidate.header.hash;
         return block;

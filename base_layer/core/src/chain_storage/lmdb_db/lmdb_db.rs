@@ -195,14 +195,19 @@ impl LMDBDatabase {
                     lmdb_insert(&write_txn, &self.orphan_chain_tips_db, hash, hash)?;
                 },
                 WriteOperation::DeleteBlock(hash) => {
-                    for utxo in lmdb_delete_keys_starting_with::<TransactionOutputRowData>(
+                    for utxo in lmdb_delete_keys_starting_with::<Option<TransactionOutputRowData>>(
                         &write_txn,
                         &self.utxos_db,
                         hash.to_hex().as_str(),
                     )? {
-                        lmdb_delete(&write_txn, &self.txos_hash_to_index_db, utxo.hash.as_slice())?;
+                        if let Some(u) = utxo {
+                            lmdb_delete(&write_txn, &self.txos_hash_to_index_db, u.hash.as_slice())?;
+                        }else {
+                            // TODO: Replace when this node is pruned
+                            unimplemented!();
+                        }
                     }
-                    lmdb_delete_keys_starting_with::<TransactionKernelRowData>(
+                    lmdb_delete_keys_starting_with::<Option<TransactionKernelRowData>>(
                         &write_txn,
                         &self.kernels_db,
                         hash.to_hex().as_str(),
@@ -214,7 +219,7 @@ impl LMDBDatabase {
                     )?;
                 },
                 WriteOperation::InsertHeaderAccumulatedData(data) => {
-                    lmdb_insert(
+                    lmdb_replace(
                         &write_txn,
                         &self.header_accumulated_data_db,
                         data.hash.clone().as_slice(),
@@ -327,8 +332,10 @@ impl LMDBDatabase {
                 lmdb_insert(&txn, &self.headers_db, k, &v)?;
             },
             DbKeyValuePair::OrphanBlock(k, v) => {
-                lmdb_insert_dup(&txn, &self.orphan_parent_map_index, &v.header.prev_hash, k)?;
-                lmdb_replace(&txn, &self.orphans_db, k.as_slice(), &**v)?;
+                if !lmdb_exists(&txn, &self.orphans_db, k.as_slice())? {
+                    lmdb_insert_dup(&txn, &self.orphan_parent_map_index, &v.header.prev_hash, k)?;
+                    lmdb_replace(&txn, &self.orphans_db, k.as_slice(), &**v)?;
+                }
             },
         }
         Ok(())
