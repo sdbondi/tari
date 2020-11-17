@@ -26,3 +26,4 @@ pub mod chain_metadata;
 pub mod mmr_tree;
 pub mod request;
 pub mod response;
+mod rpc;

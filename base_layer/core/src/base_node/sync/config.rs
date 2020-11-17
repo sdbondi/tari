@@ -20,20 +20,26 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod error;
-pub use error::BlockchainStateServiceError;
+use std::time::Duration;
+use tari_comms::peer_manager::NodeId;
 
-mod handle;
-pub use handle::{BlockchainStateRequest, BlockchainStateServiceHandle};
+#[derive(Debug, Clone)]
+pub struct BlockSyncConfig {
+    pub max_sync_peers: usize,
+    pub num_tip_hashes: usize,
+    pub num_proof_headers: usize,
+    pub ban_period: Duration,
+    pub sync_peers: Vec<NodeId>,
+}
 
-mod initializer;
-pub use initializer::BlockchainStateServiceInitializer;
-
-mod service;
-
-#[cfg(test)]
-mod mock;
-#[cfg(test)]
-pub use mock::{create_blockchain_state_service_mock, BlockchainStateMockState};
-#[cfg(test)]
-mod tests;
+impl Default for BlockSyncConfig {
+    fn default() -> Self {
+        Self {
+            max_sync_peers: 10,
+            num_tip_hashes: 500,
+            num_proof_headers: 100,
+            ban_period: Duration::from_secs(30 * 60),
+            sync_peers: Default::default(),
+        }
+    }
+}

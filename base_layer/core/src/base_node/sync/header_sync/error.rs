@@ -20,34 +20,38 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::chain_storage::ChainStorageError;
-use futures::channel::{mpsc, oneshot};
+use crate::{chain_storage::ChainStorageError, validation::ValidationError};
+use tari_comms::{
+    connectivity::ConnectivityError,
+    protocol::rpc::{RpcError, RpcStatus},
+};
 
 #[derive(Debug, thiserror::Error)]
-pub enum BlockchainStateServiceError {
-    #[error("Request channel unexpectedly disconnected")]
-    RequestChannelDisconnected,
-    #[error("Sender canceled reply")]
-    SenderReplyCanceled,
+pub enum BlockHeaderSyncError {
+    #[error("RPC error: {0}")]
+    RpcError(#[from] RpcError),
+    #[error("RPC request failed: {0}")]
+    RpcRequestError(#[from] RpcStatus),
+    #[error("Peer sent invalid header: {0}")]
+    ReceivedInvalidHeader(String),
     #[error("Chain storage error: {0}")]
     ChainStorageError(#[from] ChainStorageError),
-    #[error("Invalid argument `{arg}` in function `{func}`: {message}")]
-    InvalidArguments {
-        func: &'static str,
-        arg: &'static str,
-        message: String,
-    },
-}
-
-impl From<mpsc::SendError> for BlockchainStateServiceError {
-    fn from(_: mpsc::SendError) -> Self {
-        Self::RequestChannelDisconnected
-    }
-}
-
-// Assume here that a oneshot::Canceled error can only come from the handle
-impl From<oneshot::Canceled> for BlockchainStateServiceError {
-    fn from(_: oneshot::Canceled) -> Self {
-        Self::SenderReplyCanceled
-    }
+    #[error("Validation failed: {0}")]
+    ValidationFailed(#[from] ValidationError),
+    #[error("Sync failed for all peers")]
+    SyncFailedAllPeers,
+    #[error("Peer sent a found hash index that was out of range (Expected less than {0}, Found: {1})")]
+    FoundHashIndexOutOfRange(u32, u32),
+    #[error("Failed to ban peer: {0}")]
+    FailedToBan(ConnectivityError),
+    #[error("Connectivity Error: {0}")]
+    ConnectivityError(#[from] ConnectivityError),
+    #[error("Peer could not send a stronger chain than the local chain")]
+    WeakerChain,
+    #[error("Node is still not in sync. Sync will be retried with another peer if possible.")]
+    NotInSync,
+    #[error("Unable to locate start hash `{0}`")]
+    StartHashNotFound(String),
+    #[error("Expected header height {0} got {1}")]
+    InvalidBlockHeight(u64, u64),
 }
