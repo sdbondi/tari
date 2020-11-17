@@ -27,10 +27,8 @@ pub mod blockchain;
 
 use crate::{
     blocks::{Block, BlockHeader},
-    chain_storage::{BlockchainDatabase, BlockchainDatabaseConfig, Validators},
     consensus::ConsensusManager,
-    transactions::{transaction::Transaction, types::HashDigest},
-    validation::mocks::MockValidator,
+    transactions::{transaction::Transaction},
 };
 
 use rand::{distributions::Alphanumeric, Rng};
