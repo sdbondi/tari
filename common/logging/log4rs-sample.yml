@@ -117,6 +117,13 @@ loggers:
     appenders:
       - network
     additive: false
+
+  comms::dht:
+    level: debug
+    appenders:
+      - network
+    additive: false
+
   # Route log events sent to the "p2p" logger to the "network" appender
   p2p:
     level: info

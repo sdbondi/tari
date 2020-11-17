@@ -35,7 +35,14 @@ class BaseNodeProcess {
 
 
     ensureNodeInfo() {
+        while (true) {
+            if (fs.existsSync(this.baseDir + "/" + this.nodeFile)) {
+                break;
+            }
+        }
+
         this.nodeInfo = JSON.parse(fs.readFileSync(this.baseDir + "/" + this.nodeFile, 'utf8'));
+
     }
 
     peerAddress() {
@@ -82,9 +89,11 @@ class BaseNodeProcess {
             TARI_MERGE_MINING_PROXY__LOCALNET__MONEROD_USERNAME: "asdf",
             TARI_MERGE_MINING_PROXY__LOCALNET__MONEROD_PASSWORD: "asdf",
             TARI_MERGE_MINING_PROXY__LOCALNET__PROXY_HOST_ADDRESS: "127.0.0.1:50071",
-            TARI_BASE_NODE__LOCALNET_DB_INIT_SIZE_MB:100,
-            TARI_BASE_NODE__LOCALNET_DB_RESIZE_THRESHOLD_MB:1,
-            TARI_BASE_NODE__LOCALNET_DB_GROW_SIZE_MB:1
+            TARI_BASE_NODE__LOCALNET__DB_INIT_SIZE_MB:100,
+            TARI_BASE_NODE__LOCALNET__DB_RESIZE_THRESHOLD_MB:10,
+            TARI_BASE_NODE__LOCALNET__DB_GROW_SIZE_MB:20,
+            // Speeder peer selection
+            TARI_BASE_NODE__LOCALNET__CONNECTIVITY_UPDATE_INTERVAL: 10
         };
 
         if (this.peerSeeds) {

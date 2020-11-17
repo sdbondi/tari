@@ -19,7 +19,7 @@ async function waitFor(asyncTestFn, toBe, maxTime) {
     while (new Date() - now < maxTime) {
         const value = await asyncTestFn();
         if (value === toBe) break;
-        await sleep(100);
+        await sleep(500);
     }
 }
 

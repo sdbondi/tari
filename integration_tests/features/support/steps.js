@@ -69,11 +69,11 @@ Then(/node (.*) is at height (\d+)/, {timeout: 60*1000}, async function (name, h
     expect(await client.getTipHeight()).to.equal(height);
 });
 
-Then('all nodes are at height {int}', {timeout: 60*1000},async function (height) {
+Then('all nodes are at height {int}', {timeout: 120*1000},async function (height) {
     await this.forEachClientAsync(async (client, name) => {
-        await waitFor(async() => client.getTipHeight(), height, 55000);
+        await waitFor(async() => client.getTipHeight(), height, 115000);
         const currTip = await client.getTipHeight();
-        console.log(`Node ${name} is at tip: ${currTip} (should be ${currTip})`);
+        console.log(`Node ${name} is at tip: ${currTip} (should be ${height})`);
         expect(currTip).to.equal(height);
     })
 });
