@@ -35,7 +35,7 @@ use crate::{
     proof_of_work::{Difficulty, PowAlgorithm},
     tari_utilities::epoch_time::EpochTime,
     transactions::{
-        transaction::TransactionKernel,
+        transaction::{TransactionKernel, TransactionOutput},
         types::{Commitment, HashOutput, Signature},
     },
 };
@@ -97,7 +97,7 @@ make_async!(set_chain_metadata(metadata: ChainMetadata) -> (), "set_chain_metada
 make_async!(fetch_kernel(hash: HashOutput) -> TransactionKernel, "fetch_kernel");
 
 //---------------------------------- TXO --------------------------------------------//
-// make_async!(fetch_stxo(hash: HashOutput) -> TransactionOutput, "fetch_stxo");
+make_async!(fetch_utxo(hash: HashOutput) -> Option<TransactionOutput>, "fetch_utxo");
 // make_async!(fetch_txo(hash: HashOutput) -> Option<TransactionOutput>, "fetch_txo");
 // make_async!(spend_utxo(hash: HashOutput) -> (), "spend_utxo");
 

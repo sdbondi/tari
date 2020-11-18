@@ -133,8 +133,8 @@ When(/I mine a block on (.*) at height (\d+) with an invalid MMR/, async functio
 
 Then(/I find that the UTXO (.*) exists according to (.*)/, async function (outputName, nodeName) {
     let client = this.getClient(nodeName);
-    let lastResult = await client.fetchMatchingUtxos([getTransactionOutputHash(this.outputs[outputName])]);
-    console.log("UTXOs:", lastResult);
-    expect(lastResult.len()).to.equal(1);
+    let hash = getTransactionOutputHash(this.outputs[outputName]);
+    let lastResult = await client.fetchMatchingUtxos([hash]);
+    expect(lastResult[0].output.commitment.toString('hex')).to.equal(this.outputs[outputName].commitment.toString('hex'));
 });
 

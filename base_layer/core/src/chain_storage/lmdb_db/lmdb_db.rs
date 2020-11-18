@@ -53,16 +53,13 @@ use crate::{
             LMDB_DB_HEADER_ACCUMULATED_DATA,
             LMDB_DB_INPUTS,
             LMDB_DB_KERNELS,
-            LMDB_DB_KERNEL_MMR_CP_BACKEND,
             LMDB_DB_METADATA,
             LMDB_DB_MMR_PEAK_DATA,
             LMDB_DB_ORPHANS,
             LMDB_DB_ORPHAN_CHAIN_TIPS,
             LMDB_DB_ORPHAN_PARENT_MAP_INDEX,
-            LMDB_DB_RANGE_PROOF_MMR_CP_BACKEND,
             LMDB_DB_TXOS_HASH_TO_INDEX,
             LMDB_DB_UTXOS,
-            LMDB_DB_UTXO_MMR_CP_BACKEND,
         },
         BlockHeaderAccumulatedData,
         ChainMetadata,
@@ -99,7 +96,8 @@ pub struct LMDBDatabase {
     env: Arc<Environment>,
     env_config: LMDBConfig,
     metadata_db: DatabaseRef,
-    mem_metadata: ChainMetadata, // Memory copy of stored metadata
+    mem_metadata: ChainMetadata,
+    // Memory copy of stored metadata
     headers_db: DatabaseRef,
     header_accumulated_data_db: DatabaseRef,
     mmr_peak_data_db: DatabaseRef,
@@ -194,7 +192,7 @@ impl LMDBDatabase {
                     )? {
                         if let Some(u) = utxo {
                             lmdb_delete(&write_txn, &self.txos_hash_to_index_db, u.hash.as_slice())?;
-                        }else {
+                        } else {
                             // TODO: Replace when this node is pruned
                             unimplemented!();
                         }
@@ -250,7 +248,12 @@ impl LMDBDatabase {
             proof_hash.to_hex()
         );
         // TODO: Allow multiple values put utxo
-        lmdb_insert(txn, &*self.txos_hash_to_index_db, output_hash.as_slice(), &mmr_position)?;
+        lmdb_insert(
+            txn,
+            &*self.txos_hash_to_index_db,
+            output_hash.as_slice(),
+            &(mmr_position, key.clone()),
+        )?;
         lmdb_insert(
             txn,
             &*self.utxos_db,
@@ -358,14 +361,6 @@ impl LMDBDatabase {
                     lmdb_delete(&txn, &self.headers_db, &k)?;
                 }
             },
-            // DbKey::UnspentOutput(k) => {
-            //     lmdb_delete(&txn, &self.utxos_db, k.as_slice())?;
-            //     lmdb_delete(&txn, &self.txos_hash_to_index_db, k.as_slice())?;
-            // },
-            // DbKey::SpentOutput(k) => {
-            //     lmdb_delete(&txn, &self.stxos_db, k.as_slice())?;
-            //     lmdb_delete(&txn, &self.txos_hash_to_index_db, k.as_slice())?;
-            // },
             DbKey::TransactionKernel(k) => {
                 lmdb_delete(&txn, &self.kernels_db, k.as_slice())?;
             },
@@ -559,14 +554,6 @@ impl BlockchainBackend for LMDBDatabase {
             DbKey::Metadata(k) => lmdb_exists(&txn, &self.metadata_db, &(*k as u32))?,
             DbKey::BlockHeader(k) => lmdb_exists(&txn, &self.headers_db, k)?,
             DbKey::BlockHash(h) => lmdb_exists(&txn, &self.block_hashes_db, h)?,
-            // DbKey::UnspentOutput(k) => {
-            //     let row = lmdb_get(&txn,  &self.txos_hash_to_index_db, k)?;
-            //     if let Some(r) = row {
-            //         self
-            //     }
-            //     else { Ok(false) }
-            // },
-            // DbKey::SpentOutput(k) => lmdb_exists(&txn, &self.stxos_db, k)?,
             DbKey::TransactionKernel(k) => lmdb_exists(&txn, &self.kernels_db, k)?,
             DbKey::OrphanBlock(k) => lmdb_exists(&txn, &self.orphans_db, k)?,
         })
@@ -606,6 +593,34 @@ impl BlockchainBackend for LMDBDatabase {
                 .map(|f: Option<TransactionKernelRowData>| f.unwrap().kernel)
                 .collect(),
         )
+    }
+
+    fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError> {
+        debug!(target: LOG_TARGET, "Fetch output: {}", output_hash.to_hex());
+        let txn = ReadTransaction::new(&*self.env)?;
+        if let Some((index, key)) =
+            lmdb_get::<_, (u32, String)>(&txn, &self.txos_hash_to_index_db, output_hash.as_slice())?
+        {
+            debug!(
+                target: LOG_TARGET,
+                "Fetch output: {} Found ({}, {})",
+                output_hash.to_hex(),
+                index,
+                key
+            );
+            if let Some(output) = lmdb_get::<_, Option<TransactionOutputRowData>>(&txn, &self.utxos_db, key.as_str())? {
+                Ok(output.map(|o| o.output))
+            } else {
+                unimplemented!("Pruning of outputs not implemented")
+            }
+        } else {
+            debug!(
+                target: LOG_TARGET,
+                "Fetch output: {} NOT found in index",
+                output_hash.to_hex()
+            );
+            Ok(None)
+        }
     }
 
     fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError> {
@@ -737,7 +752,9 @@ impl BlockchainBackend for LMDBDatabase {
         info!(target: LOG_TARGET, "Fetch MMR leaf index");
         let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
         match tree {
-            MmrTree::Utxo => lmdb_get(&txn, &self.txos_hash_to_index_db, hash),
+            MmrTree::Utxo => {
+                Ok(lmdb_get::<_, (u32, String)>(&txn, &self.txos_hash_to_index_db, hash)?.map(|(index, _)| index))
+            },
             _ => unimplemented!(),
         }
     }

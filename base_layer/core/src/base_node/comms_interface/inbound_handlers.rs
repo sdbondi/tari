@@ -34,7 +34,7 @@ use crate::{
     consensus::ConsensusManager,
     mempool::{async_mempool, Mempool},
     proof_of_work::{get_target_difficulty, Difficulty, PowAlgorithm},
-    transactions::transaction::TransactionKernel,
+    transactions::transaction::{TransactionKernel, TransactionOutput},
 };
 use croaring::Bitmap;
 use log::*;
@@ -223,23 +223,14 @@ where T: BlockchainBackend + 'static
 
                 Ok(NodeCommsResponse::FetchHeadersAfterResponse(headers))
             },
-            NodeCommsRequest::FetchMatchingUtxos(_utxo_hashes) => {
-                unimplemented!()
-                // let mut utxos = Vec::<TransactionOutput>::new();
-                // for hash in utxo_hashes {
-                //     // Not finding a requested UT // let mut utxos = Vec::<TransactionOutput>::new();
-                //                 // for hash in utxo_hashes {
-                //                 //     // Not finding a requested UTXO is not an error; UTXO validation depends on
-                // this                 //     if let Ok(utxo) =
-                // async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await {
-                // //         utxos.push(utxo);                 //     }
-                //                 // }
-                //                 // Ok(NodeCommsResponse::TransXO is not an error; UTXO validation depends on this
-                //     if let Ok(utxo) = async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await {
-                //         utxos.push(utxo);
-                //     }
-                // }
-                // Ok(NodeCommsResponse::TransactionOutputs(utxos))
+            NodeCommsRequest::FetchMatchingUtxos(utxo_hashes) => {
+                let mut utxos = Vec::<TransactionOutput>::new();
+                for hash in utxo_hashes {
+                    if let Some(utxo) = async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await? {
+                        utxos.push(utxo);
+                    }
+                }
+                Ok(NodeCommsResponse::TransactionOutputs(utxos))
             },
             NodeCommsRequest::FetchMatchingTxos(_txo_hashes) => {
                 unimplemented!();

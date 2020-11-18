@@ -87,12 +87,12 @@ pub async fn get_heights(
 
 #[tonic::async_trait]
 impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
+    type FetchMatchingUtxosStream = mpsc::Receiver<Result<tari_rpc::FetchMatchingUtxosResponse, Status>>;
     type GetBlocksStream = mpsc::Receiver<Result<tari_rpc::HistoricalBlock, Status>>;
     type GetNetworkDifficultyStream = mpsc::Receiver<Result<tari_rpc::NetworkDifficultyResponse, Status>>;
     type GetTokensInCirculationStream = mpsc::Receiver<Result<tari_rpc::ValueAtHeightResponse, Status>>;
     type ListHeadersStream = mpsc::Receiver<Result<tari_rpc::BlockHeader, Status>>;
     type SearchKernelsStream = mpsc::Receiver<Result<tari_rpc::HistoricalBlock, Status>>;
-    type FetchMatchingUtxosStream = mpsc::Receiver<Result<tari_rpc::FetchMatchingUtxosResponse, Status>>;
 
     async fn get_network_difficulty(
         &self,
@@ -545,9 +545,12 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
                 Ok(data) => data,
             };
             for output in outputs {
-                match tx.send(Ok(tari_rpc::FetchMatchingUtxosResponse{
-                    output: Some(output
-                .into())})).await {
+                match tx
+                    .send(Ok(tari_rpc::FetchMatchingUtxosResponse {
+                        output: Some(output.into()),
+                    }))
+                    .await
+                {
                     Ok(_) => (),
                     Err(err) => {
                         warn!(target: LOG_TARGET, "Error sending output via GRPC:  {}", err);
@@ -564,10 +567,12 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
             }
         });
 
-        debug!(target: LOG_TARGET, "Sending FindMatchingUtxos response stream to client");
+        debug!(
+            target: LOG_TARGET,
+            "Sending FindMatchingUtxos response stream to client"
+        );
         Ok(Response::new(rx))
     }
-
 
     async fn get_calc_timing(
         &self,

@@ -31,12 +31,14 @@ use crate::{
     blocks::{Block, BlockHeader, NewBlockTemplate},
     chain_storage::{ChainMetadata, HistoricalBlock, MmrTree},
     proof_of_work::PowAlgorithm,
-    transactions::types::{Commitment, HashOutput, Signature},
+    transactions::{
+        transaction::TransactionOutput,
+        types::{Commitment, HashOutput, Signature},
+    },
 };
 use std::sync::Arc;
 use tari_service_framework::{reply_channel::SenderService, Service};
 use tokio::sync::broadcast;
-use crate::transactions::transaction::TransactionOutput;
 
 pub type BlockEventSender = broadcast::Sender<Arc<BlockEvent>>;
 pub type BlockEventReceiver = broadcast::Receiver<Arc<BlockEvent>>;
@@ -170,7 +172,6 @@ impl LocalNodeCommsInterface {
             _ => Err(CommsInterfaceError::UnexpectedApiResponse),
         }
     }
-
 
     pub async fn fetch_matching_utxos(
         &mut self,

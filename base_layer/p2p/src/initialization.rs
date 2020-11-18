@@ -450,8 +450,16 @@ impl ServiceInitializer for P2pInitializer {
     fn initialize(&mut self, context: ServiceInitializerContext) -> Self::Future {
         let config = self.config.clone();
         let connector = self.connector.take().expect("P2pInitializer called more than once");
-        let peers :Vec<Peer> = self.seed_peers.drain(..).collect();
-        info!(target: LOG_TARGET, "Initializing P2P with seed peers:{}", peers.iter().map(|p| format!("\"{}\"", p.to_short_string())).collect::<Vec<_>>().join(","));
+        let peers: Vec<Peer> = self.seed_peers.drain(..).collect();
+        info!(
+            target: LOG_TARGET,
+            "Initializing P2P with seed peers:{}",
+            peers
+                .iter()
+                .map(|p| format!("\"{}\"", p.to_short_string()))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         async move {
             let mut builder = CommsBuilder::new()

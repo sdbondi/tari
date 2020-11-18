@@ -177,6 +177,10 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_kernels_in_block(header_hash)
     }
 
+    fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError> {
+        self.db.fetch_output(output_hash)
+    }
+
     fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError> {
         self.db.fetch_outputs_in_block(header_hash)
     }

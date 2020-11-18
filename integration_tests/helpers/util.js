@@ -96,13 +96,15 @@ var getFreePort = async function (from, to) {
     }
 }
 
-
+// WIP  this doesn't hash properly
 const getTransactionOutputHash = function(output) {
     var KEY = null // optional key
     var OUTPUT_LENGTH = 32 // bytes
     var context = blake2bInit(OUTPUT_LENGTH, KEY);
-    blake2bUpdate(context,output.features.flags);
-    blake2bUpdate(context,toLittleEndian(parseInt(output.features.maturity), 64));
+    let flags = Buffer.alloc(1);
+    flags[0] =output.features.flags;
+    var buffer = Buffer.concat([flags, toLittleEndian(parseInt(output.features.maturity),64)]);
+    blake2bUpdate(context,buffer);
     blake2bUpdate(context,output.commitment);
     let final = blake2bFinal(context);
     return Buffer.from(final);

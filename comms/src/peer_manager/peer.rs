@@ -272,8 +272,8 @@ impl Peer {
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
-                .join(","))
-
+                .join(",")
+        )
     }
 }
 

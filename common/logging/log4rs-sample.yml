@@ -81,9 +81,13 @@ loggers:
     appenders:
       - base_layer
     additive: false
+  c::bn:
+    level: debug
+    appenders:
+      - base_layer
   # Chain storage and database
   c::cs:
-    level: debug
+    level: trace
     appenders:
       - base_layer
     additive: false

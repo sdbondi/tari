@@ -158,6 +158,8 @@ pub trait BlockchainBackend: Send + Sync {
 
     fn fetch_kernels_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionKernel>, ChainStorageError>;
 
+    fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError>;
+
     fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError>;
 
     fn fetch_inputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionInput>, ChainStorageError>;
@@ -387,10 +389,17 @@ where B: BlockchainBackend
         fetch_kernel(&*db, hash)
     }
 
+    /// Returns the transaction kernel with the given hash.
+    pub fn fetch_utxo(&self, hash: HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError> {
+        let db = self.db_read_access()?;
+        db.fetch_output(&hash)
+    }
+
     /// Returns the set of transaction kernels with the given hashes.
     pub fn fetch_kernels(&self, hashes: Vec<HashOutput>) -> Result<Vec<TransactionKernel>, ChainStorageError> {
         let db = self.db_read_access()?;
-        fetch_kernels(&*db, hashes)
+        unimplemented!()
+        // fetch_kernels(&*db, hashes)
     }
 
     /// Returns the block header at the given block height.
@@ -686,7 +695,7 @@ where B: BlockchainBackend
     /// Returns true if this block exists in the chain, or is orphaned.
     pub fn block_exists(&self, hash: BlockHash) -> Result<bool, ChainStorageError> {
         let db = self.db_read_access()?;
-        block_exists(&*db, hash)
+        Ok(db.contains(&DbKey::BlockHash(hash.clone()))? || db.contains(&DbKey::OrphanBlock(hash))?)
     }
 
     /// Atomically commit the provided transaction to the database backend. This function does not update the metadata.
@@ -1442,11 +1451,6 @@ fn fetch_block_with_hash<T: BlockchainBackend>(
     Ok(None)
 }
 
-fn block_exists<T: BlockchainBackend>(db: &T, hash: BlockHash) -> Result<bool, ChainStorageError> {
-    let exists = db.contains(&DbKey::BlockHash(hash.clone()))? || db.contains(&DbKey::OrphanBlock(hash))?;
-    Ok(exists)
-}
-
 fn check_for_valid_height<T: BlockchainBackend>(db: &T, height: u64) -> Result<u64, ChainStorageError> {
     let metadata = db.fetch_chain_metadata()?;
     let db_height = metadata.height_of_longest_chain();
@@ -1464,10 +1468,6 @@ fn check_for_valid_height<T: BlockchainBackend>(db: &T, height: u64) -> Result<u
         )));
     }
     Ok(db_height)
-}
-
-fn fetch_kernels<T: BlockchainBackend>(db: &T, hashes: Vec<Hash>) -> Result<Vec<TransactionKernel>, ChainStorageError> {
-    hashes.into_iter().map(|hash| fetch_kernel(db, hash)).collect()
 }
 
 // fn fetch_inputs<T: BlockchainBackend>(
@@ -1617,8 +1617,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
         return Ok(BlockAddResult::OrphanBlock);
     }
 
-
-        // Try and find all orphaned chain tips that can be linked to the new orphan block, if no better orphan chain
+    // Try and find all orphaned chain tips that can be linked to the new orphan block, if no better orphan chain
     // tips can be found then the new_block is a tip.
     let new_block_hash = new_block.hash();
     // TODO: Improve efficiency of `find_orphan_chain_tips -> for_each_orphan -> lmdb_for_each` as this wastes
@@ -1699,7 +1698,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
     // that is linked with the main chain.
     // let fork_tip_block = fetch_orphan(db, fork_tip_hash.clone()).map(Arc::new)?;
     // if fork_tip_hash != new_block_hash {
-        // New block is not the tip, find complete chain from tip to main chain.
+    // New block is not the tip, find complete chain from tip to main chain.
     let reorg_chain = get_orphan_link_main_chain(db, &fork_tip_hash)?;
     // }
     let added_blocks = reorg_chain.iter().cloned().collect::<Vec<_>>();
@@ -1826,7 +1825,11 @@ fn restore_reorged_chain<T: BlockchainBackend>(
 }
 
 // Insert the provided block into the orphan pool and returns any new tips that were created
-fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(db: &mut T, block: Arc<Block>) -> Result<Vec<HashOutput>, ChainStorageError> {
+fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(
+    db: &mut T,
+    block: Arc<Block>,
+) -> Result<Vec<HashOutput>, ChainStorageError>
+{
     let hash = block.hash();
 
     let mut txn = DbTransaction::new();
@@ -1897,10 +1900,10 @@ fn remove_orphan<T: BlockchainBackend>(db: &mut T, hash: HashOutput) -> Result<(
 /// link to the main chain.
 fn get_orphan_link_main_chain<T: BlockchainBackend>(
     db: &mut T,
-    orphan_tip: &HashOutput
+    orphan_tip: &HashOutput,
 ) -> Result<VecDeque<Arc<Block>>, ChainStorageError>
 {
-    let mut chain:VecDeque<Arc<Block>> = VecDeque::new();
+    let mut chain: VecDeque<Arc<Block>> = VecDeque::new();
     // let new_block_hash = new_block.hash();
     // let new_block_height = new_block.header.height;
     let mut curr_hash = orphan_tip.clone();

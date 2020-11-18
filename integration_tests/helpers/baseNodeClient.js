@@ -104,7 +104,6 @@ class BaseNodeClient {
         return this.client.fetchMatchingUtxos()
             .sendMessage({hashes: hashes})
             .then(result => {
-                console.log("FetchMathingUtxos res:", result);
                 return result
             });
     }

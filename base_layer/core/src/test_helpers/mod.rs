@@ -28,7 +28,7 @@ pub mod blockchain;
 use crate::{
     blocks::{Block, BlockHeader},
     consensus::ConsensusManager,
-    transactions::{transaction::Transaction},
+    transactions::transaction::Transaction,
 };
 
 use rand::{distributions::Alphanumeric, Rng};
