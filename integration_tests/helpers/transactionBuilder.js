@@ -14,6 +14,8 @@ class TransactionBuilder {
         return this.kv.private_key(id);
     }
 
+
+
     buildChallenge(publicNonce, fee, lockHeight) {
         var KEY = null // optional key
         var OUTPUT_LENGTH = 32 // bytes
@@ -61,5 +63,6 @@ class TransactionBuilder {
         }
     }
 }
+
 
 module.exports = TransactionBuilder;

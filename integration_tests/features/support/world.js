@@ -9,9 +9,11 @@ class CustomWorld {
         //this.variable = 0;
         this.seeds = {};
         this.nodes = {};
-        this.clients ={};
+        this.clients = {};
         this.headers = {};
+        this.outputs = {};
         this.testrun = `run${Date.now()}`;
+        this.lastResult = null;
     }
 
     async createSeedNode(name) {
@@ -33,6 +35,10 @@ class CustomWorld {
     addNode(name, process) {
         this.nodes[name] = process;
         this.clients[name] = process.createGrpcClient();
+    }
+
+    addOutput(name, output) {
+        this.outputs[name] = output;
     }
 
     async mineBlock(name, beforeSubmit, onError) {

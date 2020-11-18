@@ -73,35 +73,17 @@ root:
   level: warn
   appenders:
     - stdout
-    - base_layer
 
 loggers:
   # Route log events sent to the "core" logger to the "base_layer" appender
   c:
-    level: debug
-    appenders:
-      - base_layer
-    additive: false
-
-  c::cs:
-    level: trace
-    appenders:
-      - base_layer
-    additive: false
-
-  c::bn::async_db:
-    level: trace
-    appenders:
-      - base_layer
-    additive: false
-
-  tari:
     level: info
     appenders:
-      - other
-
-  tari_mmr:
-    level: trace
+      - base_layer
+    additive: false
+  # Chain storage and database
+  c::cs:
+    level: debug
     appenders:
       - base_layer
     additive: false
@@ -113,17 +95,10 @@ loggers:
     additive: false
   # Route log events sent to the "comms" logger to the "network" appender
   comms:
-    level: info
-    appenders:
-      - network
-    additive: false
-
-  comms::dht:
     level: debug
     appenders:
       - network
     additive: false
-
   # Route log events sent to the "p2p" logger to the "network" appender
   p2p:
     level: info

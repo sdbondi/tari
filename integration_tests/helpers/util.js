@@ -1,5 +1,6 @@
 var net = require('net');
-const sp = require('synchronized-promise')
+
+var {blake2bInit, blake2bUpdate, blake2bFinal} = require('blakejs');
 
 function getRandomInt(min, max) {
     min = Math.ceil(min);
@@ -95,11 +96,24 @@ var getFreePort = async function (from, to) {
     }
 }
 
+
+const getTransactionOutputHash = function(output) {
+    var KEY = null // optional key
+    var OUTPUT_LENGTH = 32 // bytes
+    var context = blake2bInit(OUTPUT_LENGTH, KEY);
+    blake2bUpdate(context,output.features.flags);
+    blake2bUpdate(context,toLittleEndian(parseInt(output.features.maturity), 64));
+    blake2bUpdate(context,output.commitment);
+    let final = blake2bFinal(context);
+    return Buffer.from(final);
+}
+
 module.exports = {
     getRandomInt,
     sleep,
     waitFor,
     toLittleEndian,
     // portInUse,
-    getFreePort
+    getFreePort,
+    getTransactionOutputHash
 };

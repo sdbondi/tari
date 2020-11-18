@@ -92,6 +92,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
     type GetTokensInCirculationStream = mpsc::Receiver<Result<tari_rpc::ValueAtHeightResponse, Status>>;
     type ListHeadersStream = mpsc::Receiver<Result<tari_rpc::BlockHeader, Status>>;
     type SearchKernelsStream = mpsc::Receiver<Result<tari_rpc::HistoricalBlock, Status>>;
+    type FetchMatchingUtxosStream = mpsc::Receiver<Result<tari_rpc::FetchMatchingUtxosResponse, Status>>;
 
     async fn get_network_difficulty(
         &self,
@@ -517,6 +518,56 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
         debug!(target: LOG_TARGET, "Sending SearchKernels response stream to client");
         Ok(Response::new(rx))
     }
+
+    async fn fetch_matching_utxos(
+        &self,
+        request: Request<tari_rpc::FetchMatchingUtxosRequest>,
+    ) -> Result<Response<Self::FetchMatchingUtxosStream>, Status>
+    {
+        debug!(target: LOG_TARGET, "Incoming GRPC request for FetchMatchingUtxos");
+        let request = request.into_inner();
+
+        let converted: Result<Vec<_>, _> = request.hashes.into_iter().map(|s| s.try_into()).collect();
+        let hashes = converted.map_err(|_| Status::internal("Failed to convert one or more arguments."))?;
+
+        let mut handler = self.node_service.clone();
+
+        let (mut tx, rx) = mpsc::channel(GET_BLOCKS_PAGE_SIZE);
+        self.executor.spawn(async move {
+            let outputs = match handler.fetch_matching_utxos(hashes).await {
+                Err(err) => {
+                    warn!(
+                        target: LOG_TARGET,
+                        "Error communicating with local base node: {:?}", err,
+                    );
+                    return;
+                },
+                Ok(data) => data,
+            };
+            for output in outputs {
+                match tx.send(Ok(tari_rpc::FetchMatchingUtxosResponse{
+                    output: Some(output
+                .into())})).await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        warn!(target: LOG_TARGET, "Error sending output via GRPC:  {}", err);
+
+                        match tx.send(Err(Status::unknown("Error sending data"))).await {
+                            Ok(_) => (),
+                            Err(send_err) => {
+                                warn!(target: LOG_TARGET, "Error sending error to GRPC client: {}", send_err)
+                            },
+                        }
+                        return;
+                    },
+                }
+            }
+        });
+
+        debug!(target: LOG_TARGET, "Sending FindMatchingUtxos response stream to client");
+        Ok(Response::new(rx))
+    }
+
 
     async fn get_calc_timing(
         &self,

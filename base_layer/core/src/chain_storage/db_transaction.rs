@@ -115,21 +115,21 @@ impl DbTransaction {
     }
 
     /// Adds a UTXO into the current transaction and update the TXO MMR.
-    pub fn insert_utxo(&mut self, utxo: TransactionOutput, header_hash: HashOutput, mmr_position: u32) {
+    pub fn insert_utxo(&mut self, utxo: TransactionOutput, header_hash: HashOutput, mmr_leaf_index: u32) {
         // et hash = utxo.hash();
         //  self.insert(DbKeyValuePair::UnspentOutput(hash, Box::new(utxo)));
         self.operations.push(WriteOperation::InsertOutput {
             header_hash,
             output: Box::new(utxo),
-            mmr_position,
+            mmr_position: mmr_leaf_index,
         });
     }
 
-    pub fn insert_input(&mut self, input: TransactionInput, header_hash: HashOutput, mmr_position: u32) {
+    pub fn insert_input(&mut self, input: TransactionInput, header_hash: HashOutput, mmr_leaf_index: u32) {
         self.operations.push(WriteOperation::InsertInput {
             header_hash,
             input: Box::new(input),
-            mmr_position,
+            mmr_position: mmr_leaf_index,
         });
     }
 
@@ -307,7 +307,7 @@ pub enum DbKey {
     BlockHeader(u64),
     BlockHash(BlockHash),
     // UnspentOutput(HashOutput),
-    SpentOutput(HashOutput),
+    // SpentOutput(HashOutput),
     TransactionKernel(HashOutput),
     OrphanBlock(HashOutput),
 }
@@ -319,7 +319,7 @@ impl DbKey {
             DbKey::BlockHeader(v) => ("BlockHeader".to_string(), "Height".to_string(), v.to_string()),
             DbKey::BlockHash(v) => ("Block".to_string(), "Hash".to_string(), v.to_hex()),
             // DbKey::UnspentOutput(v) => ("Utxo".to_string(), "Hash".to_string(), v.to_hex()),
-            DbKey::SpentOutput(v) => ("Stxo".to_string(), "Hash".to_string(), v.to_hex()),
+            // DbKey::SpentOutput(v) => ("Stxo".to_string(), "Hash".to_string(), v.to_hex()),
             DbKey::TransactionKernel(v) => ("Kernel".to_string(), "Hash".to_string(), v.to_hex()),
             DbKey::OrphanBlock(v) => ("Orphan".to_string(), "Hash".to_string(), v.to_hex()),
         };
@@ -333,7 +333,7 @@ pub enum DbValue {
     BlockHeader(Box<BlockHeader>),
     BlockHash(Box<BlockHeader>),
     UnspentOutput(Box<TransactionOutput>),
-    SpentOutput(Box<TransactionOutput>),
+    // SpentOutput(Box<TransactionOutput>),
     TransactionKernel(Box<TransactionKernel>),
     OrphanBlock(Box<Block>),
 }
@@ -345,7 +345,7 @@ impl Display for DbValue {
             DbValue::BlockHeader(_) => f.write_str("Block header"),
             DbValue::BlockHash(_) => f.write_str("Block hash"),
             DbValue::UnspentOutput(_) => f.write_str("Unspent output"),
-            DbValue::SpentOutput(_) => f.write_str("Spent output"),
+            // DbValue::SpentOutput(_) => f.write_str("Spent output"),
             DbValue::TransactionKernel(_) => f.write_str("Transaction kernel"),
             DbValue::OrphanBlock(_) => f.write_str("Orphan block"),
         }
@@ -359,7 +359,7 @@ impl Display for DbKey {
             DbKey::BlockHeader(v) => f.write_str(&format!("Block header (#{})", v)),
             DbKey::BlockHash(v) => f.write_str(&format!("Block hash (#{})", to_hex(v))),
             // DbKey::UnspentOutput(v) => f.write_str(&format!("Unspent output ({})", to_hex(v))),
-            DbKey::SpentOutput(v) => f.write_str(&format!("Spent output ({})", to_hex(v))),
+            // DbKey::SpentOutput(v) => f.write_str(&format!("Spent output ({})", to_hex(v))),
             DbKey::TransactionKernel(v) => f.write_str(&format!("Transaction kernel ({})", to_hex(v))),
             DbKey::OrphanBlock(v) => f.write_str(&format!("Orphan block hash ({})", to_hex(v))),
         }

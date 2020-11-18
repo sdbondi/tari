@@ -90,7 +90,7 @@ message HistoricalBlock {
     // confirmation.
     uint64 confirmations = 1;
     // The underlying block
-    Block block = 2;
+    Block block = 3;
 }
 
 

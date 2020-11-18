@@ -2,7 +2,7 @@
 const { Given, When, Then } = require("cucumber");
 const BaseNodeProcess = require('../../helpers/baseNodeProcess');
 const expect = require('chai').expect;
-const {waitFor} = require('../../helpers/util');
+const {waitFor, getTransactionOutputHash} = require('../../helpers/util');
 
 
 Given(/I have a seed node (.*)/, {timeout: 20*1000}, async function (name) {
@@ -49,12 +49,6 @@ Given('I have {int} base nodes connected to all seed nodes',{timeout: 190*1000},
 });
 
 
-When(/I mine (\d+) blocks on (.*)/, {timeout: 600*1000}, async function (numBlocks, name) {
-   for(let i=0;i<numBlocks;i++) {
-        await this.mineBlock(name);
-    }
-});
-
 When(/I start (.*)/, {timeout: 20*1000}, async function (name) {
     await this.startNode(name);
 });
@@ -94,6 +88,15 @@ Then(/node (.*) is at tip (.*)/, async function (node, name) {
 });
 
 
+When(/I mine a block on (.*) with coinbase (.*)/, {timeout: 600*1000}, async function (name, coinbaseName) {
+        await this.mineBlock(name, candidate => {
+            console.log(candidate.block.body.outputs);
+            this.addOutput(coinbaseName, candidate.block.body.outputs[0]);
+            return candidate;
+        });
+});
+
+
 When(/I mine a block on (.*) based on height (\d+)/, async function (node, atHeight) {
     let client = this.getClient(node);
     let template = client.getPreviousBlockTemplate(atHeight);
@@ -127,3 +130,11 @@ When(/I mine a block on (.*) at height (\d+) with an invalid MMR/, async functio
         return false;
     })
 });
+
+Then(/I find that the UTXO (.*) exists according to (.*)/, async function (outputName, nodeName) {
+    let client = this.getClient(nodeName);
+    let lastResult = await client.fetchMatchingUtxos([getTransactionOutputHash(this.outputs[outputName])]);
+    console.log("UTXOs:", lastResult);
+    expect(lastResult.len()).to.equal(1);
+});
+

@@ -878,7 +878,7 @@ impl Parser {
         };
         let mut handler = self.node_service.clone();
         self.executor.spawn(async move {
-            match handler.get_blocks_with_utxos(vec![commitment.clone()]).await {
+            match handler.fetch_blocks_with_utxos(vec![commitment.clone()]).await {
                 Err(err) => {
                     println!("Failed to retrieve blocks: {:?}", err);
                     warn!(

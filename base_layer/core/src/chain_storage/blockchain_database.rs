@@ -1196,7 +1196,7 @@ fn store_new_block<T: BlockchainBackend>(
         output_mmr.push(output.hash())?;
 
         proof_mmr.push(output.proof().hash())?;
-        // mutable mmr returns a differnet pos
+
         txn.insert_utxo(
             output.clone(),
             header_hash.clone(),

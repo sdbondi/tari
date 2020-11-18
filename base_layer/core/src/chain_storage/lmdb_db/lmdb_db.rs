@@ -60,7 +60,6 @@ use crate::{
             LMDB_DB_ORPHAN_CHAIN_TIPS,
             LMDB_DB_ORPHAN_PARENT_MAP_INDEX,
             LMDB_DB_RANGE_PROOF_MMR_CP_BACKEND,
-            LMDB_DB_STXOS,
             LMDB_DB_TXOS_HASH_TO_INDEX,
             LMDB_DB_UTXOS,
             LMDB_DB_UTXO_MMR_CP_BACKEND,
@@ -107,7 +106,6 @@ pub struct LMDBDatabase {
     block_hashes_db: DatabaseRef,
     utxos_db: DatabaseRef,
     inputs_db: DatabaseRef,
-    stxos_db: DatabaseRef,
     txos_hash_to_index_db: DatabaseRef,
     kernels_db: DatabaseRef,
     orphans_db: DatabaseRef,
@@ -119,11 +117,6 @@ pub struct LMDBDatabase {
 
 impl LMDBDatabase {
     pub fn new(store: LMDBStore, file_lock: File) -> Result<Self, ChainStorageError> {
-        // let utxo_checkpoints = LMDBVec::new(store.env(), get_database(&store, LMDB_DB_UTXO_MMR_CP_BACKEND)?);
-        // let kernel_checkpoints = LMDBVec::new(store.env(), get_database(&store, LMDB_DB_KERNEL_MMR_CP_BACKEND)?);
-        // let range_proof_checkpoints =
-        //     LMDBVec::new(store.env(), get_database(&store, LMDB_DB_RANGE_PROOF_MMR_CP_BACKEND)?);
-        // Restore memory metadata
         let env = store.env();
         let metadata_db = get_database(&store, LMDB_DB_METADATA)?;
         let txn = ReadTransaction::new(env.as_ref()).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
@@ -139,7 +132,6 @@ impl LMDBDatabase {
             block_hashes_db: get_database(&store, LMDB_DB_BLOCK_HASHES)?,
             utxos_db: get_database(&store, LMDB_DB_UTXOS)?,
             inputs_db: get_database(&store, LMDB_DB_INPUTS)?,
-            stxos_db: get_database(&store, LMDB_DB_STXOS)?,
             txos_hash_to_index_db: get_database(&store, LMDB_DB_TXOS_HASH_TO_INDEX)?,
             kernels_db: get_database(&store, LMDB_DB_KERNELS)?,
             orphans_db: get_database(&store, LMDB_DB_ORPHANS)?,
@@ -370,10 +362,10 @@ impl LMDBDatabase {
             //     lmdb_delete(&txn, &self.utxos_db, k.as_slice())?;
             //     lmdb_delete(&txn, &self.txos_hash_to_index_db, k.as_slice())?;
             // },
-            DbKey::SpentOutput(k) => {
-                lmdb_delete(&txn, &self.stxos_db, k.as_slice())?;
-                lmdb_delete(&txn, &self.txos_hash_to_index_db, k.as_slice())?;
-            },
+            // DbKey::SpentOutput(k) => {
+            //     lmdb_delete(&txn, &self.stxos_db, k.as_slice())?;
+            //     lmdb_delete(&txn, &self.txos_hash_to_index_db, k.as_slice())?;
+            // },
             DbKey::TransactionKernel(k) => {
                 lmdb_delete(&txn, &self.kernels_db, k.as_slice())?;
             },
@@ -424,15 +416,11 @@ pub fn create_lmdb_database<P: AsRef<Path>>(path: P, config: LMDBConfig) -> Resu
         .add_database(LMDB_DB_BLOCK_HASHES, flags)
         .add_database(LMDB_DB_UTXOS, flags)
         .add_database(LMDB_DB_INPUTS, flags)
-        .add_database(LMDB_DB_STXOS, flags)
         .add_database(LMDB_DB_TXOS_HASH_TO_INDEX, flags)
         .add_database(LMDB_DB_KERNELS, flags)
         .add_database(LMDB_DB_ORPHANS, flags)
         .add_database(LMDB_DB_ORPHAN_CHAIN_TIPS, flags)
         .add_database(LMDB_DB_ORPHAN_PARENT_MAP_INDEX, flags | db::DUPSORT)
-        .add_database(LMDB_DB_UTXO_MMR_CP_BACKEND, flags)
-        .add_database(LMDB_DB_KERNEL_MMR_CP_BACKEND, flags)
-        .add_database(LMDB_DB_RANGE_PROOF_MMR_CP_BACKEND, flags)
         .build()
         .map_err(|err| ChainStorageError::CriticalError(format!("Could not create LMDB store:{}", err)))?;
     LMDBDatabase::new(lmdb_store, file_lock)
@@ -548,10 +536,10 @@ impl BlockchainBackend for LMDBDatabase {
             //     let val: Option<TransactionOutput> = lmdb_get(&txn, &self.utxos_db, k)?;
             //     val.map(|val| DbValue::UnspentOutput(Box::new(val)))
             // },
-            DbKey::SpentOutput(k) => {
-                let val: Option<TransactionOutput> = lmdb_get(&txn, &self.stxos_db, k)?;
-                val.map(|val| DbValue::SpentOutput(Box::new(val)))
-            },
+            // DbKey::SpentOutput(k) => {
+            //     let val: Option<TransactionOutput> = lmdb_get(&txn, &self.stxos_db, k)?;
+            //     val.map(|val| DbValue::SpentOutput(Box::new(val)))
+            // },
             DbKey::TransactionKernel(k) => {
                 let val: Option<TransactionKernel> = lmdb_get(&txn, &self.kernels_db, k)?;
                 val.map(|val| DbValue::TransactionKernel(Box::new(val)))
@@ -578,7 +566,7 @@ impl BlockchainBackend for LMDBDatabase {
             //     }
             //     else { Ok(false) }
             // },
-            DbKey::SpentOutput(k) => lmdb_exists(&txn, &self.stxos_db, k)?,
+            // DbKey::SpentOutput(k) => lmdb_exists(&txn, &self.stxos_db, k)?,
             DbKey::TransactionKernel(k) => lmdb_exists(&txn, &self.kernels_db, k)?,
             DbKey::OrphanBlock(k) => lmdb_exists(&txn, &self.orphans_db, k)?,
         })
@@ -633,7 +621,7 @@ impl BlockchainBackend for LMDBDatabase {
     fn fetch_inputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionInput>, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env)?;
         Ok(
-            lmdb_fetch_keys_starting_with(header_hash.to_hex().as_str(), &txn, &self.stxos_db)?
+            lmdb_fetch_keys_starting_with(header_hash.to_hex().as_str(), &txn, &self.inputs_db)?
                 .into_iter()
                 .map(|f: TransactionInputRowData| f.input)
                 .collect(),

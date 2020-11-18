@@ -36,6 +36,7 @@ use crate::{
 use std::sync::Arc;
 use tari_service_framework::{reply_channel::SenderService, Service};
 use tokio::sync::broadcast;
+use crate::transactions::transaction::TransactionOutput;
 
 pub type BlockEventSender = broadcast::Sender<Arc<BlockEvent>>;
 pub type BlockEventReceiver = broadcast::Receiver<Arc<BlockEvent>>;
@@ -170,8 +171,24 @@ impl LocalNodeCommsInterface {
         }
     }
 
+
+    pub async fn fetch_matching_utxos(
+        &mut self,
+        hashes: Vec<HashOutput>,
+    ) -> Result<Vec<TransactionOutput>, CommsInterfaceError>
+    {
+        match self
+            .request_sender
+            .call(NodeCommsRequest::FetchMatchingUtxos(hashes))
+            .await??
+        {
+            NodeCommsResponse::TransactionOutputs(outputs) => Ok(outputs),
+            _ => Err(CommsInterfaceError::UnexpectedApiResponse),
+        }
+    }
+
     /// Fetches the blocks with the specified utxo commitments
-    pub async fn get_blocks_with_utxos(
+    pub async fn fetch_blocks_with_utxos(
         &mut self,
         commitments: Vec<Commitment>,
     ) -> Result<Vec<HistoricalBlock>, CommsInterfaceError>
