@@ -7,12 +7,12 @@
 #![deny(unknown_lints)]
 #![recursion_limit = "512"]
 use log::*;
-use rand::{rngs::OsRng, seq::SliceRandom};
-use std::{fs, sync::Arc};
+use rand::{rngs::OsRng, Rng};
+use std::{fs, str::FromStr, sync::Arc};
 use structopt::StructOpt;
 use tari_app_utilities::{
     identity_management::setup_node_identity,
-    utilities::{parse_peer_seeds, setup_wallet_transport_type, ExitCodes},
+    utilities::{setup_wallet_transport_type, ExitCodes},
 };
 use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, GlobalConfig, Network};
 use tari_comms::{
@@ -21,7 +21,7 @@ use tari_comms::{
 };
 use tari_comms_dht::{DbConnectionUrl, DhtConfig};
 use tari_core::{consensus::Network as NetworkType, transactions::types::CryptoFactories};
-use tari_p2p::initialization::CommsConfig;
+use tari_p2p::{initialization::CommsConfig, seed_peer::SeedPeer, DEFAULT_DNS_SEED_RESOLVER};
 use tari_shutdown::{Shutdown, ShutdownSignal};
 use tari_wallet::{
     base_node_service::config::BaseNodeServiceConfig,
@@ -90,11 +90,9 @@ fn main_inner() -> Result<(), ExitCodes> {
     debug!(target: LOG_TARGET, "Using configuration: {:?}", config);
     // Load or create the Node identity
     let node_identity = setup_node_identity(
-        &config.wallet_identity_file,
+        &config.console_wallet_identity_file,
         &config.public_address,
-        bootstrap.create_id ||
-            // If the base node identity exists, we want to be sure that the wallet identity exists
-            config.identity_file.exists(),
+        bootstrap.create_id,
         PeerFeatures::COMMUNICATION_CLIENT,
     )?;
 
@@ -102,8 +100,8 @@ fn main_inner() -> Result<(), ExitCodes> {
     if bootstrap.create_id {
         info!(
             target: LOG_TARGET,
-            "Node ID created at '{}'. Done.",
-            config.identity_file.to_string_lossy()
+            "Console wallet's node ID created at '{}'. Done.",
+            config.console_wallet_identity_file.to_string_lossy()
         );
         return Ok(());
     }
@@ -124,11 +122,9 @@ fn main_inner() -> Result<(), ExitCodes> {
 
     debug!(target: LOG_TARGET, "Starting app");
 
-    let node_identity = wallet.comms.node_identity().as_ref().clone();
-
     let handle = runtime.handle().clone();
     let result = match wallet_mode(bootstrap) {
-        WalletMode::Tui => tui_mode(handle, config, node_identity, wallet.clone(), base_node),
+        WalletMode::Tui => tui_mode(handle, config, wallet.clone(), base_node),
         WalletMode::Grpc => grpc_mode(handle, wallet.clone(), config),
         WalletMode::Script(path) => script_mode(handle, path, wallet.clone(), config),
         WalletMode::Command(command) => command_mode(handle, command, wallet.clone(), config),
@@ -149,29 +145,29 @@ fn main_inner() -> Result<(), ExitCodes> {
 }
 
 fn get_base_node_peer(config: &GlobalConfig) -> Result<Peer, ExitCodes> {
+    // base node service peer is defined, so use that
+    if let Ok(base_node) = SeedPeer::from_str(&config.wallet_base_node_service_peer).map(Peer::from) {
+        return Ok(base_node);
+    }
+
     // pick a random peer from peer seeds config
     // todo: strategy for picking peer seed: random or lowest latency
-    let peer_seeds = parse_peer_seeds(&config.peer_seeds);
-    let peer_seed = peer_seeds.choose(&mut OsRng);
+    let mut peer_seeds = config
+        .peer_seeds
+        .iter()
+        .map(|s| SeedPeer::from_str(s))
+        .map(|r| r.map(Peer::from))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| ExitCodes::ConfigError(format!("Malformed seed peer: {}", err)))?;
 
-    // get the configured base node service peer
-    let base_node_peers = parse_peer_seeds(&[config.wallet_base_node_service_peer.clone()]);
-    let base_node = base_node_peers.first();
+    if !peer_seeds.is_empty() {
+        let idx = OsRng.gen_range(0, peer_seeds.len());
+        return Ok(peer_seeds.remove(idx));
+    }
 
-    let peer = match (peer_seed, base_node) {
-        // base node service peer is defined, so use that
-        (_, Some(node)) => node.clone(),
-        // only peer seeds were provided in config
-        (Some(seed), None) => seed.clone(),
-        // invalid configuration
-        _ => {
-            return Err(ExitCodes::ConfigError(
-                "No peer seeds or base node peer defined in config!".to_string(),
-            ))
-        },
-    };
-
-    Ok(peer)
+    Err(ExitCodes::ConfigError(
+        "No peer seeds or base node peer defined in config!".to_string(),
+    ))
 }
 
 fn wallet_mode(bootstrap: ConfigBootstrap) -> WalletMode {
@@ -199,17 +195,17 @@ async fn setup_wallet(
 {
     fs::create_dir_all(
         &config
-            .wallet_db_file
+            .console_wallet_db_file
             .parent()
-            .expect("wallet_db_file cannot be set to a root directory"),
+            .expect("console_wallet_db_file cannot be set to a root directory"),
     )
     .map_err(|e| ExitCodes::WalletError(format!("Error creating Wallet folder. {}", e)))?;
-    fs::create_dir_all(&config.wallet_peer_db_path)
+    fs::create_dir_all(&config.console_wallet_peer_db_path)
         .map_err(|e| ExitCodes::WalletError(format!("Error creating peer db folder. {}", e)))?;
 
     debug!(target: LOG_TARGET, "Running Wallet database migrations");
     let (wallet_backend, transaction_backend, output_manager_backend, contacts_backend) =
-        initialize_sqlite_database_backends(config.wallet_db_file.clone(), None)
+        initialize_sqlite_database_backends(config.console_wallet_db_file.clone(), None)
             .map_err(|e| ExitCodes::WalletError(format!("Error creating Wallet database backends. {}", e)))?;
     debug!(target: LOG_TARGET, "Databases Initialized");
 
@@ -220,13 +216,13 @@ async fn setup_wallet(
         node_identity,
         user_agent: format!("tari/wallet/{}", env!("CARGO_PKG_VERSION")),
         transport_type: setup_wallet_transport_type(&config),
-        datastore_path: config.wallet_peer_db_path.clone(),
+        datastore_path: config.console_wallet_peer_db_path.clone(),
         peer_database_name: "peers".to_string(),
         max_concurrent_inbound_tasks: 100,
         outbound_buffer_size: 100,
         // TODO - make this configurable
         dht: DhtConfig {
-            database_url: DbConnectionUrl::File(config.data_dir.join("dht-wallet.db")),
+            database_url: DbConnectionUrl::File(config.data_dir.join("dht-console-wallet.db")),
             auto_join: true,
             ..Default::default()
         },
@@ -234,6 +230,10 @@ async fn setup_wallet(
         allow_test_addresses: true,
         listener_liveness_allowlist_cidrs: Vec::new(),
         listener_liveness_max_sessions: 0,
+        dns_seeds_name_server: DEFAULT_DNS_SEED_RESOLVER.parse().unwrap(),
+        peer_seeds: Default::default(),
+        dns_seeds: Default::default(),
+        dns_seeds_use_dnssec: true,
     };
 
     let network = match &config.network {

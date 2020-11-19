@@ -7,7 +7,6 @@ const {waitFor, getTransactionOutputHash} = require('../../helpers/util');
 
 Given(/I have a seed node (.*)/, {timeout: 20*1000}, async function (name) {
     return await this.createSeedNode(name);
-    // Write code here that turns the phrase above into concrete actions
 });
 
 Given('I have {int} seed nodes',{timeout:20*1000}, async function (n) {
@@ -129,6 +128,12 @@ When(/I mine a block on (.*) at height (\d+) with an invalid MMR/, async functio
         console.log(error);
         return false;
     })
+});
+
+When(/I mine (\d+) blocks on (.*)/, {timeout: 600*1000}, async function (numBlocks, name) {
+    for(let i=0;i<numBlocks;i++) {
+        await this.mineBlock(name);
+    }
 });
 
 Then(/I find that the UTXO (.*) exists according to (.*)/, async function (outputName, nodeName) {

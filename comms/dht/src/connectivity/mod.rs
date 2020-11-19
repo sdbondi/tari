@@ -201,6 +201,10 @@ impl DhtConnectivity {
             .fetch_neighbouring_peers(self.config.num_neighbouring_nodes, &[])
             .await?;
 
+        if new_neighbours.is_empty() {
+            warn!(target: LOG_TARGET, "No neighbours found! ",);
+        }
+
         let (intersection, difference) = self
             .neighbours
             .iter()

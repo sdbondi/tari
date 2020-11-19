@@ -107,13 +107,11 @@ where B: BlockchainBackend + 'static
 
         let sync_strategy = config.block_sync_strategy.parse().unwrap();
 
-        let seed_peers = utilities::parse_peer_seeds(&config.peer_seeds);
-
         let mempool_sync = MempoolSyncInitializer::new(mempool_config, self.mempool.clone());
         let mempool_protocol = mempool_sync.get_protocol_extension();
 
         let mut handles = StackBuilder::new(self.interrupt_signal)
-            .add_initializer(P2pInitializer::new(comms_config, publisher, seed_peers))
+            .add_initializer(P2pInitializer::new(comms_config, publisher))
             .add_initializer(BaseNodeServiceInitializer::new(
                 peer_message_subscriptions.clone(),
                 self.db.clone(),
@@ -156,10 +154,10 @@ where B: BlockchainBackend + 'static
         let comms = initialization::spawn_comms_using_transport(comms, transport_type).await?;
         // Save final node identity after comms has initialized. This is required because the public_address can be
         // changed by comms during initialization when using tor.
-        identity_management::save_as_json(&config.identity_file, &*comms.node_identity())
+        identity_management::save_as_json(&config.base_node_identity_file, &*comms.node_identity())
             .map_err(|e| anyhow!("Failed to save node identity: {:?}", e))?;
         if let Some(hs) = comms.hidden_service() {
-            identity_management::save_as_json(&config.tor_identity_file, hs.tor_identity())
+            identity_management::save_as_json(&config.base_node_tor_identity_file, hs.tor_identity())
                 .map_err(|e| anyhow!("Failed to save tor identity: {:?}", e))?;
         }
 
@@ -195,12 +193,17 @@ where B: BlockchainBackend + 'static
             dht: DhtConfig {
                 database_url: DbConnectionUrl::File(self.config.data_dir.join("dht.db")),
                 auto_join: true,
+                connectivity_update_interval: Duration::from_secs(5),
                 ..Default::default()
             },
             allow_test_addresses: false,
             listener_liveness_allowlist_cidrs: self.config.listener_liveness_allowlist_cidrs.clone(),
             listener_liveness_max_sessions: self.config.listnener_liveness_max_sessions,
             user_agent: format!("tari/basenode/{}", env!("CARGO_PKG_VERSION")),
+            peer_seeds: self.config.peer_seeds.clone(),
+            dns_seeds: self.config.dns_seeds.clone(),
+            dns_seeds_name_server: self.config.dns_seeds_name_server,
+            dns_seeds_use_dnssec: self.config.dns_seeds_use_dnssec,
         }
     }
 
@@ -236,14 +239,16 @@ where B: BlockchainBackend + 'static
                 auth,
                 onion_port,
             } => {
-                let identity = Some(&config.tor_identity_file).filter(|p| p.exists()).and_then(|p| {
-                    // If this fails, we can just use another address
-                    identity_management::load_from_json::<_, TorIdentity>(p).ok()
-                });
+                let identity = Some(&config.base_node_tor_identity_file)
+                    .filter(|p| p.exists())
+                    .and_then(|p| {
+                        // If this fails, we can just use another address
+                        identity_management::load_from_json::<_, TorIdentity>(p).ok()
+                    });
                 info!(
                     target: LOG_TARGET,
                     "Tor identity at path '{}' {:?}",
-                    config.tor_identity_file.to_string_lossy(),
+                    config.base_node_tor_identity_file.to_string_lossy(),
                     identity
                         .as_ref()
                         .map(|ident| format!("loaded for address '{}.onion'", ident.service_id))

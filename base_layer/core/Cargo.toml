@@ -22,7 +22,7 @@ tari_common = { version = "^0.2", path = "../../common"}
 tari_comms = { version = "^0.2", path = "../../comms"}
 tari_comms_dht = { version = "^0.2.1", path = "../../comms/dht"}
 tari_comms_rpc_macros = { version = "^0.1", path = "../../comms/rpc_macros"}
-tari_crypto = { version = "^0.8" }
+tari_crypto = { path = "../../../tari-crypto", version = "^0.8" }
 tari_mmr = { version = "^0.2", path = "../../base_layer/mmr", optional = true }
 tari_p2p = { version = "^0.2", path = "../../base_layer/p2p" }
 tari_service_framework = { version = "^0.2", path = "../service_framework"}

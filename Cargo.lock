@@ -3992,8 +3992,6 @@ dependencies = [
 [[package]]
 name = "tari_crypto"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea703e58cc4880c4d572124a8567c1285ac330257777ca17262e89bd045a821c"
 dependencies = [
  "base64 0.10.1",
  "blake2",
@@ -4834,6 +4832,7 @@ dependencies = [
  "futures 0.3.6",
  "lazy_static 1.4.0",
  "log 0.4.11",
+ "openssl",
  "radix_trie",
  "rand 0.7.3",
  "thiserror",
@@ -4855,6 +4854,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static 1.4.0",
  "log 0.4.11",
+ "openssl",
  "rand 0.7.3",
  "smallvec",
  "thiserror",

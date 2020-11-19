@@ -209,6 +209,7 @@ impl UnspawnedCommsNode {
         let connection_manager_event_subscription = connection_manager_requester.get_event_subscription();
 
         //---------------------------------- Spawn Actors --------------------------------------------//
+        info!(target: LOG_TARGET, "HAVE NOT SPAWNED");
         connectivity_manager.create().spawn();
         connection_manager.spawn();
 

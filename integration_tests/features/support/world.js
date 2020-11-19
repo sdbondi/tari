@@ -19,6 +19,7 @@ class CustomWorld {
     async createSeedNode(name) {
         let proc =  new BaseNodeProcess(`seed-${name}`);
         await proc.startNew();
+        await new Promise(resolve => setTimeout(resolve, 1000));
         this.seeds[name] = proc;
         this.clients[name] = proc.createGrpcClient();
     }

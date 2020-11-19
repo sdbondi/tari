@@ -27,20 +27,19 @@ use std::{fmt, fmt::Formatter, net::SocketAddr, path::Path};
 use tari_common::{CommsTransport, GlobalConfig, SocksAuthentication, TorControlAuthentication};
 use tari_comms::{
     multiaddr::{Multiaddr, Protocol},
-    peer_manager::{NodeId, Peer, PeerFeatures, PeerFlags},
+    peer_manager::NodeId,
     socks,
     tor,
     tor::TorIdentity,
     transports::SocksConfig,
     types::CommsPublicKey,
 };
-use tari_core::transactions::types::PublicKey;
-use tari_crypto::tari_utilities::hex::Hex;
+use tari_core::tari_utilities::hex::Hex;
 use tari_p2p::transport::{TorConfig, TransportType};
 use tari_wallet::util::emoji::EmojiId;
 use tokio::{runtime, runtime::Runtime};
 
-pub const LOG_TARGET: &str = "tari::application";
+pub const LOG_TARGET: &str = "c::application";
 
 /// Enum to show failure information
 #[derive(Debug, Clone)]
@@ -88,7 +87,7 @@ impl fmt::Display for ExitCodes {
     }
 }
 
-/// Creates a transport type for the base node's wallet using the provided configuration
+/// Creates a transport type for the console wallet using the provided configuration
 /// ## Paramters
 /// `config` - The reference to the configuration in which to set up the comms stack, see [GlobalConfig]
 ///
@@ -97,7 +96,7 @@ impl fmt::Display for ExitCodes {
 pub fn setup_wallet_transport_type(config: &GlobalConfig) -> TransportType {
     debug!(
         target: LOG_TARGET,
-        "Wallet transport is set to '{:?}'", config.comms_transport
+        "Console wallet transport is set to '{:?}'", config.comms_transport
     );
 
     let add_to_port = |addr: Multiaddr, n| -> Multiaddr {
@@ -131,7 +130,7 @@ pub fn setup_wallet_transport_type(config: &GlobalConfig) -> TransportType {
             // to ensure that different wallet implementations cannot be differentiated by their port.
             let port_mapping = (18101u16, "127.0.0.1:0".parse::<SocketAddr>().unwrap()).into();
 
-            let tor_identity_path = Path::new(&config.wallet_tor_identity_file);
+            let tor_identity_path = Path::new(&config.console_wallet_tor_identity_file);
             let identity = if tor_identity_path.exists() {
                 // If this fails, we can just use another address
                 load_from_json::<_, TorIdentity>(&tor_identity_path).ok()
@@ -140,7 +139,7 @@ pub fn setup_wallet_transport_type(config: &GlobalConfig) -> TransportType {
             };
             info!(
                 target: LOG_TARGET,
-                "Wallet tor identity at path '{}' {:?}",
+                "Console wallet tor identity at path '{}' {:?}",
                 tor_identity_path.to_string_lossy(),
                 identity
                     .as_ref()
@@ -223,71 +222,6 @@ pub fn setup_runtime(config: &GlobalConfig) -> Result<Runtime, String> {
         .enable_all()
         .build()
         .map_err(|e| format!("There was an error while building the node runtime. {}", e.to_string()))
-}
-
-/// Parses the seed peers from a delimited string into a list of peers
-/// ## Parameters
-/// `seeds` - A string of peers delimited by '::'
-///
-/// ## Returns
-/// A list of peers, peers which do not have a valid public key are excluded
-pub fn parse_peer_seeds(seeds: &[String]) -> Vec<Peer> {
-    info!("Parsing {} peers", seeds.len());
-    let mut result = Vec::with_capacity(seeds.len());
-    for s in seeds {
-        let parts: Vec<&str> = s.split("::").map(|s| s.trim()).collect();
-        if parts.len() != 2 {
-            warn!(target: LOG_TARGET, "Invalid peer seed: {}", s);
-            continue;
-        }
-        let pub_key = match PublicKey::from_hex(parts[0]) {
-            Err(e) => {
-                warn!(
-                    target: LOG_TARGET,
-                    "{} is not a valid peer seed. The public key is incorrect. {}",
-                    s,
-                    e.to_string()
-                );
-                continue;
-            },
-            Ok(p) => p,
-        };
-        let addr = match parts[1].parse::<Multiaddr>() {
-            Err(e) => {
-                warn!(
-                    target: LOG_TARGET,
-                    "{} is not a valid peer seed. The address is incorrect. {}",
-                    s,
-                    e.to_string()
-                );
-                continue;
-            },
-            Ok(a) => a,
-        };
-        let node_id = match NodeId::from_key(&pub_key) {
-            Err(e) => {
-                warn!(
-                    target: LOG_TARGET,
-                    "{} is not a valid peer seed. A node id couldn't be derived from the public key. {}",
-                    s,
-                    e.to_string()
-                );
-                continue;
-            },
-            Ok(id) => id,
-        };
-        let peer = Peer::new(
-            pub_key,
-            node_id,
-            addr.into(),
-            PeerFlags::default(),
-            PeerFeatures::COMMUNICATION_NODE,
-            &[],
-            Default::default(),
-        );
-        result.push(peer);
-    }
-    result
 }
 
 /// Returns a CommsPublicKey from either a emoji id or a public key

@@ -37,29 +37,28 @@ class BaseNodeClient {
     }
 
     getHeaderAt(height) {
-        return this.client.listHeaders().sendMessage({from_height: height, num_headers: 1}).then(header=> {
+        return this.client.listHeaders().sendMessage({from_height: height, num_headers: 1}).then(header => {
             console.log("Header:", header);
             return header;
         })
     }
 
     getTipHeader() {
-        return this.client.listHeaders().sendMessage({from_height: 0, num_headers: 1}).then(header=> {
-          //  console.log("Header:", header);
+        return this.client.listHeaders().sendMessage({from_height: 0, num_headers: 1}).then(header => {
+            //  console.log("Header:", header);
             return header;
         })
     }
 
     getPreviousBlockTemplate(height) {
         //console.log("Tempaltes:", this.blockTemplates);
-       return cloneDeep(this.blockTemplates["height" +  height]);
+        return cloneDeep(this.blockTemplates["height" + height]);
     }
 
     getBlockTemplate() {
         return this.client.getNewBlockTemplate()
             .sendMessage({pow_algo: 1})
             .then(template => {
-
                 let res = {block_reward: template.block_reward, block: template.new_block_template};
                 this.blockTemplates["height" + template.new_block_template.header.height] = cloneDeep(res);
                 return res;
@@ -164,7 +163,7 @@ class BaseNodeClient {
         let template = await this.getMinedCandidateBlock();
         return this.submitBlock(template, beforeSubmit).then(async () => {
             let tip = await this.getTipHeight();
-         //   console.log("Tip:", tip);
+            //   console.log("Tip:", tip);
             //expect(tip).to.equal(parseInt(template.header.height));
         }, err => {
             if (onError) {
@@ -183,9 +182,9 @@ class BaseNodeClient {
         hash.update(toLittleEndian(header.version, 16));
         hash.update(toLittleEndian(parseInt(header.height), 64));
         hash.update(header.prev_hash);
-       // console.log("header.Timestamp", header.timestamp);
+        // console.log("header.Timestamp", header.timestamp);
         let timestamp = parseInt(header.timestamp.seconds);
-       // console.log("Timestamp", timestamp);
+        // console.log("Timestamp", timestamp);
         hash.update(toLittleEndian(timestamp, 64));
         hash.update(header.output_mr);
         hash.update(header.range_proof_mr);
