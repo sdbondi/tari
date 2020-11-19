@@ -98,6 +98,7 @@ make_async!(fetch_kernel(hash: HashOutput) -> TransactionKernel, "fetch_kernel")
 
 //---------------------------------- TXO --------------------------------------------//
 make_async!(fetch_utxo(hash: HashOutput) -> Option<TransactionOutput>, "fetch_utxo");
+make_async!(fetch_utxos(hashes: Vec<HashOutput>, is_spent_as_of: Option<HashOutput>) -> Vec<Option<(TransactionOutput, bool)>>, "fetch_utxos");
 // make_async!(fetch_txo(hash: HashOutput) -> Option<TransactionOutput>, "fetch_txo");
 // make_async!(spend_utxo(hash: HashOutput) -> (), "spend_utxo");
 

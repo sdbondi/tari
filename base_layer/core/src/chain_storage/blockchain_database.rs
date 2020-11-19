@@ -158,7 +158,7 @@ pub trait BlockchainBackend: Send + Sync {
 
     fn fetch_kernels_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionKernel>, ChainStorageError>;
 
-    fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError>;
+    fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<(TransactionOutput, u32)>, ChainStorageError>;
 
     fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError>;
 
@@ -359,16 +359,16 @@ where B: BlockchainBackend
     /// that case to re-sync the metadata; or else just exit the program.
     ///
     /// If the chain is empty (the genesis block hasn't been added yet), this function returns `None`
-    pub fn get_height(&self) -> Result<Option<u64>, ChainStorageError> {
+    pub fn get_height(&self) -> Result<u64, ChainStorageError> {
         let db = self.db_read_access()?;
-        Ok(db.fetch_chain_metadata()?.height_of_longest_chain)
+        Ok(db.fetch_chain_metadata()?.height_of_longest_chain())
     }
 
     /// Return the geometric mean of the proof of work of the longest chain.
     /// The proof of work is returned as the geometric mean of all difficulties
-    pub fn get_accumulated_difficulty(&self) -> Result<Option<u128>, ChainStorageError> {
+    pub fn get_accumulated_difficulty(&self) -> Result<u128, ChainStorageError> {
         let db = self.db_read_access()?;
-        Ok(db.fetch_chain_metadata()?.accumulated_difficulty)
+        Ok(db.fetch_chain_metadata()?.accumulated_difficulty())
     }
 
     /// Returns a copy of the current blockchain database metadata
@@ -389,18 +389,37 @@ where B: BlockchainBackend
         fetch_kernel(&*db, hash)
     }
 
-    /// Returns the transaction kernel with the given hash.
+    // Fetch the utxo and it's position in the MMR
     pub fn fetch_utxo(&self, hash: HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError> {
         let db = self.db_read_access()?;
-        db.fetch_output(&hash)
+        Ok(db.fetch_output(&hash)?.map(|(out, _index)| out))
+    }
+
+    // Return a list of matching utxos, with each being `None` if not found. If found, the transaction
+    // output, and a boolean indicating if the UTXO was spent as of the block hash specified or the tip if not
+    // specified.
+    pub fn fetch_utxos(&self, hashes: Vec<HashOutput>, is_spent_as_of: Option<HashOutput>) -> Result<Vec<Option<(TransactionOutput, bool)>>, ChainStorageError> {
+        let db = self.db_read_access()?;
+        let is_spent_as_of = match is_spent_as_of {
+            Some(hash) => hash,
+            None => db.fetch_chain_metadata()?.best_block().clone()
+        };
+        let data = db.get_mmr_peaks(&is_spent_as_of)?;
+        let mut result  =vec![];
+        for hash in hashes {
+            let output = db.fetch_output(&hash)?;
+            result.push(output.map(|(out, mmr_index)| (out, data.deleted.contains(mmr_index))));
+        }
+        Ok(result)
     }
 
     /// Returns the set of transaction kernels with the given hashes.
-    pub fn fetch_kernels(&self, hashes: Vec<HashOutput>) -> Result<Vec<TransactionKernel>, ChainStorageError> {
-        let db = self.db_read_access()?;
-        unimplemented!()
-        // fetch_kernels(&*db, hashes)
-    }
+    // pub fn fetch_kernels(&self, hashes: Vec<HashOutput>) -> Result<Vec<TransactionKernel>, ChainStorageError> {
+    //     let db = self.db_read_access()?;
+    //     unimplemented!()
+    //     // fetch_kernels(&*db, hashes)
+    // }
+
 
     /// Returns the block header at the given block height.
     pub fn fetch_header(&self, block_num: u64) -> Result<BlockHeader, ChainStorageError> {
@@ -783,18 +802,18 @@ where B: BlockchainBackend
         // Update metadata
         txn.set_metadata(
             MetadataKey::ChainHeight,
-            MetadataValue::ChainHeight(Some(tip_header.height)),
+            MetadataValue::ChainHeight(tip_header.height),
         );
 
         let best_block = tip_header.hash();
-        txn.set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(Some(best_block)));
+        txn.set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(best_block));
 
         let accumulated_difficulty =
             ProofOfWork::new_from_difficulty(&tip_header.pow, ProofOfWork::achieved_difficulty(&tip_header)?)
                 .total_accumulated_difficulty();
         txn.set_metadata(
             MetadataKey::AccumulatedWork,
-            MetadataValue::AccumulatedWork(Some(accumulated_difficulty)),
+            MetadataValue::AccumulatedWork(accumulated_difficulty),
         );
 
         txn.set_metadata(
@@ -919,12 +938,12 @@ fn set_chain_metadata<T: BlockchainBackend>(db: &mut T, metadata: ChainMetadata)
     let mut txn = DbTransaction::new();
     txn.set_metadata(
         MetadataKey::ChainHeight,
-        MetadataValue::ChainHeight(metadata.height_of_longest_chain),
+        MetadataValue::ChainHeight(metadata.height_of_longest_chain()),
     );
-    txn.set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(metadata.best_block));
+    txn.set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(metadata.best_block().clone()));
     txn.set_metadata(
         MetadataKey::AccumulatedWork,
-        MetadataValue::AccumulatedWork(metadata.accumulated_difficulty),
+        MetadataValue::AccumulatedWork(metadata.accumulated_difficulty()),
     );
     commit(db, txn)
 }
@@ -1134,14 +1153,14 @@ fn store_new_block<T: BlockchainBackend>(
     // Build all the DB queries needed to add the block and the add it atomically
 
     // Update metadata
-    txn.set_metadata(MetadataKey::ChainHeight, MetadataValue::ChainHeight(Some(height)));
+    txn.set_metadata(MetadataKey::ChainHeight, MetadataValue::ChainHeight(height));
     txn.set_metadata(
         MetadataKey::BestBlock,
-        MetadataValue::BestBlock(Some(header_hash.clone())),
+        MetadataValue::BestBlock(header_hash.clone()),
     );
     txn.set_metadata(
         MetadataKey::AccumulatedWork,
-        MetadataValue::AccumulatedWork(Some(accumulated_difficulty)),
+        MetadataValue::AccumulatedWork(accumulated_difficulty),
     );
     txn.insert_header(header.clone());
     let prev_accumulated_data_total_kernel_offset = if height == 0 {
@@ -1548,15 +1567,15 @@ fn rewind_to_height<T: BlockchainBackend>(db: &mut T, height: u64) -> Result<Vec
             .total_accumulated_difficulty();
     txn.set_metadata(
         MetadataKey::ChainHeight,
-        MetadataValue::ChainHeight(Some(last_header.height)),
+        MetadataValue::ChainHeight(last_header.height),
     );
     txn.set_metadata(
         MetadataKey::BestBlock,
-        MetadataValue::BestBlock(Some(last_header.hash())),
+        MetadataValue::BestBlock(last_header.hash()),
     );
     txn.set_metadata(
         MetadataKey::AccumulatedWork,
-        MetadataValue::AccumulatedWork(Some(accumulated_work)),
+        MetadataValue::AccumulatedWork(accumulated_work),
     );
     commit(db, txn)?;
 
@@ -1574,28 +1593,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
 {
     let db_height = db
         .fetch_chain_metadata()?
-        .height_of_longest_chain
-        .ok_or_else(|| ChainStorageError::InvalidQuery("Cannot retrieve block. Blockchain DB is empty".into()))
-        .map_err(|e| {
-            error!(
-                target: LOG_TARGET,
-                "Could not retrieve block, block chain is empty {:?}", e
-            );
-            e
-        })?;
-    // // We can assume that the new block is part of the reorg chain if it exists, otherwise the reorg would have
-    // // happened on the previous call to this function.
-    // // Try and construct a path from `new_block` to the main chain:
-    // let mut reorg_chain = try_construct_fork(db, new_block.clone())?;
-    // if reorg_chain.is_empty() {
-    //     debug!(
-    //         target: LOG_TARGET,
-    //         "No reorg required, could not construct complete chain using block #{} ({}).",
-    //         new_block.header.height,
-    //         new_block.hash().to_hex()
-    //     );
-    //     return Ok(BlockAddResult::OrphanBlock);
-    // }
+        .height_of_longest_chain();
 
     let new_tips = insert_orphan_and_find_new_tips(db, new_block.clone())?;
     debug!(
@@ -1945,7 +1943,7 @@ fn find_strongest_orphan_tip<T: BlockchainBackend>(
 // block height will also be discarded.
 fn cleanup_orphans<T: BlockchainBackend>(db: &mut T, orphan_storage_capacity: usize) -> Result<(), ChainStorageError> {
     let metadata = db.fetch_chain_metadata()?;
-    let horizon_height = metadata.horizon_block(metadata.height_of_longest_chain.unwrap_or(0));
+    let horizon_height = metadata.horizon_block(metadata.height_of_longest_chain());
 
     db.delete_oldest_orphans(horizon_height, orphan_storage_capacity)
 }

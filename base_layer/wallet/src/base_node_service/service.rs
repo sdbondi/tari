@@ -55,6 +55,7 @@ use tari_p2p::{domain_message::DomainMessage, tari_message::TariMessageType};
 use tari_service_framework::reply_channel::Receiver;
 use tari_shutdown::ShutdownSignal;
 use tokio::time;
+use std::convert::TryInto;
 
 const LOG_TARGET: &str = "wallet::base_node_service::service";
 
@@ -262,7 +263,7 @@ where BNResponseStream: Stream<Item = DomainMessage<BaseNodeProto::BaseNodeServi
                     let now = Utc::now().naive_utc();
                     let state = BaseNodeState {
                         is_synced: Some(message.is_synced),
-                        chain_metadata: Some(chain_metadata.into()),
+                        chain_metadata: Some(chain_metadata.try_into().map_err(|s| BaseNodeServiceError::UnexpectedApiResponse)?),
                         updated: Some(now),
                     };
                     self.publish_event(BaseNodeEvent::BaseNodeState(state.clone()));

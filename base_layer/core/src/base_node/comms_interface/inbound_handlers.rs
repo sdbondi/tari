@@ -224,24 +224,19 @@ where T: BlockchainBackend + 'static
                 Ok(NodeCommsResponse::FetchHeadersAfterResponse(headers))
             },
             NodeCommsRequest::FetchMatchingUtxos(utxo_hashes) => {
-                let mut utxos = Vec::<TransactionOutput>::new();
-                for hash in utxo_hashes {
-                    if let Some(utxo) = async_db::fetch_utxo(self.blockchain_db.clone(), hash.clone()).await? {
-                        utxos.push(utxo);
+                let mut res = vec![];
+                for item in async_db::fetch_utxos(self.blockchain_db.clone(), utxo_hashes.clone(), None).await? {
+                    if let Some((output, spent)) = item {
+                        if !spent {
+                            res.push(output);
+                        }
                     }
                 }
-                Ok(NodeCommsResponse::TransactionOutputs(utxos))
+                Ok(NodeCommsResponse::TransactionOutputs(res))
             },
-            NodeCommsRequest::FetchMatchingTxos(_txo_hashes) => {
-                unimplemented!();
-                // let mut txos = Vec::<TransactionOutput>::new();
-                // for hash in txo_hashes {
-                //     // Not finding a requested TXO is not an error; TXO validation depends on this
-                //     if let Ok(Some(txo)) = async_db::fetch_txo(self.blockchain_db.clone(), hash.clone()).await {
-                //         txos.push(txo);
-                //     }
-                // }
-                // Ok(NodeCommsResponse::TransactionOutputs(txos))
+            NodeCommsRequest::FetchMatchingTxos(hashes) => {
+                    let res = async_db::fetch_utxos(self.blockchain_db.clone(), hashes.clone(), None).await?.into_iter().filter_map(|opt| opt.map(|(output, _)| output)).collect();
+                        Ok(NodeCommsResponse::TransactionOutputs(res))
             },
             NodeCommsRequest::FetchMatchingBlocks(block_nums) => {
                 let mut blocks = Vec::<HistoricalBlock>::with_capacity(block_nums.len());
@@ -577,8 +572,7 @@ where T: BlockchainBackend + 'static
     {
         let height_of_longest_chain = async_db::get_chain_metadata(self.blockchain_db.clone())
             .await?
-            .height_of_longest_chain
-            .ok_or_else(|| CommsInterfaceError::UnexpectedApiResponse)?;
+            .height_of_longest_chain();
         trace!(
             target: LOG_TARGET,
             "Calculating target difficulty at height:{} for PoW:{}",

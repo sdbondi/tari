@@ -147,7 +147,7 @@ impl<B: BlockchainBackend + 'static> BlockchainStateService<B> {
 
         if start.is_none() {
             // `(..n)` means fetch blocks with the lowest height possible until `n`
-            start = Some(metadata.as_ref().unwrap().effective_pruned_height);
+            start = Some(metadata.as_ref().unwrap().effective_pruned_height());
         }
         if end.is_none() {
             // `(n..)` means fetch blocks until this node's tip

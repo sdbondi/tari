@@ -136,8 +136,7 @@ async fn do_recovery<D: BlockchainBackend + 'static>(
     let max_height = temp_db_backend
         .get_chain_metadata()
         .map_err(|e| anyhow!("Could not get max chain height: {}", e))?
-        .height_of_longest_chain
-        .unwrap_or(0);
+        .height_of_longest_chain();
     // we start at height 1
     let mut counter = 1;
     print!("Starting recovery at height: ");

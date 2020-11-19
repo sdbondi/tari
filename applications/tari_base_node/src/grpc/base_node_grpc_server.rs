@@ -221,7 +221,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
                 warn!(target: LOG_TARGET, "Error communicating with base node: {}", err,);
                 return Err(Status::internal(err.to_string()));
             },
-            Ok(data) => data.height_of_longest_chain.unwrap_or(0),
+            Ok(data) => data.height_of_longest_chain(),
         };
 
         let sorting: Sorting = request.sorting();

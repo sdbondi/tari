@@ -61,7 +61,7 @@ fn test_target_difficulty_at_tip() {
         PowAlgorithm::Blake,
     ];
     create_test_pow_blockchain(&store, pow_algos.clone(), &consensus_manager);
-    let height = store.get_chain_metadata().unwrap().height_of_longest_chain.unwrap();
+    let height = store.get_chain_metadata().unwrap().height_of_longest_chain();
 
     let pow_algo = PowAlgorithm::Monero;
     let target_difficulties = store.fetch_target_difficulties(pow_algo, height, block_window).unwrap();

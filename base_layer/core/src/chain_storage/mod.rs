@@ -126,6 +126,10 @@ impl MmrPeakData {
             total_utxo_sum,
         }
     }
+
+    pub fn deleted(&self) -> &Bitmap {
+        &self.deleted
+    }
 }
 
 impl Serialize for MmrPeakData {

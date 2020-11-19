@@ -179,7 +179,7 @@ impl BlockHeader {
     ) -> Result<Vec<u64>, CommsInterfaceError>
     {
         let metadata = handler.get_metadata().await?;
-        let tip = metadata.height_of_longest_chain.unwrap_or(0);
+        let tip = metadata.height_of_longest_chain();
         // Avoid overflow
         let height_from_tip = std::cmp::min(tip, height_from_tip);
         let start = std::cmp::max(tip - height_from_tip, 0);

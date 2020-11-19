@@ -276,9 +276,9 @@ impl fmt::Display for MetadataKey {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum MetadataValue {
-    ChainHeight(Option<u64>),
-    BestBlock(Option<BlockHash>),
-    AccumulatedWork(Option<u128>),
+    ChainHeight(u64),
+    BestBlock(BlockHash),
+    AccumulatedWork(u128),
     PruningHorizon(u64),
     EffectivePrunedHeight(u64),
     HorizonSyncState(InProgressHorizonSyncState),
@@ -287,14 +287,14 @@ pub enum MetadataValue {
 impl fmt::Display for MetadataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MetadataValue::ChainHeight(h) => write!(f, "Chain height is {}", h.unwrap_or(0)),
-            MetadataValue::AccumulatedWork(d) => write!(f, "Total accumulated work is {}", d.unwrap_or_default()),
+            MetadataValue::ChainHeight(h) => write!(f, "Chain height is {}", h),
+            MetadataValue::AccumulatedWork(d) => write!(f, "Total accumulated work is {}", d),
             MetadataValue::PruningHorizon(h) => write!(f, "Pruning horizon is {}", h),
             MetadataValue::EffectivePrunedHeight(h) => write!(f, "Effective pruned height is {}", h),
             MetadataValue::BestBlock(hash) => write!(
                 f,
                 "Chain tip block hash is {}",
-                hash.as_ref().map(Hex::to_hex).unwrap_or_else(|| "None".to_string())
+                hash.to_hex()
             ),
             MetadataValue::HorizonSyncState(state) => write!(f, "Horizon state sync in progress: {}", state),
         }

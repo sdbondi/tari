@@ -93,7 +93,7 @@ fn test_median_timestamp_odd_order() {
     let pow_algos = vec![PowAlgorithm::Blake]; // GB default
     create_test_pow_blockchain(&store, pow_algos, &consensus_manager);
     let mut timestamps = vec![store.fetch_block(0).unwrap().block().header.timestamp.clone()];
-    let height = store.get_chain_metadata().unwrap().height_of_longest_chain.unwrap();
+    let height = store.get_chain_metadata().unwrap().height_of_longest_chain();
     let mut median_timestamp = get_median_timestamp(get_header_timestamps(
         &*store.db_read_access().unwrap(),
         height,
@@ -103,10 +103,10 @@ fn test_median_timestamp_odd_order() {
     assert_eq!(median_timestamp, timestamps[0]);
     let pow_algos = vec![PowAlgorithm::Blake];
     // lets add 1
-    let tip = store.fetch_block(store.get_height().unwrap().unwrap()).unwrap().block;
+    let tip = store.fetch_block(store.get_height().unwrap()).unwrap().block;
     append_to_pow_blockchain(&store, tip, pow_algos.clone(), &consensus_manager);
     timestamps.push(timestamps[0].increase(120));
-    let height = store.get_chain_metadata().unwrap().height_of_longest_chain.unwrap();
+    let height = store.get_chain_metadata().unwrap().height_of_longest_chain();
     median_timestamp = get_median_timestamp(get_header_timestamps(
         &*store.db_read_access().unwrap(),
         height,
@@ -126,7 +126,7 @@ fn test_median_timestamp_odd_order() {
     store.add_block(new_block.into()).unwrap();
 
     timestamps.push(timestamps[2].increase(60));
-    let height = store.get_chain_metadata().unwrap().height_of_longest_chain.unwrap();
+    let height = store.get_chain_metadata().unwrap().height_of_longest_chain();
     median_timestamp = get_median_timestamp(get_header_timestamps(
         &*store.db_read_access().unwrap(),
         height,

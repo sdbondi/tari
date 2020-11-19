@@ -41,6 +41,8 @@ use tari_comms::{
 };
 use tari_p2p::services::liveness::{LivenessEvent, LivenessHandle, Metadata, MetadataKey};
 use tokio::sync::broadcast;
+use std::convert::TryInto;
+use crate::base_node::chain_metadata_service::error::ChainMetadataSyncError::ConversionError;
 
 pub(super) struct ChainMetadataService {
     liveness: LivenessHandle,
@@ -241,12 +243,12 @@ impl ChainMetadataService {
     ) -> Result<(), ChainMetadataSyncError>
     {
         if let Some(chain_metadata_bytes) = metadata.get(MetadataKey::ChainMetadata) {
-            let chain_metadata: ChainMetadata = proto::ChainMetadata::decode(chain_metadata_bytes.as_slice())?.into();
+            let chain_metadata: ChainMetadata = proto::ChainMetadata::decode(chain_metadata_bytes.as_slice())?.try_into().map_err(|s| ConversionError(s))?;
             debug!(
                 target: LOG_TARGET,
                 "Received chain metadata from NodeId '{}' #{}",
                 node_id,
-                chain_metadata.height_of_longest_chain.unwrap_or(0)
+                chain_metadata.height_of_longest_chain()
             );
 
             if let Some(pos) = self
@@ -258,7 +260,7 @@ impl ChainMetadataService {
             }
 
             self.peer_chain_metadata
-                .push(PeerChainMetadata::new(node_id.clone(), chain_metadata));
+                .push(PeerChainMetadata::new(node_id.clone(), Some(chain_metadata)));
         }
         Ok(())
     }
@@ -273,12 +275,12 @@ impl ChainMetadataService {
             .get(MetadataKey::ChainMetadata)
             .ok_or_else(|| ChainMetadataSyncError::NoChainMetadata)?;
 
-        let chain_metadata: ChainMetadata = proto::ChainMetadata::decode(chain_metadata_bytes.as_slice())?.into();
+        let chain_metadata: ChainMetadata = proto::ChainMetadata::decode(chain_metadata_bytes.as_slice())?.try_into().map_err(|s| ConversionError(s))?;
         debug!(
             target: LOG_TARGET,
             "Received chain metadata from NodeId '{}' #{}",
             node_id,
-            chain_metadata.height_of_longest_chain.unwrap_or(0)
+            chain_metadata.height_of_longest_chain()
         );
 
         if let Some(pos) = self
@@ -290,7 +292,7 @@ impl ChainMetadataService {
         }
 
         self.peer_chain_metadata
-            .push(PeerChainMetadata::new(node_id.clone(), chain_metadata));
+            .push(PeerChainMetadata::new(node_id.clone(), Some(chain_metadata)));
 
         Ok(())
     }
