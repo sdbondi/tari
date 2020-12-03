@@ -353,8 +353,9 @@ fn check_mmr_roots<B: BlockchainBackend>(block: &Block, db: &B) -> Result<(), Va
 }
 
 /// This validator checks whether a block satisfies consensus rules.
-/// It implements two validators: one for the `BlockHeader` and one for `Block`. The `Block` validator ONLY validates
-/// the block body using the header. It is assumed that the `BlockHeader` has already been validated.
+/// It implements a validator for `Block`. The `Block` validator ONLY validates the block body (but still requires the
+/// header to validate against). It is assumed that the `BlockHeader` has been previously validated (e.g. in header
+/// sync).
 pub struct BlockValidator<B> {
     db: BlockchainDatabase<B>,
     rules: ConsensusManager,
@@ -435,7 +436,7 @@ impl<B: BlockchainBackend> BlockValidator<B> {
 }
 
 impl<B: BlockchainBackend> Validation<Block> for BlockValidator<B> {
-    /// The following consensus checks are done:
+    /// The following consensus checks are done
     /// 1. Does the block satisfy the stateless checks?
     /// 1. Are the block header MMR roots valid?
     fn validate(&self, block: &Block) -> Result<(), ValidationError> {

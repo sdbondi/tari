@@ -31,37 +31,38 @@ tari_shutdown = { version = "^0.2", path = "../../infrastructure/shutdown" }
 tari_storage = { version = "^0.2", path = "../../infrastructure/storage" }
 tari_test_utils = { version = "^0.2", path = "../../infrastructure/test_utils" }
 
+asparit = {version = "0.1.0" , features = ["tokio-executor"]}
 bincode = "1.1.4"
 bitflags = "1.0.4"
 blake2 = "^0.8.0"
-sha3 = "0.9"
 bytes = "0.4.12"
+cfg-if = "0.1.10"
 chrono = { version = "0.4.6", features = ["serde"]}
+config = { version = "0.9.3" }
 croaring = { version = "=0.4.5", optional = true }
 digest = "0.8.0"
-futures = {version = "^0.3.1", features = ["async-await"] }
 fs2 = "0.3.0"
+futures = {version = "^0.3.1", features = ["async-await"] }
 hex = "0.4.2"
 lmdb-zero = "0.4.4"
 log = "0.4"
 monero = { version = "^0.9.1", features= ["serde_support"], optional = true }
 newtype-ops = "0.1.4"
 num = "0.3"
+num-format = "0.4.0"
 prost = "0.6.1"
 prost-types = "0.6.1"
 rand = "0.7.2"
 randomx-rs = { version = "0.4.0", optional = true }
 serde = { version = "1.0.106", features = ["derive"] }
 serde_json = "1.0"
-cfg-if = "0.1.10"
-config = { version = "0.9.3" }
+sha3 = "0.9"
 strum = "^0.19"
 strum_macros = "0.17.1"
 thiserror = "1.0.20"
 tokio = { version="^0.2", features = ["blocking", "time", "sync"] }
 ttl_cache = "0.5.1"
 uint = { version = "0.8", default-features = false }
-num-format = "0.4.0"
 
 [dev-dependencies]
 tari_p2p = { version = "^0.2", path = "../../base_layer/p2p", features=["test-mocks"]}

@@ -1,5 +1,3 @@
-//  Copyright 2020, The Tari Project
-//
 //  Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 //  following conditions are met:
 //
@@ -25,3 +23,5 @@ pub use error::BlockSyncError;
 
 mod synchronizer;
 pub use synchronizer::BlockSynchronizer;
+
+mod validator;
