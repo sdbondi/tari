@@ -49,7 +49,10 @@ async fn main() -> Result<(), MmProxyError> {
     let config = initialize()?;
 
     let addr = config.proxy_host_address;
-    println!("\nListening on {}...\n", addr);
+    println!(
+        "\nProxying requests on {} to monerod ({}) and Tari base node ({})...\n",
+        addr, config.monerod_url, config.grpc_base_node_address
+    );
 
     let config = MergeMiningProxyConfig::from(config);
     let xmrig_service = MergeMiningProxyService::new(config, BlockTemplateRepository::new());

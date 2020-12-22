@@ -29,7 +29,7 @@ impl wallet_server::Wallet for WalletGrpcServer {
             Ok(resp) => Ok(Response::new(GetCoinbaseResponse {
                 transaction: Some(resp.into()),
             })),
-            Err(_err) => unimplemented!(),
+            Err(err) => Status::internal(err),
         }
     }
 }
