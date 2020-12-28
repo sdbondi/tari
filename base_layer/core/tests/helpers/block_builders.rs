@@ -202,10 +202,9 @@ pub fn chain_block(
     consensus: &ConsensusManager,
 ) -> NewBlockTemplate
 {
-    unimplemented!()
-    // let mut header = BlockHeader::from_previous(&prev_block.header).unwrap();
-    // header.version = consensus.consensus_constants(header.height).blockchain_version();
-    // NewBlockTemplate::from(header.into_builder().with_transactions(transactions).build())
+    let mut header = BlockHeader::from_previous(&prev_block.header).unwrap();
+    header.version = consensus.consensus_constants(header.height).blockchain_version();
+    NewBlockTemplate::from_block(header.into_builder().with_transactions(transactions).build(), 1.into())
 }
 
 /// Create a new block using the provided coinbase and transactions that adds to the blockchain given in `prev_block`.
@@ -217,16 +216,16 @@ pub fn chain_block_with_coinbase(
     consensus: &ConsensusManager,
 ) -> NewBlockTemplate
 {
-    unimplemented!()
-    // let mut header = BlockHeader::from_previous(&prev_block.header).unwrap();
-    // header.version = consensus.consensus_constants(header.height).blockchain_version();
-    // NewBlockTemplate::from(
-    //     header
-    //         .into_builder()
-    //         .with_transactions(transactions)
-    //         .with_coinbase_utxo(coinbase_utxo, coinbase_kernel)
-    //         .build(),
-    // )
+    let mut header = BlockHeader::from_previous(&prev_block.block.header).unwrap();
+    header.version = consensus.consensus_constants(header.height).blockchain_version();
+    NewBlockTemplate::from_block(
+        header
+            .into_builder()
+            .with_transactions(transactions)
+            .with_coinbase_utxo(coinbase_utxo, coinbase_kernel)
+            .build(),
+        1.into()
+    )
 }
 
 /// Create a new block using the provided coinbase and transactions that adds to the blockchain given in `prev_block`.
@@ -237,29 +236,29 @@ pub fn chain_block_with_new_coinbase(
     factories: &CryptoFactories,
 ) -> (NewBlockTemplate, UnblindedOutput)
 {
-    // let height = prev_block.header.height + 1;
-    // let mut coinbase_value = consensus_manager.emission_schedule().block_reward(height);
-    // coinbase_value += transactions
-    //     .iter()
-    //     .fold(MicroTari(0), |acc, x| acc + x.body.get_total_fee());
-    // let (coinbase_utxo, coinbase_kernel, coinbase_output) = create_coinbase(
-    //     &factories,
-    //     coinbase_value,
-    //     height + consensus_manager.consensus_constants(0).coinbase_lock_height(),
-    // );
-    // let mut header = BlockHeader::from_previous(&prev_block.header).unwrap();
-    // header.version = consensus_manager
-    //     .consensus_constants(header.height)
-    //     .blockchain_version();
-    // let template = NewBlockTemplate::from(
-    //     header
-    //         .into_builder()
-    //         .with_transactions(transactions)
-    //         .with_coinbase_utxo(coinbase_utxo, coinbase_kernel)
-    //         .build(),
-    // );
-    // (template, coinbase_output)
-    unimplemented!()
+    let height = prev_block.block.header.height + 1;
+    let mut coinbase_value = consensus_manager.emission_schedule().block_reward(height);
+    coinbase_value += transactions
+        .iter()
+        .fold(MicroTari(0), |acc, x| acc + x.body.get_total_fee());
+    let (coinbase_utxo, coinbase_kernel, coinbase_output) = create_coinbase(
+        &factories,
+        coinbase_value,
+        height + consensus_manager.consensus_constants(0).coinbase_lock_height(),
+    );
+    let mut header = BlockHeader::from_previous(&prev_block.block.header).unwrap();
+    header.version = consensus_manager
+        .consensus_constants(header.height)
+        .blockchain_version();
+    let template = NewBlockTemplate::from_block(
+        header
+            .into_builder()
+            .with_transactions(transactions)
+            .with_coinbase_utxo(coinbase_utxo, coinbase_kernel)
+            .build(),
+        1.into()
+    );
+    (template, coinbase_output)
 }
 
 /// Create a new block with the provided transactions. The new MMR roots are calculated, and then the new block is

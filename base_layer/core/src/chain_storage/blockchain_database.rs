@@ -93,6 +93,40 @@ pub enum BlockAddResult {
     ChainReorg(Vec<Arc<ChainBlock>>, Vec<Arc<ChainBlock>>),
 }
 
+impl BlockAddResult {
+    pub fn is_added(&self) -> bool {
+        match self {
+            BlockAddResult::Ok(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn assert_added(&self) {
+        if !self.is_added() {
+            panic!("Result was not added")
+        }
+    }
+
+    pub fn assert_orphaned(&self) {
+        match self {
+            BlockAddResult::OrphanBlock => (),
+            _ => panic!("Result was not orphaned")
+        }
+    }
+
+  pub fn assert_reorg(&self, num_added: usize, num_removed: usize) {
+        match self {
+            BlockAddResult::ChainReorg(a,r) => {
+                assert_eq!(num_added, a.len(), "Number of added reorged blocks was different");
+                assert_eq!(num_removed, r.len(), "Number of removed reorged blocks was different");
+            },
+            BlockAddResult::Ok(_) => panic!("Expected reorg result, but was Ok()"),
+            BlockAddResult::BlockExists => panic!("Expected reorg result, but was BlockExists"),
+            BlockAddResult::OrphanBlock => panic!("Expected reorg result, but was OrphanBlock"),
+        }
+    }
+}
+
 /// A placeholder struct that contains the two validators that the database uses to decide whether or not a block is
 /// eligible to be added to the database. The `block` validator should perform a full consensus check. The `orphan`
 /// validator needs to check that the block is internally consistent, but can't know whether the PoW is sufficient,

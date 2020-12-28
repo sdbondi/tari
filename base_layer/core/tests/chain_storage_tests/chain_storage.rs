@@ -213,7 +213,7 @@ fn test_checkpoints() {
     assert_eq!(blocks[0].block, block_a.block);
     let block_b = db.fetch_block(1).unwrap();
     assert_eq!(block_b.confirmations(), 1);
-    let block1 = serde_json::to_string(&block1).unwrap();
+    let block1 = serde_json::to_string(&block1.block).unwrap();
     let block_b = serde_json::to_string(&Block::from(block_b)).unwrap();
     assert_eq!(block1, block_b);
 }
@@ -443,7 +443,7 @@ fn handle_reorg() {
 
     // Create Forked Chain 1
     let mut orphan1_store = create_store_with_consensus(&consensus_manager);
-    orphan1_store.add_block(blocks[1].block.clone().into()).unwrap(); // A1
+    orphan1_store.add_block(blocks[1].block.clone().into()).unwrap().assert_added(); // A1
     let mut orphan1_blocks = vec![blocks[0].clone(), blocks[1].clone()];
     let mut orphan1_outputs = vec![outputs[0].clone(), outputs[1].clone()];
     // Block B2
@@ -485,9 +485,9 @@ fn handle_reorg() {
 
     // Create Forked Chain 2
     let mut orphan2_store = create_store_with_consensus(&consensus_manager);
-    orphan2_store.add_block(blocks[1].block.clone().into()).unwrap(); // A1
-    orphan2_store.add_block(orphan1_blocks[2].block.clone().into()).unwrap(); // B2
-    orphan2_store.add_block(orphan1_blocks[3].block.clone().into()).unwrap(); // B3
+    orphan2_store.add_block(blocks[1].block.clone().into()).unwrap().assert_added(); // A1
+    orphan2_store.add_block(orphan1_blocks[2].block.clone().into()).unwrap().assert_added(); // B2
+    orphan2_store.add_block(orphan1_blocks[3].block.clone().into()).unwrap().assert_added(); // B3
     let mut orphan2_blocks = vec![
         blocks[0].clone(),
         blocks[1].clone(),
@@ -514,10 +514,10 @@ fn handle_reorg() {
 
     // Now add the fork blocks C4, B2, B4 and B3 (out of order) to the first DB and observe a reorg. Blocks are added
     // out of order to test the forward and reverse chaining.
-    store.add_block(orphan2_blocks[4].block.clone().into()).unwrap(); // C4
-    store.add_block(orphan1_blocks[2].block.clone().into()).unwrap(); // B2
-    store.add_block(orphan1_blocks[4].block.clone().into()).unwrap(); // B4
-    store.add_block(orphan1_blocks[3].block.clone().into()).unwrap(); // B3
+    store.add_block(orphan2_blocks[4].block.clone().into()).unwrap().assert_orphaned(); // C4
+    store.add_block(orphan1_blocks[2].block.clone().into()).unwrap().assert_orphaned(); // B2
+    store.add_block(orphan1_blocks[4].block.clone().into()).unwrap().assert_orphaned(); // B4
+    store.add_block(orphan1_blocks[3].block.clone().into()).unwrap().assert_reorg(3,3); // B3
     assert_eq!(store.fetch_tip_header().unwrap().header, orphan2_blocks[4].block.header);
 
     // Check that B2,B3 and C4 were removed from the block orphans and A2,A3,A4 and B4 has been orphaned.

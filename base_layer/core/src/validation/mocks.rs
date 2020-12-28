@@ -32,6 +32,7 @@ use std::sync::{
 use crate::validation::MempoolTransactionValidation;
 use crate::transactions::transaction::Transaction;
 use tari_crypto::tari_utilities::Hashable;
+use crate::proof_of_work::sha3_difficulty;
 
 #[derive(Clone)]
 pub struct MockValidator {
@@ -92,10 +93,11 @@ impl<B: BlockchainBackend> HeaderValidation<B> for MockValidator {
     {
         if self.is_valid.load(Ordering::SeqCst) {
 
+            let achieved = sha3_difficulty(header);
             let accum_data = BlockHeaderAccumulatedDataBuilder::default()
                 .hash(header.hash())
                 .target_difficulty(1.into())
-                .achieved_difficulty(previous_data, header.pow_algo(), 1.into()).total_kernel_offset(&previous_data.total_kernel_offset, &header.total_kernel_offset);
+                .achieved_difficulty(previous_data, header.pow_algo(), achieved).total_kernel_offset(&previous_data.total_kernel_offset, &header.total_kernel_offset);
 
             Ok(accum_data)
         } else {
