@@ -44,7 +44,7 @@ fn add_many_chained_blocks(size: usize, db: &BlockchainDatabase<TempDatabase>) -
         block.header.prev_hash = prev_block_hash.clone();
         prev_block_hash = block.hash();
         let block = Arc::new(block);
-        db.add_block(block.clone()).unwrap();
+        db.add_block(block.clone()).unwrap().assert_added();
         blocks.push(block);
     }
     blocks

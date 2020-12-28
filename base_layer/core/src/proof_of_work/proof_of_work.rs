@@ -113,7 +113,7 @@ mod test {
         let pow = ProofOfWork::default();
         assert_eq!(
             &format!("{}", pow),
-            "Mining algorithm: Sha3, Target difficulty: 1\nTotal accumulated difficulty:\nMonero=1, Sha3=1\nPow data: \
+            "Mining algorithm: Sha3\nPow data: \
              \n"
         );
     }
@@ -122,7 +122,7 @@ mod test {
     fn to_bytes() {
         let mut pow = ProofOfWork::default();
         pow.pow_algo = PowAlgorithm::Sha3;
-        assert_eq!(pow.to_bytes(), vec![2, 65, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(pow.to_bytes(), vec![2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
     }
 
 }

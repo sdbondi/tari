@@ -65,29 +65,22 @@ use crate::proof_of_work::randomx_factory::RandomXFactory;
 use crate::validation::block_validators::{FullConsensusValidator, OrphanBlockValidator};
 use crate::validation::header_validator::HeaderValidator;
 use crate::validation::mocks::MockValidator;
+use crate::blocks::genesis_block::get_ridcully_genesis_block;
+use crate::consensus::chain_strength_comparer::ChainStrengthComparerBuilder;
+use crate::consensus::ConsensusConstantsBuilder;
 
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
-    unimplemented!()
-    // let network = Network::LocalNet;
-    // let consensus_constants = ConsensusConstantsBuilder::new(network).build();
-    // let genesis = genesis_template();
-    // let consensus_manager = ConsensusManagerBuilder::new(network)
-    //     .with_consensus_constants(consensus_constants)
-    //     .with_block(Block {
-    //         header: genesis.header.into(),
-    //         body: genesis.body,
-    //     })
-    //     .on_ties(ChainStrengthComparerBuilder::new().by_height().build())
-    //     .build();
-    // let validators = Validators::new(MockValidator::new(true), MockValidator::new(true), MockValidator::new(true));
-    // create_store_with_consensus_and_validators(&consensus_manager, validators)
-}
-
-fn genesis_template() -> NewBlockTemplate {
-    // let header = BlockHeader::new(0);
-    // header.into_builder().build().into()
-    unimplemented!("Need to add the difficulty back here")
+    let network = Network::Ridcully;
+    let consensus_constants = ConsensusConstantsBuilder::new(network).build();
+    let genesis = get_ridcully_genesis_block();
+    let consensus_manager = ConsensusManagerBuilder::new(network)
+        .with_consensus_constants(consensus_constants)
+        .with_block(genesis)
+        .on_ties(ChainStrengthComparerBuilder::new().by_height().build())
+        .build();
+    let validators = Validators::new(MockValidator::new(true), MockValidator::new(true), MockValidator::new(true));
+    create_store_with_consensus_and_validators(&consensus_manager, validators)
 }
 
 pub fn create_store_with_consensus_and_validators(
