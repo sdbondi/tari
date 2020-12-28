@@ -36,6 +36,7 @@ use tari_core::{
     txn_schema,
 };
 use tari_storage::lmdb_store::LMDBConfig;
+use tari_core::chain_storage::ChainBlock;
 // use crate::helpers::database::{TempDatabase, create_store_with_consensus};
 
 static EMISSION: [u64; 2] = [10, 10];
@@ -127,7 +128,7 @@ pub fn create_new_blockchain(
     network: Network,
 ) -> (
     BlockchainDatabase<TempDatabase>,
-    Vec<Block>,
+    Vec<ChainBlock>,
     Vec<Vec<UnblindedOutput>>,
     ConsensusManager,
 ) {
@@ -157,7 +158,7 @@ pub fn create_new_blockchain_lmdb<P: AsRef<std::path::Path>>(
     config: BlockchainDatabaseConfig,
 ) -> (
     BlockchainDatabase<LMDBDatabase>,
-    Vec<Block>,
+    Vec<ChainBlock>,
     Vec<Vec<UnblindedOutput>>,
     ConsensusManager,
 )

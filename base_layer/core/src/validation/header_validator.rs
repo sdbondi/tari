@@ -89,7 +89,6 @@ impl<B: BlockchainBackend> HeaderValidation<B> for HeaderValidator {
         &self,
         backend: &B,
         header: &BlockHeader,
-        previous_header: &BlockHeader,
         previous_data: &BlockHeaderAccumulatedData,
     ) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError>
     {

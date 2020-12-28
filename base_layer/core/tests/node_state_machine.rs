@@ -57,6 +57,7 @@ use tokio::{
     sync::{broadcast, watch},
     time,
 };
+use tari_core::proof_of_work::randomx_factory::RandomXFactory;
 
 static EMISSION: [u64; 2] = [10, 10];
 #[test]
@@ -99,6 +100,7 @@ fn test_listening_lagging() {
         SyncValidators::new(MockValidator::new(true), MockValidator::new(true)),
         status_event_sender,
         state_change_event_publisher,
+        RandomXFactory::default(),
         consensus_manager.clone(),
         shutdown.to_signal(),
     );
@@ -111,7 +113,7 @@ fn test_listening_lagging() {
         let mut bob_local_nci = bob_node.local_nci;
 
         // Bob Block 1 - no block event
-        let prev_block = append_block(&bob_db, &prev_block, vec![], &consensus_manager, 3.into()).unwrap();
+        let prev_block = append_block(&bob_db, &prev_block.block, vec![], &consensus_manager, 3.into()).unwrap();
         // Bob Block 2 - with block event and liveness service metadata update
         let prev_block = bob_db
             .prepare_block_merkle_roots(chain_block(&prev_block, vec![], &consensus_manager))

@@ -57,6 +57,12 @@ pub struct RandomXFactory {
     inner: Arc<RwLock<RandomXFactoryInner>>,
 }
 
+impl Default for RandomXFactory {
+    fn default() -> Self {
+        Self::new(RandomXConfig::default())
+    }
+}
+
 impl RandomXFactory {
     pub fn new(config: RandomXConfig) -> Self {
         Self {
@@ -95,7 +101,7 @@ impl RandomXFactoryInner {
         }
 
         if self.vms.len() + 1 > MAX_VMS {
-            let mut oldest_value = Instant::now();
+            let oldest_value = Instant::now();
             let mut oldest_key = None;
             for (k, v) in self.vms.iter() {
                 if v.0 < oldest_value {

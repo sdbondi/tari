@@ -27,7 +27,7 @@ use crate::{
         sync::BlockSynchronizer,
         BaseNodeStateMachine,
     },
-    chain_storage::{BlockAddResult, BlockHeaderAccumulatedData, BlockchainBackend},
+    chain_storage::{BlockAddResult, BlockchainBackend},
 };
 use log::*;
 use std::time::Instant;
@@ -69,7 +69,7 @@ impl BlockSync {
             let local_height = block.block.header.height;
             local_nci.publish_block_event(BlockEvent::ValidBlockAdded(
                 block.block.clone().into(),
-                BlockAddResult::Ok,
+                BlockAddResult::Ok(block.clone()),
                 false.into(),
             ));
 

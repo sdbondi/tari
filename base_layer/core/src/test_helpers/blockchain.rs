@@ -39,18 +39,18 @@ use crate::{
         Validators,
     },
     consensus::{
-        chain_strength_comparer::ChainStrengthComparerBuilder,
-        ConsensusConstantsBuilder,
+        // chain_strength_comparer::ChainStrengthComparerBuilder,
+        // ConsensusConstantsBuilder,
         ConsensusManager,
         ConsensusManagerBuilder,
         Network,
     },
-    proof_of_work::randomx_factory::{RandomXConfig, RandomXFactory},
+    // proof_of_work::randomx_factory::{RandomXConfig, RandomXFactory},
     transactions::{
         transaction::{TransactionInput, TransactionKernel, TransactionOutput},
-        types::{CryptoFactories, HashOutput, Signature},
+        types::{HashOutput, Signature},
     },
-    validation::{block_validators::FullConsensusValidator, mocks::MockValidator},
+    // validation::{block_validators::FullConsensusValidator, mocks::MockValidator},
 };
 use std::{
     fs,
@@ -60,6 +60,10 @@ use std::{
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_storage::lmdb_store::LMDBConfig;
 use tari_test_utils::paths::create_temporary_data_path;
+use crate::transactions::types::CryptoFactories;
+use crate::proof_of_work::randomx_factory::RandomXFactory;
+use crate::validation::block_validators::{FullConsensusValidator, OrphanBlockValidator};
+use crate::validation::header_validator::HeaderValidator;
 
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
@@ -95,17 +99,17 @@ pub fn create_store_with_consensus_and_validators(
 }
 
 pub fn create_store_with_consensus(rules: &ConsensusManager) -> BlockchainDatabase<TempDatabase> {
-    unimplemented!()
-    // let factories = CryptoFactories::default();
-    // let validators = Validators::new(
-    //     FullConsensusValidator::new(
-    //         rules.clone(),
-    //         RandomXFactory::new(RandomXConfig { use_large_pages: true }),
-    //     ),
-    //     HeaderValidator::new(),
-    //     StatelessBlockValidator::new(rules.clone(), factories),
-    // );
-    // create_store_with_consensus_and_validators(rules, validators)
+    let factories = CryptoFactories::default();
+    let rx = RandomXFactory::default();
+    let validators = Validators::new(
+        FullConsensusValidator::new(
+            rules.clone(),
+            rx.clone()
+        ),
+        HeaderValidator::new(rules.clone(), rx),
+        OrphanBlockValidator::new(rules.clone(), factories),
+    );
+    create_store_with_consensus_and_validators(rules, validators)
 }
 pub fn create_test_blockchain_db() -> BlockchainDatabase<TempDatabase> {
     let network = Network::Ridcully;
@@ -302,7 +306,7 @@ impl BlockchainBackend for TempDatabase {
         hash: HashOutput,
     ) -> Result<BlockHeaderAccumulatedData, ChainStorageError>
     {
-        self.fetch_orphan_header_accumulated_data(hash)
+        self.db.fetch_orphan_header_accumulated_data(hash)
     }
 
     fn delete_oldest_orphans(

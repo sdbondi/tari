@@ -20,9 +20,9 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use crate::{
-    blocks::{block_header::BlockHeader, Block, BlockValidationError},
+    blocks::{Block, BlockValidationError},
     chain_storage,
-    chain_storage::{fetch_headers, BlockchainBackend, BlockchainDatabase, ChainBlock, MmrTree},
+    chain_storage::{BlockchainBackend, ChainBlock, MmrTree},
     consensus::ConsensusManager,
     proof_of_work::randomx_factory::RandomXFactory,
     transactions::{
@@ -36,10 +36,6 @@ use crate::{
             check_block_weight,
             check_coinbase_output,
             check_cut_through,
-            check_header_timestamp_greater_than_median,
-            check_pow_data,
-            check_target_difficulty,
-            check_timestamp_ftl,
             is_all_unique_and_sorted,
         },
         CandidateBlockBodyValidation,

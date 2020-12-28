@@ -448,12 +448,12 @@ async fn inbound_fetch_blocks() {
 async fn inbound_fetch_blocks_before_horizon_height() {
     let network = Network::LocalNet;
     let consensus_constants = network.create_consensus_constants();
-    let block0 = genesis_block::get_rincewind_genesis_block_raw();
+    let block0 = genesis_block::get_ridcully_genesis_block_raw();
     let consensus_manager = ConsensusManagerBuilder::new(network)
         .with_consensus_constants(consensus_constants[0].clone())
         .with_block(block0.clone())
         .build();
-    let validators = Validators::new(MockValidator::new(true), MockValidator::new(true));
+    let validators = Validators::new(MockValidator::new(true), MockValidator::new(true), MockValidator::new(true));
     let db = create_test_db();
     let config = BlockchainDatabaseConfig {
         pruning_horizon: 3,

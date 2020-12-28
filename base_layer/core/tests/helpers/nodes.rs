@@ -60,6 +60,8 @@ use tari_p2p::{
 use tari_service_framework::{RegisterHandle, StackBuilder};
 use tari_shutdown::Shutdown;
 use tokio::runtime::Runtime;
+use tari_core::validation::{CandidateBlockBodyValidation, HeaderValidation, OrphanValidation};
+use tari_core::chain_storage::BlockchainBackend;
 
 /// The NodeInterfaces is used as a container for providing access to all the services and interfaces of a single node.
 pub struct NodeInterfaces {
@@ -159,13 +161,14 @@ impl BaseNodeBuilder {
         self
     }
 
-    pub fn with_validators(
+    pub fn with_validators<B:BlockchainBackend>(
         mut self,
-        block: impl StatefulValidation<Block, TempDatabase> + 'static,
-        orphan: impl Validation<Block> + 'static,
+        block: impl CandidateBlockBodyValidation<B> + 'static,
+        header: impl HeaderValidation<B> + 'static,
+        orphan: impl OrphanValidation + 'static,
     ) -> Self
     {
-        let validators = Validators::new(block, orphan);
+        let validators = Validators::new(block, header, orphan);
         self.validators = Some(validators);
         self
     }
@@ -180,7 +183,7 @@ impl BaseNodeBuilder {
     pub fn start(self, runtime: &mut Runtime, data_path: &str) -> (NodeInterfaces, ConsensusManager) {
         let validators = self
             .validators
-            .unwrap_or(Validators::new(MockValidator::new(true), MockValidator::new(true)));
+            .unwrap_or(Validators::new(MockValidator::new(true), MockValidator::new(true), MockValidator::new(true)));
         let consensus_manager = self
             .consensus_manager
             .unwrap_or(ConsensusManagerBuilder::new(self.network).build());

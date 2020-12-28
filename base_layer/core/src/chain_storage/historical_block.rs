@@ -22,6 +22,8 @@
 
 use crate::{blocks::Block, chain_storage::BlockHeaderAccumulatedData};
 use serde::{Deserialize, Serialize};
+use crate::chain_storage::ChainBlock;
+use crate::transactions::types::HashOutput;
 
 /// The representation of a historical block in the blockchain. It is essentially identical to a protocol-defined
 /// block but contains some extra metadata that clients such as Block Explorers will find interesting.
@@ -54,8 +56,19 @@ impl HistoricalBlock {
         &self.block
     }
 
+    pub fn hash(&self) -> &HashOutput {
+        &self.accumulated_data.hash
+    }
+
     pub fn into_block(self) -> Block {
         self.block
+    }
+
+    pub fn into_chain_block(self) -> ChainBlock {
+        ChainBlock {
+            accumulated_data: self.accumulated_data,
+            block: self.block,
+        }
     }
 }
 

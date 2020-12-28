@@ -158,7 +158,7 @@ impl MempoolInboundHandlers {
     pub async fn handle_block_event(&mut self, block_event: &BlockEvent) -> Result<(), MempoolServiceError> {
         use BlockEvent::*;
         match block_event {
-            ValidBlockAdded(block, BlockAddResult::Ok, broadcast) => {
+            ValidBlockAdded(block, BlockAddResult::Ok(_), broadcast) => {
                 async_mempool::process_published_block(self.mempool.clone(), block.clone()).await?;
                 if broadcast.is_true() {
                     let _ = self.event_publisher.send(MempoolStateEvent::Updated);

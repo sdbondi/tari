@@ -22,7 +22,6 @@
 
 use crate::{
     blocks::Block,
-    chain_storage::ChainBlock,
     mempool::{
         error::MempoolError,
         mempool_storage::MempoolStorage,
@@ -46,7 +45,7 @@ pub struct Mempool {
 
 impl Mempool {
     /// Create a new Mempool with an UnconfirmedPool, OrphanPool, PendingPool and ReOrgPool.
-    pub fn new(config: MempoolConfig, validator: impl MempoolTransactionValidation + 'static) -> Self {
+    pub fn new(config: MempoolConfig, validator: Arc<dyn MempoolTransactionValidation>) -> Self {
         Self {
             pool_storage: Arc::new(RwLock::new(MempoolStorage::new(config, validator))),
         }

@@ -42,7 +42,7 @@ use crate::{
     proof_of_work::{monero_rx::MoneroData, PowAlgorithm, TargetDifficultyWindow},
     tari_utilities::epoch_time::EpochTime,
     transactions::{
-        transaction::{TransactionInput, TransactionKernel, TransactionOutput},
+        transaction::{TransactionKernel, TransactionOutput},
         types::{Commitment, HashDigest, HashOutput, Signature},
     },
     validation::{CandidateBlockBodyValidation, HeaderValidation, OrphanValidation, ValidationError},
@@ -86,7 +86,7 @@ impl Default for BlockchainDatabaseConfig {
 
 #[derive(Clone, Debug, PartialEq, Display)]
 pub enum BlockAddResult {
-    Ok,
+    Ok(Arc<ChainBlock>),
     BlockExists,
     OrphanBlock,
     /// Indicates the new block caused a chain reorg. This contains removed blocks followed by added blocks.
@@ -100,9 +100,9 @@ pub enum BlockAddResult {
 /// The `GenesisBlockValidator` is used to check that the chain builds on the correct genesis block.
 /// The `ChainTipValidator` is used to check that the accounting balance and MMR states of the chain state is valid.
 pub struct Validators<B> {
-    block: Arc<Box<dyn CandidateBlockBodyValidation<B>>>,
-    header: Arc<Box<dyn HeaderValidation<B>>>,
-    orphan: Arc<Box<dyn OrphanValidation>>,
+    pub block: Arc<Box<dyn CandidateBlockBodyValidation<B>>>,
+    pub header: Arc<Box<dyn HeaderValidation<B>>>,
+    pub orphan: Arc<Box<dyn OrphanValidation>>,
 }
 
 impl<B: BlockchainBackend> Validators<B> {
@@ -244,6 +244,20 @@ where B: BlockchainBackend
             blockchain_db.store_pruning_horizon(config.pruning_horizon)?;
         }
         Ok(blockchain_db)
+    }
+
+    pub fn create_chain_header_if_valid(&self, header: BlockHeader, prev: &ChainHeader) -> Result<ChainHeader, ChainStorageError> {
+        let db = self.db_read_access()?;
+        // let prev  = db.fetch_chain_header_in_all_chains(&header.prev_hash)?.ok_or_else(|| ChainStorageError::ValueNotFound {
+        //     entity: "Header".to_string(),
+        //     field: "hash".to_string(),
+        //     value:  header.prev_hash.to_hex()
+        // })?;
+        let accum_data = self.validators.header.validate(&*db, &header, &prev.accumulated_data)?;
+        Ok(ChainHeader{
+            header,
+            accumulated_data: accum_data.build()?
+        })
     }
 
     // Be careful about making this method public. Rather use `db_and_metadata_read_access`
@@ -762,7 +776,7 @@ where B: BlockchainBackend
 
         // Cleanup of backend when in pruned mode.
         match block_add_result {
-            BlockAddResult::Ok | BlockAddResult::ChainReorg(_, _) => prune_database(
+            BlockAddResult::Ok(_) | BlockAddResult::ChainReorg(_, _) => prune_database(
                 &mut *db,
                 self.config.pruning_interval,
                 self.config.pruning_horizon,
@@ -1616,7 +1630,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
     let new_block_hash = new_block.hash();
 
     // Check the accumulated difficulty of the best fork chain compared to the main chain.
-    let fork_header = find_strongest_orphan_tip(db, new_tips, chain_strength_comparer)?;
+    let fork_header = find_strongest_orphan_tip(new_tips, chain_strength_comparer)?;
     if fork_header.is_none() {
         // This should never happen because a block is always added to the orphan pool before
         // checking, but just in case
@@ -1718,7 +1732,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
             num_removed_blocks,
             num_added_blocks,
         );
-        Ok(BlockAddResult::Ok)
+        Ok(BlockAddResult::Ok(reorg_chain.front().unwrap().clone()))
     }
 }
 
@@ -1819,7 +1833,7 @@ fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(
     let mut txn = DbTransaction::new();
 
     let mut new_tips_found = vec![];
-    let mut parent;
+    let parent;
     if let Some(curr_parent) = db.fetch_orphan_chain_tip_by_hash(&block.hash())? {
         parent = curr_parent;
         txn.remove_orphan_chain_tip(block.header.prev_hash.clone());
@@ -1848,7 +1862,7 @@ fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(
         }
     }
 
-    let accum_builder = validator.validate(db, &block.header, &parent.header, &parent.accumulated_data)?;
+    let accum_builder = validator.validate(db, &block.header, &parent.accumulated_data)?;
     let accumulated_data = accum_builder
         .total_kernel_offset(
             &parent.accumulated_data.total_kernel_offset,
@@ -1893,7 +1907,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
     }
     let mut res = vec![];
     for child in children {
-        match validator.validate(db, &child.header, &prev_header, prev_accumulated_data) {
+        match validator.validate(db, &child.header, prev_accumulated_data) {
             Ok(builder) => {
                 let accum_data = builder
                     .total_kernel_offset(
@@ -1965,8 +1979,7 @@ fn get_orphan_link_main_chain<T: BlockchainBackend>(
 }
 
 /// Find and return the orphan chain tip with the highest accumulated difficulty.
-fn find_strongest_orphan_tip<T: BlockchainBackend>(
-    db: &T,
+fn find_strongest_orphan_tip(
     orphan_chain_tips: Vec<ChainHeader>,
     chain_strength_comparer: &dyn ChainStrengthComparer,
 ) -> Result<Option<ChainHeader>, ChainStorageError>

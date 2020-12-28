@@ -60,7 +60,6 @@ pub trait HeaderValidation<B: BlockchainBackend>: Send + Sync {
         &self,
         db: &B,
         header: &BlockHeader,
-        previous_header: &BlockHeader,
         previous_data: &BlockHeaderAccumulatedData,
     ) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError>;
 }

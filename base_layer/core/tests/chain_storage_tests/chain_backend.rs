@@ -41,42 +41,6 @@ use tari_crypto::tari_utilities::Hashable;
 use tari_storage::lmdb_store::LMDBConfig;
 use tari_test_utils::paths::create_temporary_data_path;
 
-fn insert_contains_delete_and_fetch_header<T: BlockchainBackend>(mut db: T) {
-    let mut header = BlockHeader::new(0);
-    header.height = 42;
-    let hash = header.hash();
-    assert_eq!(db.contains(&DbKey::BlockHeader(header.height)).unwrap(), false);
-    assert_eq!(db.contains(&DbKey::BlockHash(hash.clone())).unwrap(), false);
-
-    let mut txn = DbTransaction::new();
-    txn.insert_header(header.clone());
-    assert!(db.write(txn).is_ok());
-    assert_eq!(db.contains(&DbKey::BlockHeader(header.height)).unwrap(), true);
-    assert_eq!(db.contains(&DbKey::BlockHash(hash.clone())).unwrap(), true);
-    if let Some(DbValue::BlockHeader(retrieved_header)) = db.fetch(&DbKey::BlockHeader(header.height)).unwrap() {
-        assert_eq!(*retrieved_header, header);
-    } else {
-        assert!(false);
-    }
-    if let Some(DbValue::BlockHash(retrieved_header)) = db.fetch(&DbKey::BlockHash(hash.clone())).unwrap() {
-        assert_eq!(*retrieved_header, header);
-    } else {
-        assert!(false);
-    }
-
-    let mut txn = DbTransaction::new();
-    txn.delete(DbKey::BlockHash(hash.clone()));
-    assert!(db.write(txn).is_ok());
-    assert_eq!(db.contains(&DbKey::BlockHeader(header.height)).unwrap(), false);
-    assert_eq!(db.contains(&DbKey::BlockHash(hash)).unwrap(), false);
-}
-
-#[test]
-fn lmdb_insert_contains_delete_and_fetch_header() {
-    let db = create_test_db();
-    insert_contains_delete_and_fetch_header(db);
-}
-
 fn insert_contains_delete_and_fetch_utxo<T: BlockchainBackend>(mut _db: T) {
     unimplemented!();
     // let factories = CryptoFactories::default();
@@ -534,32 +498,6 @@ fn duplicate_utxo<T: BlockchainBackend>(_db: T) {
 fn lmdb_duplicate_utxo() {
     let db = create_test_db();
     duplicate_utxo(db);
-}
-
-fn fetch_last_header<T: BlockchainBackend>(mut db: T) {
-    let mut header0 = BlockHeader::new(0);
-    header0.height = 0;
-    let mut header1 = BlockHeader::new(0);
-    header1.height = 1;
-    let mut header2 = BlockHeader::new(0);
-    header2.height = 2;
-
-    let mut txn = DbTransaction::new();
-    txn.insert_header(header0);
-    txn.insert_header(header1.clone());
-    assert!(db.write(txn).is_ok());
-    assert_eq!(db.fetch_last_header().unwrap(), header1);
-
-    let mut txn = DbTransaction::new();
-    txn.insert_header(header2.clone());
-    assert!(db.write(txn).is_ok());
-    assert_eq!(db.fetch_last_header().unwrap(), header2);
-}
-
-#[test]
-fn lmdb_fetch_last_header() {
-    let db = create_test_db();
-    fetch_last_header(db);
 }
 
 fn fetch_utxo_rp_mmr_nodes_and_count<T: BlockchainBackend>(mut _db: T) {

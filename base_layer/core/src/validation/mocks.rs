@@ -29,6 +29,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use crate::validation::MempoolTransactionValidation;
+use crate::transactions::transaction::Transaction;
 
 #[derive(Clone)]
 pub struct MockValidator {
@@ -84,7 +86,6 @@ impl<B: BlockchainBackend> HeaderValidation<B> for MockValidator {
         &self,
         _db: &B,
         _header: &BlockHeader,
-        _previous_header: &BlockHeader,
         _previous_data: &BlockHeaderAccumulatedData,
     ) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError>
     {
@@ -100,6 +101,18 @@ impl<B: BlockchainBackend> HeaderValidation<B> for MockValidator {
     // &BlockHeaderAccumulatedData) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError> {
     //     unimplemented!()
     // }
+}
+
+impl MempoolTransactionValidation for MockValidator {
+    fn validate(&self, _transaction: &Transaction) -> Result<(), ValidationError> {
+        if self.is_valid.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom_error(
+                "This mock validator always returns an error",
+            ))
+        }
+    }
 }
 
 #[cfg(test)]

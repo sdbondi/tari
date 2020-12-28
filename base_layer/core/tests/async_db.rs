@@ -155,7 +155,7 @@ fn async_add_new_block() {
             let result = db.add_block(new_block.clone().into()).await.unwrap();
             let block = db.fetch_block(1).await.unwrap();
             match result {
-                BlockAddResult::Ok => assert_eq!(Block::from(block).hash(), new_block.hash()),
+                BlockAddResult::Ok(_) => assert_eq!(Block::from(block).hash(), new_block.hash()),
                 _ => panic!("Unexpected result"),
             }
         });

@@ -26,7 +26,7 @@ use crate::{
         proto,
         sync::{hooks::Hooks, rpc, BlockSyncConfig},
     },
-    blocks::{Block, BlockHeader},
+    blocks::{ BlockHeader},
     chain_storage::{async_db::AsyncBlockchainDb, BlockchainBackend, ChainBlock},
     consensus::ConsensusManager,
     proof_of_work::randomx_factory::RandomXFactory,

@@ -22,7 +22,6 @@
 
 use crate::{
     blocks::Block,
-    chain_storage::ChainBlock,
     mempool::{error::MempoolError, Mempool, StateResponse, StatsResponse, TxStorageResponse},
     transactions::{transaction::Transaction, types::Signature},
 };

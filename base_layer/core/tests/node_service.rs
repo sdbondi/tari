@@ -62,7 +62,7 @@ use tari_core::{
         types::CryptoFactories,
     },
     txn_schema,
-    validation::{block_validators::StatelessBlockValidator, mocks::MockValidator},
+    validation::{block_validators::OrphanBlockValidator, mocks::MockValidator},
 };
 use tari_crypto::tari_utilities::hash::Hashable;
 use tari_p2p::services::liveness::LivenessConfig;
@@ -106,85 +106,87 @@ fn request_response_get_metadata() {
 
 #[test]
 fn request_and_response_fetch_headers() {
-    let mut runtime = Runtime::new().unwrap();
-    let temp_dir = tempdir().unwrap();
-    let (mut alice_node, bob_node, carol_node, _consensus_manager) =
-        create_network_with_3_base_nodes(&mut runtime, temp_dir.path().to_str().unwrap());
-
-    let mut headerb1 = BlockHeader::new(0);
-    headerb1.height = 1;
-    let mut headerb2 = BlockHeader::new(0);
-    headerb2.height = 2;
-    let mut txn = DbTransaction::new();
-    txn.insert_header(headerb1.clone());
-    txn.insert_header(headerb2.clone());
-    assert!(bob_node.blockchain_db.commit(txn).is_ok());
-
-    let mut headerc1 = BlockHeader::new(0);
-    headerc1.height = 1;
-    let mut headerc2 = BlockHeader::new(0);
-    headerc2.height = 2;
-    let mut txn = DbTransaction::new();
-    txn.insert_header(headerc1.clone());
-    txn.insert_header(headerc2.clone());
-    assert!(carol_node.blockchain_db.commit(txn).is_ok());
-
-    // The request is sent to a random remote base node so the returned headers can be from bob or carol
-    runtime.block_on(async {
-        let received_headers = alice_node.outbound_nci.fetch_headers(vec![1]).await.unwrap();
-        assert_eq!(received_headers.len(), 1);
-        assert!(received_headers.contains(&headerb1) || received_headers.contains(&headerc1));
-
-        let received_headers = alice_node.outbound_nci.fetch_headers(vec![1, 2]).await.unwrap();
-        assert_eq!(received_headers.len(), 2);
-        assert!(
-            (received_headers.contains(&headerb1) && (received_headers.contains(&headerb2))) ||
-                (received_headers.contains(&headerc1) && (received_headers.contains(&headerc2)))
-        );
-
-        alice_node.shutdown().await;
-        bob_node.shutdown().await;
-        carol_node.shutdown().await;
-    });
+    unimplemented!()
+    // let mut runtime = Runtime::new().unwrap();
+    // let temp_dir = tempdir().unwrap();
+    // let (mut alice_node, bob_node, carol_node, _consensus_manager) =
+    //     create_network_with_3_base_nodes(&mut runtime, temp_dir.path().to_str().unwrap());
+    //
+    // let mut headerb1 = BlockHeader::new(0);
+    // headerb1.height = 1;
+    // let mut headerb2 = BlockHeader::new(0);
+    // headerb2.height = 2;
+    // let mut txn = DbTransaction::new();
+    // txn.insert_header(headerb1.clone());
+    // txn.insert_header(headerb2.clone());
+    // assert!(bob_node.blockchain_db.commit(txn).is_ok());
+    //
+    // let mut headerc1 = BlockHeader::new(0);
+    // headerc1.height = 1;
+    // let mut headerc2 = BlockHeader::new(0);
+    // headerc2.height = 2;
+    // let mut txn = DbTransaction::new();
+    // txn.insert_header(headerc1.clone());
+    // txn.insert_header(headerc2.clone());
+    // assert!(carol_node.blockchain_db.commit(txn).is_ok());
+    //
+    // // The request is sent to a random remote base node so the returned headers can be from bob or carol
+    // runtime.block_on(async {
+    //     let received_headers = alice_node.outbound_nci.fetch_headers(vec![1]).await.unwrap();
+    //     assert_eq!(received_headers.len(), 1);
+    //     assert!(received_headers.contains(&headerb1) || received_headers.contains(&headerc1));
+    //
+    //     let received_headers = alice_node.outbound_nci.fetch_headers(vec![1, 2]).await.unwrap();
+    //     assert_eq!(received_headers.len(), 2);
+    //     assert!(
+    //         (received_headers.contains(&headerb1) && (received_headers.contains(&headerb2))) ||
+    //             (received_headers.contains(&headerc1) && (received_headers.contains(&headerc2)))
+    //     );
+    //
+    //     alice_node.shutdown().await;
+    //     bob_node.shutdown().await;
+    //     carol_node.shutdown().await;
+    // });
 }
 
 #[test]
 fn request_and_response_fetch_headers_with_hashes() {
-    let mut runtime = Runtime::new().unwrap();
-    let temp_dir = tempdir().unwrap();
-    let (mut alice_node, bob_node, _consensus_manager) =
-        create_network_with_2_base_nodes(&mut runtime, temp_dir.path().to_str().unwrap());
-
-    let mut header1 = BlockHeader::new(0);
-    header1.height = 1;
-    let header2 = BlockHeader::from_previous(&header1).unwrap();
-    let hash1 = header1.hash();
-    let hash2 = header2.hash();
-    let mut txn = DbTransaction::new();
-    txn.insert_header(header1.clone());
-    txn.insert_header(header2.clone());
-    assert!(bob_node.blockchain_db.commit(txn).is_ok());
-
-    runtime.block_on(async {
-        let received_headers = alice_node
-            .outbound_nci
-            .fetch_headers_with_hashes(vec![hash1.clone()])
-            .await
-            .unwrap();
-        assert_eq!(received_headers.len(), 1);
-        assert!(received_headers.contains(&header1));
-
-        let received_headers = alice_node
-            .outbound_nci
-            .fetch_headers_with_hashes(vec![hash1, hash2])
-            .await
-            .unwrap();
-        assert_eq!(received_headers.len(), 2);
-        assert!(received_headers.contains(&header1) && (received_headers.contains(&header2)));
-
-        alice_node.shutdown().await;
-        bob_node.shutdown().await;
-    });
+    unimplemented!()
+    // let mut runtime = Runtime::new().unwrap();
+    // let temp_dir = tempdir().unwrap();
+    // let (mut alice_node, bob_node, _consensus_manager) =
+    //     create_network_with_2_base_nodes(&mut runtime, temp_dir.path().to_str().unwrap());
+    //
+    // let mut header1 = BlockHeader::new(0);
+    // header1.height = 1;
+    // let header2 = BlockHeader::from_previous(&header1).unwrap();
+    // let hash1 = header1.hash();
+    // let hash2 = header2.hash();
+    // let mut txn = DbTransaction::new();
+    // txn.insert_header(header1.clone());
+    // txn.insert_header(header2.clone());
+    // assert!(bob_node.blockchain_db.commit(txn).is_ok());
+    //
+    // runtime.block_on(async {
+    //     let received_headers = alice_node
+    //         .outbound_nci
+    //         .fetch_headers_with_hashes(vec![hash1.clone()])
+    //         .await
+    //         .unwrap();
+    //     assert_eq!(received_headers.len(), 1);
+    //     assert!(received_headers.contains(&header1));
+    //
+    //     let received_headers = alice_node
+    //         .outbound_nci
+    //         .fetch_headers_with_hashes(vec![hash1, hash2])
+    //         .await
+    //         .unwrap();
+    //     assert_eq!(received_headers.len(), 2);
+    //     assert!(received_headers.contains(&header1) && (received_headers.contains(&header2)));
+    //
+    //     alice_node.shutdown().await;
+    //     bob_node.shutdown().await;
+    // });
 }
 
 #[test]
@@ -608,7 +610,7 @@ fn propagate_and_forward_invalid_block() {
         .with_consensus_constants(consensus_constants)
         .with_block(block0.clone())
         .build();
-    let stateless_block_validator = StatelessBlockValidator::new(rules.clone(), factories.clone());
+    let stateless_block_validator = OrphanBlockValidator::new(rules.clone(), factories.clone());
 
     let mock_validator = MockValidator::new(false);
     let (mut dan_node, rules) = BaseNodeBuilder::new(network)

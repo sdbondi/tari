@@ -550,7 +550,7 @@ where T: BlockchainBackend + 'static
                 trace!(target: LOG_TARGET, "Block event created: {}", block_add_result);
 
                 let should_propagate = match &block_add_result {
-                    BlockAddResult::Ok => true,
+                    BlockAddResult::Ok(_) => true,
                     BlockAddResult::BlockExists => false,
                     BlockAddResult::OrphanBlock => false,
                     BlockAddResult::ChainReorg(_, _) => true,

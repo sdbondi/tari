@@ -36,10 +36,13 @@ use tari_core::{
     test_helpers::blockchain::{create_store_with_consensus, create_test_db},
     transactions::types::CryptoFactories,
     validation::{
-        block_validators::{FullConsensusValidator, StatelessBlockValidator},
+        block_validators::{FullConsensusValidator, OrphanBlockValidator},
         ValidationError,
     },
 };
+use tari_core::validation::header_validator::HeaderValidator;
+use tari_core::proof_of_work::randomx_factory::{RandomXFactory, RandomXConfig};
+
 mod helpers;
 
 #[test]
@@ -48,13 +51,15 @@ fn test_genesis_block() {
     let network = Network::Ridcully;
     let rules = ConsensusManagerBuilder::new(network).build();
     let backend = create_test_db();
+    let rx = RandomXFactory::new(RandomXConfig::default());
     let validators = Validators::new(
-        FullConsensusValidator::new(rules.clone()),
-        StatelessBlockValidator::new(rules.clone(), factories),
+        FullConsensusValidator::new(rules.clone(),rx.clone()),
+        HeaderValidator::new(rules.clone(), rx),
+        OrphanBlockValidator::new(rules.clone(), factories),
     );
     let db = BlockchainDatabase::new(backend, &rules, validators, BlockchainDatabaseConfig::default(), false).unwrap();
     let block = rules.get_genesis_block();
-    match db.add_block(block.into()).unwrap_err() {
+    match db.add_block(block.block.into()).unwrap_err() {
         ChainStorageError::ValidationError { source } => match source {
             ValidationError::ValidatingGenesis => (),
             _ => panic!("Failed because incorrect validation error was received"),

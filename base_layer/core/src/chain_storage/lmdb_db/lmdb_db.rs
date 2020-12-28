@@ -39,7 +39,6 @@ use crate::{
                 lmdb_insert_dup,
                 lmdb_last,
                 lmdb_len,
-                lmdb_list_values,
                 lmdb_replace,
             },
             TransactionInputRowData,
@@ -573,15 +572,6 @@ impl LMDBDatabase {
     fn fetch_orphan(&self, txn: &ConstTransaction<'_>, hash: &HashOutput) -> Result<Option<Block>, ChainStorageError> {
         let val: Option<Block> = lmdb_get(txn, &self.orphans_db, hash)?;
         Ok(val)
-    }
-
-    fn fetch_header_accumulated_data(
-        &self,
-        txn: &ConstTransaction<'_>,
-        hash: &[u8],
-    ) -> Result<Option<BlockHeaderAccumulatedData>, ChainStorageError>
-    {
-        lmdb_get(txn, &self.header_accumulated_data_db, hash)
     }
 
     #[allow(clippy::ptr_arg)]
