@@ -41,6 +41,7 @@ pub fn create_orphan_block(block_height: u64, transactions: Vec<Transaction>, co
         create_coinbase(&CryptoFactories::default(), coinbase_value, block_height + lock_height);
     let mut header = BlockHeader::new(consensus.consensus_constants(block_height).blockchain_version());
     header.prev_hash = Vec::from([1u8; 32]); // Random
+    header.height = block_height;
 
     let template = NewBlockTemplate::from_block(
         header
