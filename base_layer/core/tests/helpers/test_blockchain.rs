@@ -56,7 +56,7 @@ impl TestBlockchain {
         let mut blocks = HashMap::new();
         let genesis_block = b.pop().unwrap();
         let mut hash_to_block = HashMap::new();
-        hash_to_block.insert(genesis_block.hash(), name.clone());
+        hash_to_block.insert(genesis_block.hash().clone(), name.clone());
         blocks.insert(name.clone(), BlockProxy::new(name, genesis_block));
 
         Self {
@@ -78,13 +78,16 @@ impl TestBlockchain {
         new_block.header.nonce = OsRng.next_u64();
         find_header_with_achieved_difficulty(&mut new_block.header, block.difficulty.unwrap_or(1).into());
 
-        self.hash_to_block.insert(new_block.hash(), block.name.clone());
-        self.blocks.insert(
-            block.name.clone(),
-            BlockProxy::new(block.name.to_string(), new_block.clone()),
-        );
+        let res = self.store.add_block(Arc::new(new_block)).unwrap();
+        if let BlockAddResult::Ok(ref b) = res {
+            self.hash_to_block.insert(b.hash().clone(), block.name.clone());
+            self.blocks.insert(
+                block.name.clone(),
+                BlockProxy::new(block.name.to_string(), b.as_ref().clone()),
+            );
+        }
 
-        self.store.add_block(Arc::new(new_block)).unwrap()
+        res
     }
 
     pub fn builder(&mut self) -> TestBlockBuilder {

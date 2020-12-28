@@ -49,6 +49,7 @@ use tari_crypto::{
 };
 use tari_mmr::MutableMmr;
 use tari_core::chain_storage::{ChainBlock, BlockHeaderAccumulatedData};
+use tari_core::proof_of_work::sha3_difficulty;
 
 const _MAINNET: Network = Network::MainNet;
 const _RIDCULLY: Network = Network::Ridcully;
@@ -230,7 +231,7 @@ pub fn chain_block_with_coinbase(
 
 /// Create a new block using the provided coinbase and transactions that adds to the blockchain given in `prev_block`.
 pub fn chain_block_with_new_coinbase(
-    prev_block: &Block,
+    prev_block: &ChainBlock,
     transactions: Vec<Transaction>,
     consensus_manager: &ConsensusManager,
     factories: &CryptoFactories,
@@ -307,7 +308,7 @@ pub fn append_block_with_coinbase<B: BlockchainBackend>(
     find_header_with_achieved_difficulty(&mut block.header, achieved_difficulty);
     let res = db.add_block(Arc::new(block.clone()))?;
     match res {
-        BlockAddResult::Ok(b) => Ok((b.into_inner(), coinbase_output)),
+        BlockAddResult::Ok(b) => Ok((b.as_ref().clone(), coinbase_output)),
         BlockAddResult::BlockExists => Err(ChainStorageError::InvalidOperation("Block already exists".to_string())),
         BlockAddResult::OrphanBlock =>  Err(ChainStorageError::InvalidOperation("Block added as orphan".to_string())),
         BlockAddResult::ChainReorg(_, _) =>  Err(ChainStorageError::InvalidOperation("Chain reorged unexpectedly".to_string())),
@@ -390,7 +391,8 @@ pub fn generate_new_block_with_coinbase<B: BlockchainBackend>(
 
 pub fn find_header_with_achieved_difficulty(header: &mut BlockHeader, achieved_difficulty: Difficulty) {
     let mut num_tries = 0;
-    while header.achieved_difficulty().unwrap() != achieved_difficulty {
+
+    while sha3_difficulty(header)!= achieved_difficulty {
         header.nonce += 1;
         num_tries += 1;
         if num_tries > 10_000_000 {
@@ -406,7 +408,7 @@ pub fn find_header_with_achieved_difficulty(header: &mut BlockHeader, achieved_d
 /// with [generate_new_block], you must update the unblinded UTXO vector yourself.
 pub fn generate_block<B: BlockchainBackend>(
     db: &BlockchainDatabase<B>,
-    blocks: &mut Vec<Block>,
+    blocks: &mut Vec<ChainBlock>,
     transactions: Vec<Transaction>,
     consensus: &ConsensusManager,
 ) -> Result<BlockAddResult, ChainStorageError>
@@ -415,15 +417,15 @@ pub fn generate_block<B: BlockchainBackend>(
     let template = chain_block_with_new_coinbase(prev_block, transactions, consensus, &CryptoFactories::default()).0;
     let new_block = db.prepare_block_merkle_roots(template)?;
     let result = db.add_block(new_block.clone().into());
-    if let Ok(BlockAddResult::Ok(_)) = result {
-        blocks.push(new_block);
+    if let Ok(BlockAddResult::Ok(ref b)) = result {
+        blocks.push(b.as_ref().clone());
     }
     result
 }
 
 pub fn generate_block_with_achieved_difficulty<B: BlockchainBackend>(
     db: &mut BlockchainDatabase<B>,
-    blocks: &mut Vec<Block>,
+    blocks: &mut Vec<ChainBlock>,
     transactions: Vec<Transaction>,
     achieved_difficulty: Difficulty,
     consensus: &ConsensusManager,
@@ -440,8 +442,8 @@ pub fn generate_block_with_achieved_difficulty<B: BlockchainBackend>(
     new_block.header.nonce = OsRng.next_u64();
     find_header_with_achieved_difficulty(&mut new_block.header, achieved_difficulty);
     let result = db.add_block(new_block.clone().into());
-    if let Ok(BlockAddResult::Ok(_)) = result {
-        blocks.push(new_block);
+    if let Ok(BlockAddResult::Ok(ref b)) = result {
+        blocks.push(b.as_ref().clone());
     }
     result
 }
@@ -474,10 +476,10 @@ pub fn generate_block_with_coinbase<B: BlockchainBackend>(
 
 pub fn construct_chained_blocks<B: BlockchainBackend>(
     db: &BlockchainDatabase<B>,
-    block0: Block,
+    block0: ChainBlock,
     consensus: &ConsensusManager,
     n: usize,
-) -> Vec<Block>
+) -> Vec<ChainBlock>
 {
     let mut prev_block = block0;
 

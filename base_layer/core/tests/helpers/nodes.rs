@@ -161,10 +161,10 @@ impl BaseNodeBuilder {
         self
     }
 
-    pub fn with_validators<B:BlockchainBackend>(
+    pub fn with_validators(
         mut self,
-        block: impl CandidateBlockBodyValidation<B> + 'static,
-        header: impl HeaderValidation<B> + 'static,
+        block: impl CandidateBlockBodyValidation<TempDatabase> + 'static,
+        header: impl HeaderValidation<TempDatabase> + 'static,
         orphan: impl OrphanValidation + 'static,
     ) -> Self
     {
@@ -191,7 +191,7 @@ impl BaseNodeBuilder {
         let mempool_validator = TxInputAndMaturityValidator::new(blockchain_db.clone());
         let mempool = Mempool::new(
             self.mempool_config.unwrap_or(MempoolConfig::default()),
-            Box::new(mempool_validator),
+            Arc::new(mempool_validator),
         );
         let node_identity = self.node_identity.unwrap_or(random_node_identity());
         let node_interfaces = setup_base_node_services(

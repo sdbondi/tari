@@ -80,7 +80,7 @@ static EMISSION: [u64; 2] = [10, 10];
 ///             -> change     (5.7)
 pub fn create_blockchain_db_no_cut_through() -> (
     BlockchainDatabase<TempDatabase>,
-    Vec<Block>,
+    Vec<ChainBlock>,
     Vec<Vec<UnblindedOutput>>,
     ConsensusManager,
 ) {
