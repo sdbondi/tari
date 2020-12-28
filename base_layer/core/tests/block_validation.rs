@@ -97,28 +97,24 @@ fn test_monero_blocks() {
         .with_consensus_constants(cc)
         .build();
     let db = create_store_with_consensus(&cm);
-    let block_0 = db.fetch_block(0).unwrap().into_block();
-    dbg!("hi");
+    let block_0 = db.fetch_block(0).unwrap().into_chain_block();
     let (block_1_t, _) = chain_block_with_new_coinbase(&block_0, vec![], &cm, &factories);
     let mut block_1 = db.prepare_block_merkle_roots(block_1_t).unwrap();
 
     // Now we have block 1, lets add monero data to it
     add_monero_data(&mut block_1, seed1.clone());
-    assert!(db.add_block(Arc::new(block_1.clone())).is_ok());
-    dbg!("hi");
+    let cb_1 = db.add_block(Arc::new(block_1.clone())).unwrap().assert_added();
     // Now lets add a second faulty block using the same seed hash
-    let (block_2_t, _) = chain_block_with_new_coinbase(&block_1, vec![], &cm, &factories);
+    let (block_2_t, _) = chain_block_with_new_coinbase(&cb_1, vec![], &cm, &factories);
     let mut block_2 = db.prepare_block_merkle_roots(block_2_t).unwrap();
 
     add_monero_data(&mut block_2, seed1.clone());
-    assert!(db.add_block(Arc::new(block_2.clone())).is_ok());
-    dbg!("hi");
+    let cb_2= db.add_block(Arc::new(block_2.clone())).unwrap().assert_added();
     // Now lets add a third faulty block using the same seed hash. This should fail.
-    let (block_3_t, _) = chain_block_with_new_coinbase(&block_2, vec![], &cm, &factories);
+    let (block_3_t, _) = chain_block_with_new_coinbase(&cb_2, vec![], &cm, &factories);
     let mut block_3 = db.prepare_block_merkle_roots(block_3_t).unwrap();
     let mut block_3_broken = block_3.clone();
     add_monero_data(&mut block_3_broken, seed1.clone());
-    dbg!("hi");
     let result = match db.add_block(Arc::new(block_3_broken.clone())) {
         Err(ChainStorageError::ValidationError {
             source: ValidationError::BlockHeaderError(BlockHeaderValidationError::OldSeedHash),
@@ -129,7 +125,7 @@ fn test_monero_blocks() {
 
     // now lets fix the seed, and try again
     add_monero_data(&mut block_3, seed2.clone());
-    assert!(db.add_block(Arc::new(block_3.clone())).is_ok());
+    db.add_block(Arc::new(block_3.clone())).unwrap().assert_added();
 }
 
 fn add_monero_data(tblock: &mut Block, seed_hash: String) {

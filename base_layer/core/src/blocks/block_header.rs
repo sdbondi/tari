@@ -325,22 +325,10 @@ mod test {
         h1.nonce = 7600;
         assert_eq!(h1.height, 0, "Default block height");
         let hash1 = h1.hash();
-        let diff1 = h1.achieved_difficulty().unwrap();
-        assert_eq!(diff1, 1.into());
         let h2 = BlockHeader::from_previous(&h1).unwrap();
         assert_eq!(h2.height, h1.height + 1, "Incrementing block height");
         assert!(h2.timestamp > h1.timestamp, "Timestamp");
         assert_eq!(h2.prev_hash, hash1, "Previous hash");
-        // default pow is blake, so monero diff should stay the same
-        assert_eq!(
-            h2.pow.accumulated_monero_difficulty, h1.pow.accumulated_monero_difficulty,
-            "Monero difficulty"
-        );
-        assert_eq!(
-            h2.pow.accumulated_blake_difficulty,
-            h1.pow.accumulated_blake_difficulty + diff1,
-            "Blake difficulty"
-        );
     }
 
     #[test]

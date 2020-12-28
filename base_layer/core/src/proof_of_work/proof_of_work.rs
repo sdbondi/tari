@@ -104,7 +104,7 @@ impl Display for ProofOfWork {
 #[cfg(test)]
 mod test {
     use crate::proof_of_work::{
-        proof_of_work::{Ordering, PowAlgorithm, ProofOfWork},
+        proof_of_work::{PowAlgorithm, ProofOfWork},
         Difficulty,
     };
 
@@ -121,66 +121,8 @@ mod test {
     #[test]
     fn to_bytes() {
         let mut pow = ProofOfWork::default();
-        pow.accumulated_monero_difficulty = Difficulty::from(65);
-        pow.accumulated_blake_difficulty = Difficulty::from(257);
         pow.pow_algo = PowAlgorithm::Sha3;
         assert_eq!(pow.to_bytes(), vec![2, 65, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0]);
     }
 
-    #[test]
-    fn total_difficulty() {
-        let mut pow = ProofOfWork::default();
-        // Simple cases
-        pow.accumulated_monero_difficulty = 500.into();
-        pow.accumulated_blake_difficulty = 100.into();
-        assert_eq!(pow.total_accumulated_difficulty(), 50000, "Case 1");
-        pow.accumulated_monero_difficulty = 50.into();
-        pow.accumulated_blake_difficulty = 1000.into();
-        assert_eq!(pow.total_accumulated_difficulty(), 50000, "Case 2");
-        // Edge cases - Very large OOM difficulty differences
-        pow.accumulated_monero_difficulty = 444.into();
-        pow.accumulated_blake_difficulty = 1_555_222_888_555_555.into();
-        assert_eq!(pow.total_accumulated_difficulty(), 690_518_962_518_666_420, "Case 3");
-        pow.accumulated_monero_difficulty = 1.into();
-        pow.accumulated_blake_difficulty = 15_222_333_444_555_666_777.into();
-        assert_eq!(pow.total_accumulated_difficulty(), 15_222_333_444_555_666_777, "Case 4");
-    }
-
-    #[test]
-    fn add_difficulty() {
-        let mut pow = ProofOfWork::new(PowAlgorithm::Monero);
-        pow.accumulated_blake_difficulty = Difficulty::from(42);
-        pow.accumulated_monero_difficulty = Difficulty::from(420);
-        let mut pow2 = ProofOfWork::default();
-        pow2.add_difficulty(&pow, Difficulty::from(80));
-        assert_eq!(pow2.accumulated_blake_difficulty, Difficulty::from(42));
-        assert_eq!(pow2.accumulated_monero_difficulty, Difficulty::from(500));
-    }
-
-    #[test]
-    fn partial_cmp() {
-        let mut pow1 = ProofOfWork::default();
-        let mut pow2 = ProofOfWork::default();
-        // (0,0) vs (0,0)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::Equal);
-        pow1.accumulated_monero_difficulty = 100.into();
-        // (100,0) vs (0,0)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::GreaterThan);
-        pow2.accumulated_blake_difficulty = 50.into();
-        // (100,0) vs (0,50)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::Indeterminate);
-        pow2.accumulated_monero_difficulty = 110.into();
-        // (100,0) vs (110, 50)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::LessThan);
-        pow1.accumulated_blake_difficulty = 50.into();
-        // (100,50) vs (110, 50)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::LessThan);
-        pow1.accumulated_monero_difficulty = 110.into();
-        // (110,50) vs (110, 50)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::Equal);
-        pow1.accumulated_monero_difficulty = 200.into();
-        pow1.accumulated_blake_difficulty = 80.into();
-        // (200,80) vs (110, 50)
-        assert_eq!(pow1.partial_cmp(&pow2), Ordering::GreaterThan);
-    }
 }

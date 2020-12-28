@@ -181,7 +181,7 @@ pub fn create_genesis_block_with_utxos(
     factories: &CryptoFactories,
     values: &[MicroTari],
     consensus_constants: &ConsensusConstants,
-) -> (Block, Vec<UnblindedOutput>)
+) -> (ChainBlock, Vec<UnblindedOutput>)
 {
     let (mut template, coinbase) = genesis_template(&factories, 100_000_000.into(), consensus_constants);
     let outputs = values.iter().fold(vec![coinbase], |mut secrets, v| {
@@ -192,7 +192,15 @@ pub fn create_genesis_block_with_utxos(
     });
     let mut block = update_genesis_block_mmr_roots(template).unwrap();
     find_header_with_achieved_difficulty(&mut block.header, Difficulty::from(1));
-    (block, outputs)
+    (  ChainBlock{ accumulated_data: BlockHeaderAccumulatedData{
+        hash: block.hash(),
+        total_kernel_offset: Default::default(),
+        achieved_difficulty: 1.into(),
+        total_accumulated_difficulty: 1,
+        accumulated_monero_difficulty: 1.into(),
+        accumulated_blake_difficulty: 1.into(),
+        target_difficulty: 1.into()
+    }, block, }, outputs)
 }
 
 /// Create a new block using the provided transactions that adds to the blockchain given in `prev_block`.

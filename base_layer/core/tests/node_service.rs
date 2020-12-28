@@ -300,19 +300,19 @@ fn request_and_response_fetch_blocks() {
     generate_block(db, &mut blocks, vec![], &consensus_manager).unwrap();
     generate_block(db, &mut blocks, vec![], &consensus_manager).unwrap();
 
-    carol_node.blockchain_db.add_block(blocks[1].clone().into()).unwrap();
-    carol_node.blockchain_db.add_block(blocks[2].clone().into()).unwrap();
+    carol_node.blockchain_db.add_block(blocks[1].block.clone().into()).unwrap().assert_added();
+    carol_node.blockchain_db.add_block(blocks[2].block.clone().into()).unwrap().assert_added();
 
     runtime.block_on(async {
         let received_blocks = alice_node.outbound_nci.fetch_blocks(vec![0]).await.unwrap();
         assert_eq!(received_blocks.len(), 1);
-        assert_eq!(*received_blocks[0].block(), blocks[0]);
+        assert_eq!(received_blocks[0].block(), &blocks[0].block);
 
         let received_blocks = alice_node.outbound_nci.fetch_blocks(vec![0, 1]).await.unwrap();
         assert_eq!(received_blocks.len(), 2);
         assert_ne!(*received_blocks[0].block(), *received_blocks[1].block());
-        assert!((*received_blocks[0].block() == blocks[0]) || (*received_blocks[1].block() == blocks[0]));
-        assert!((*received_blocks[0].block() == blocks[1]) || (*received_blocks[1].block() == blocks[1]));
+        assert!((received_blocks[0].block() == &blocks[0].block) || (received_blocks[1].block() == &blocks[0].block));
+        assert!((received_blocks[0].block() == &blocks[1].block) || (received_blocks[1].block() == &blocks[1].block));
 
         alice_node.shutdown().await;
         bob_node.shutdown().await;
@@ -352,8 +352,8 @@ fn request_and_response_fetch_blocks_with_hashes() {
     let block0_hash = blocks[0].hash();
     let block1_hash = blocks[1].hash();
 
-    carol_node.blockchain_db.add_block(blocks[1].clone().into()).unwrap();
-    carol_node.blockchain_db.add_block(blocks[2].clone().into()).unwrap();
+    carol_node.blockchain_db.add_block(blocks[1].block.clone().into()).unwrap().assert_added();
+    carol_node.blockchain_db.add_block(blocks[2].block.clone().into()).unwrap().assert_added();
 
     runtime.block_on(async {
         let received_blocks = alice_node
@@ -362,17 +362,17 @@ fn request_and_response_fetch_blocks_with_hashes() {
             .await
             .unwrap();
         assert_eq!(received_blocks.len(), 1);
-        assert_eq!(*received_blocks[0].block(), blocks[0]);
+        assert_eq!(received_blocks[0].block(), &blocks[0].block);
 
         let received_blocks = alice_node
             .outbound_nci
-            .fetch_blocks_with_hashes(vec![block0_hash.clone(), block1_hash])
+            .fetch_blocks_with_hashes(vec![block0_hash.clone(), block1_hash.clone()])
             .await
             .unwrap();
         assert_eq!(received_blocks.len(), 2);
         assert_ne!(received_blocks[0], received_blocks[1]);
-        assert!((*received_blocks[0].block() == blocks[0]) || (*received_blocks[1].block() == blocks[0]));
-        assert!((*received_blocks[0].block() == blocks[1]) || (*received_blocks[1].block() == blocks[1]));
+        assert!((*received_blocks[0].block() == blocks[0].block) || (*received_blocks[1].block() == blocks[0].block));
+        assert!((*received_blocks[0].block() == blocks[1].block) || (*received_blocks[1].block() == blocks[1].block));
 
         alice_node.shutdown().await;
         bob_node.shutdown().await;
@@ -455,7 +455,7 @@ fn propagate_and_forward_many_valid_blocks() {
         for block in &blocks {
             alice_node
                 .outbound_nci
-                .propagate_block(NewBlock::from(block), vec![])
+                .propagate_block(NewBlock::from(&block.block), vec![])
                 .await
                 .unwrap();
 
@@ -467,21 +467,21 @@ fn propagate_and_forward_many_valid_blocks() {
             let block_hash = block.hash();
 
             if let BlockEvent::ValidBlockAdded(received_block, _, _) = &*bob_block_event.unwrap().unwrap() {
-                assert_eq!(received_block.hash(), block_hash);
+                assert_eq!(&received_block.hash(), block_hash);
             } else {
                 panic!("Bob's node did not receive and validate the expected block");
             }
             if let BlockEvent::ValidBlockAdded(received_block, _block_add_result, _) =
                 &*carol_block_event.unwrap().unwrap()
             {
-                assert_eq!(received_block.hash(), block_hash);
+                assert_eq!(&received_block.hash(), block_hash);
             } else {
                 panic!("Carol's node did not receive and validate the expected block");
             }
             if let BlockEvent::ValidBlockAdded(received_block, _block_add_result, _) =
                 &*dan_block_event.unwrap().unwrap()
             {
-                assert_eq!(received_block.hash(), block_hash);
+                assert_eq!(&received_block.hash(), block_hash);
             } else {
                 panic!("Dan's node did not receive and validate the expected block");
             }
@@ -547,7 +547,7 @@ fn propagate_and_forward_invalid_block_hash() {
 
     let mut block1 = append_block(&alice_node.blockchain_db, &block0, vec![], &rules, 1.into()).unwrap();
     // Create unknown block hash
-    block1.header.height = 0;
+    block1.block.header.height = 0;
 
     let mut bob_message_events = bob_node.messaging_events.subscribe();
     let mut carol_message_events = carol_node.messaging_events.subscribe();
@@ -555,7 +555,7 @@ fn propagate_and_forward_invalid_block_hash() {
     runtime.block_on(async {
         alice_node
             .outbound_nci
-            .propagate_block(NewBlock::from(&block1), vec![])
+            .propagate_block(NewBlock::from(&block1.block), vec![])
             .await
             .unwrap();
 
@@ -621,13 +621,13 @@ fn propagate_and_forward_invalid_block() {
         .with_node_identity(carol_node_identity.clone())
         .with_peers(vec![dan_node_identity.clone()])
         .with_consensus_manager(rules)
-        .with_validators(mock_validator.clone(), stateless_block_validator.clone())
+        .with_validators(mock_validator.clone(), mock_validator.clone(),stateless_block_validator.clone())
         .start(&mut runtime, temp_dir.path().join("carol").to_str().unwrap());
     let (mut bob_node, rules) = BaseNodeBuilder::new(network)
         .with_node_identity(bob_node_identity.clone())
         .with_peers(vec![dan_node_identity.clone()])
         .with_consensus_manager(rules)
-        .with_validators(mock_validator.clone(), stateless_block_validator.clone())
+        .with_validators(mock_validator.clone(), mock_validator.clone(), stateless_block_validator.clone())
         .start(&mut runtime, temp_dir.path().join("bob").to_str().unwrap());
     let (mut alice_node, rules) = BaseNodeBuilder::new(network)
         .with_node_identity(alice_node_identity)
@@ -666,7 +666,7 @@ fn propagate_and_forward_invalid_block() {
 
         assert!(alice_node
             .outbound_nci
-            .propagate_block(NewBlock::from(&block1), vec![])
+            .propagate_block(NewBlock::from(&block1.block), vec![])
             .await
             .is_ok());
 
@@ -677,12 +677,12 @@ fn propagate_and_forward_invalid_block() {
             join!(bob_block_event_fut, carol_block_event_fut, dan_block_event_fut);
 
         if let BlockEvent::AddBlockFailed(received_block, _) = &*bob_block_event.unwrap().unwrap() {
-            assert_eq!(received_block.hash(), block1_hash);
+            assert_eq!(&received_block.hash(), block1_hash);
         } else {
             panic!("Bob's node should have detected an invalid block");
         }
         if let BlockEvent::AddBlockFailed(received_block, _) = &*carol_block_event.unwrap().unwrap() {
-            assert_eq!(received_block.hash(), block1_hash);
+            assert_eq!(&received_block.hash(), block1_hash);
         } else {
             panic!("Carol's node should have detected an invalid block");
         }
@@ -733,14 +733,14 @@ fn local_get_metadata() {
     let (mut node, consensus_manager) =
         BaseNodeBuilder::new(network).start(&mut runtime, temp_dir.path().to_str().unwrap());
     let db = &node.blockchain_db;
-    let block0 = db.fetch_block(0).unwrap().block().clone();
+    let block0 = db.fetch_block(0).unwrap().into_chain_block();
     let block1 = append_block(db, &block0, vec![], &consensus_manager, 1.into()).unwrap();
     let block2 = append_block(db, &block1, vec![], &consensus_manager, 1.into()).unwrap();
 
     runtime.block_on(async {
         let metadata = node.local_nci.get_metadata().await.unwrap();
         assert_eq!(metadata.height_of_longest_chain(), 2);
-        assert_eq!(metadata.best_block(), &block2.hash());
+        assert_eq!(metadata.best_block(), block2.hash());
 
         node.shutdown().await;
     });
@@ -810,7 +810,7 @@ fn local_submit_block() {
         let event = event_stream_next(&mut event_stream, Duration::from_millis(20000)).await;
         if let BlockEvent::ValidBlockAdded(received_block, result, _) = &*event.unwrap().unwrap() {
             assert_eq!(received_block.hash(), block1.hash());
-            assert_eq!(*result, BlockAddResult::Ok);
+            result.assert_added();
         } else {
             panic!("Block validation failed");
         }

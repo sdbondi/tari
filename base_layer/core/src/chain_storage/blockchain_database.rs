@@ -101,9 +101,14 @@ impl BlockAddResult {
         }
     }
 
-    pub fn assert_added(&self) {
-        if !self.is_added() {
-            panic!("Result was not added")
+    pub fn assert_added(&self) -> ChainBlock {
+        match self {
+            BlockAddResult::ChainReorg(added,removed) => {
+                panic!("Expected added result, but was reorg ({} added, {} removed)", added.len(),  removed.len())
+            },
+            BlockAddResult::Ok(b) => b.as_ref().clone(),
+            BlockAddResult::BlockExists => panic!("Expected added result, but was BlockExists"),
+            BlockAddResult::OrphanBlock => panic!("Expected added result, but was OrphanBlock"),
         }
     }
 
@@ -432,6 +437,17 @@ where B: BlockchainBackend
     {
         let db = self.db_read_access()?;
         db.fetch_header_and_accumulated_data(height)
+    }
+
+    /// Returns the block header at the given block height.
+    pub fn fetch_chain_header(
+        &self,
+        height: u64,
+    ) -> Result<ChainHeader, ChainStorageError>
+    {
+        let db = self.db_read_access()?;
+        let (header, accumulated_data ) =  db.fetch_header_and_accumulated_data(height)?;
+        Ok(ChainHeader{ header, accumulated_data })
     }
 
     /// Find the first matching header in a list of block hashes, returning the index of the match and the BlockHeader.

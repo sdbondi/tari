@@ -113,10 +113,10 @@ fn test_listening_lagging() {
         let mut bob_local_nci = bob_node.local_nci;
 
         // Bob Block 1 - no block event
-        let prev_block = append_block(&bob_db, &prev_block.block, vec![], &consensus_manager, 3.into()).unwrap();
+        let prev_block = append_block(&bob_db, &prev_block, vec![], &consensus_manager, 3.into()).unwrap();
         // Bob Block 2 - with block event and liveness service metadata update
         let prev_block = bob_db
-            .prepare_block_merkle_roots(chain_block(&prev_block, vec![], &consensus_manager))
+            .prepare_block_merkle_roots(chain_block(&prev_block.block, vec![], &consensus_manager))
             .unwrap();
         bob_local_nci
             .submit_block(prev_block, Broadcast::from(true))
@@ -141,7 +141,7 @@ fn test_event_channel() {
     let temp_dir = tempdir().unwrap();
     let mut runtime = Runtime::new().unwrap();
     let (node, consensus_manager) =
-        BaseNodeBuilder::new(Network::Rincewind).start(&mut runtime, temp_dir.path().to_str().unwrap());
+        BaseNodeBuilder::new(Network::Ridcully).start(&mut runtime, temp_dir.path().to_str().unwrap());
     // let shutdown = Shutdown::new();
     let db = create_test_blockchain_db();
     let shutdown = Shutdown::new();
@@ -159,6 +159,7 @@ fn test_event_channel() {
         SyncValidators::new(MockValidator::new(true), MockValidator::new(true)),
         status_event_sender,
         state_change_event_publisher,
+        RandomXFactory::default(),
         consensus_manager.clone(),
         shutdown.to_signal(),
     );

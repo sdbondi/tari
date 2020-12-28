@@ -164,18 +164,18 @@ mod test {
     #[test]
     fn ridcully_genesis_sanity_check() {
         let block = get_ridcully_genesis_block();
-        assert_eq!(block.body.outputs().len(), 4001);
+        assert_eq!(block.block.body.outputs().len(), 4001);
 
         let factories = CryptoFactories::default();
-        let coinbase = block.body.outputs().first().unwrap();
+        let coinbase = block.block.body.outputs().first().unwrap();
         assert!(coinbase.is_coinbase());
         coinbase.verify_range_proof(&factories.range_proof).unwrap();
-        assert_eq!(block.body.kernels().len(), 2);
-        for kernel in block.body.kernels() {
+        assert_eq!(block.block.body.kernels().len(), 2);
+        for kernel in block.block.body.kernels() {
             kernel.verify_signature().unwrap();
         }
 
-        let coinbase_kernel = block.body.kernels().first().unwrap();
+        let coinbase_kernel = block.block.body.kernels().first().unwrap();
         assert!(coinbase_kernel.features.contains(KernelFeatures::COINBASE_KERNEL));
     }
 }

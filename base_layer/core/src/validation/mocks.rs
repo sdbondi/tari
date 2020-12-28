@@ -29,7 +29,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use crate::validation::MempoolTransactionValidation;
+use crate::validation::{MempoolTransactionValidation, FinalHeaderStateValidation};
 use crate::transactions::transaction::Transaction;
 use tari_crypto::tari_utilities::Hashable;
 use crate::proof_of_work::sha3_difficulty;
@@ -124,19 +124,14 @@ impl MempoolTransactionValidation for MockValidator {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::validation::{mocks::MockValidator, Validation};
-
-    #[test]
-    fn mock_is_valid() {
-        let validator = MockValidator::new(true);
-        assert!(<MockValidator as Validation<_>>::validate(&validator, &()).is_ok());
-    }
-
-    #[test]
-    fn mock_is_invalid() {
-        let validator = MockValidator::new(false);
-        assert!(<MockValidator as Validation<_>>::validate(&validator, &()).is_err());
+impl FinalHeaderStateValidation for MockValidator {
+    fn validate(&self, header: &BlockHeader) -> Result<(), ValidationError> {
+        if self.is_valid.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom_error(
+                "This mock validator always returns an error",
+            ))
+        }
     }
 }

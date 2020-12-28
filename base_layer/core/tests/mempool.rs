@@ -70,7 +70,7 @@ fn test_insert_and_process_published_block() {
     let network = Network::LocalNet;
     let (mut store, mut blocks, mut outputs, consensus_manager) = create_new_blockchain(network);
     let mempool_validator = TxInputAndMaturityValidator::new(store.clone());
-    let mempool = Mempool::new(MempoolConfig::default(), Box::new(mempool_validator));
+    let mempool = Mempool::new(MempoolConfig::default(), Arc::new(mempool_validator));
     // Create a block with 4 outputs
     let txs = vec![txn_schema!(
         from: vec![outputs[0][0].clone()],
@@ -108,7 +108,7 @@ fn test_insert_and_process_published_block() {
     mempool.insert(tx2.clone()).unwrap();
     mempool.insert(tx3.clone()).unwrap();
     mempool.insert(tx5.clone()).unwrap();
-    mempool.process_published_block(blocks[1].clone().into()).unwrap();
+    mempool.process_published_block(blocks[1].block.clone().into()).unwrap();
 
     assert_eq!(
         mempool
@@ -154,7 +154,7 @@ fn test_insert_and_process_published_block() {
 
     // Spend tx2, so it goes in Reorg pool
     generate_block(&mut store, &mut blocks, vec![tx2.deref().clone()], &consensus_manager).unwrap();
-    mempool.process_published_block(blocks[2].clone().into()).unwrap();
+    mempool.process_published_block(blocks[2].block.clone().into()).unwrap();
 
     assert_eq!(
         mempool
@@ -202,14 +202,14 @@ fn test_retrieve() {
     let network = Network::LocalNet;
     let (mut store, mut blocks, mut outputs, consensus_manager) = create_new_blockchain(network);
     let mempool_validator = TxInputAndMaturityValidator::new(store.clone());
-    let mempool = Mempool::new(MempoolConfig::default(), Box::new(mempool_validator));
+    let mempool = Mempool::new(MempoolConfig::default(), Arc::new(mempool_validator));
     let txs = vec![txn_schema!(
         from: vec![outputs[0][0].clone()],
         to: vec![1 * T, 1 * T, 1 * T, 1 * T, 1 * T, 1 * T, 1 * T]
     )];
     // "Mine" Block 1
     generate_new_block(&mut store, &mut blocks, &mut outputs, txs, &consensus_manager).unwrap();
-    mempool.process_published_block(blocks[1].clone().into()).unwrap();
+    mempool.process_published_block(blocks[1].block.clone().into()).unwrap();
     // 1-Block, 8 UTXOs, empty mempool
     let txs = vec![
         txn_schema!(from: vec![outputs[1][0].clone()], to: vec![], fee: 30*uT),
@@ -250,9 +250,8 @@ fn test_retrieve() {
     ];
     // "Mine" block 2
     generate_block(&mut store, &mut blocks, block2_txns, &consensus_manager).unwrap();
-    println!("{}", blocks[2]);
     outputs.push(utxos);
-    mempool.process_published_block(blocks[2].clone().into()).unwrap();
+    mempool.process_published_block(blocks[2].block.clone().into()).unwrap();
     // 2-blocks, 2 unconfirmed txs in mempool
     let stats = mempool.stats().unwrap();
     assert_eq!(stats.unconfirmed_txs, 2);
@@ -288,12 +287,12 @@ fn test_reorg() {
     let network = Network::LocalNet;
     let (mut db, mut blocks, mut outputs, consensus_manager) = create_new_blockchain(network);
     let mempool_validator = TxInputAndMaturityValidator::new(db.clone());
-    let mempool = Mempool::new(MempoolConfig::default(), Box::new(mempool_validator));
+    let mempool = Mempool::new(MempoolConfig::default(), Arc::new(mempool_validator));
 
     // "Mine" Block 1
     let txs = vec![txn_schema!(from: vec![outputs[0][0].clone()], to: vec![1 * T, 1 * T])];
     generate_new_block(&mut db, &mut blocks, &mut outputs, txs, &consensus_manager).unwrap();
-    mempool.process_published_block(blocks[1].clone().into()).unwrap();
+    mempool.process_published_block(blocks[1].block.clone().into()).unwrap();
 
     // "Mine" block 2
     let schemas = vec![
@@ -310,7 +309,7 @@ fn test_reorg() {
     assert_eq!(stats.unconfirmed_txs, 3);
     let txns2 = txns2.iter().map(|t| t.deref().clone()).collect();
     generate_block(&mut db, &mut blocks, txns2, &consensus_manager).unwrap();
-    mempool.process_published_block(blocks[2].clone().into()).unwrap();
+    mempool.process_published_block(blocks[2].block.clone().into()).unwrap();
 
     // "Mine" block 3
     let schemas = vec![
@@ -332,7 +331,7 @@ fn test_reorg() {
         &consensus_manager,
     )
     .unwrap();
-    mempool.process_published_block(blocks[3].clone().into()).unwrap();
+    mempool.process_published_block(blocks[3].block.clone().into()).unwrap();
 
     let stats = mempool.stats().unwrap();
     assert_eq!(stats.unconfirmed_txs, 0);
@@ -341,11 +340,11 @@ fn test_reorg() {
 
     db.rewind_to_height(2).unwrap();
 
-    let template = chain_block(&blocks[2], vec![], &consensus_manager);
+    let template = chain_block(&blocks[2].block, vec![], &consensus_manager);
     let reorg_block3 = db.prepare_block_merkle_roots(template).unwrap();
 
     mempool
-        .process_reorg(vec![blocks[3].clone().into()], vec![reorg_block3.into()])
+        .process_reorg(vec![blocks[3].block.clone().into()], vec![reorg_block3.into()])
         .unwrap();
     let stats = mempool.stats().unwrap();
     assert_eq!(stats.unconfirmed_txs, 2);
@@ -353,7 +352,7 @@ fn test_reorg() {
     assert_eq!(stats.reorg_txs, 3);
 
     // "Mine" block 4
-    let template = chain_block(&blocks[3], vec![], &consensus_manager);
+    let template = chain_block(&blocks[3].block, vec![], &consensus_manager);
     let reorg_block4 = db.prepare_block_merkle_roots(template).unwrap();
 
     // test that process_reorg can handle the case when removed_blocks is empty
@@ -381,7 +380,7 @@ fn test_orphaned_mempool_transactions() {
         &consensus_manager,
     )
     .unwrap();
-    store.add_block(blocks[1].clone().into()).unwrap();
+    store.add_block(blocks[1].block.clone().into()).unwrap();
     let schemas = vec![
         txn_schema!(from: vec![outputs[1][0].clone(), outputs[1][1].clone()], to: vec![], fee: 500*uT, lock: 1100, OutputFeatures::default()),
         txn_schema!(from: vec![outputs[1][2].clone()], to: vec![], fee: 300*uT, lock: 1700, OutputFeatures::default()),
@@ -398,7 +397,7 @@ fn test_orphaned_mempool_transactions() {
     let (txns2, _) = schema_to_transaction(&schemas.clone());
     generate_new_block(&mut miner, &mut blocks, &mut outputs, schemas, &consensus_manager).unwrap();
     let mempool_validator = TxInputAndMaturityValidator::new(store.clone());
-    let mempool = Mempool::new(MempoolConfig::default(), Box::new(mempool_validator));
+    let mempool = Mempool::new(MempoolConfig::default(), Arc::new(mempool_validator));
     // There are 2 orphan txs
     vec![txns[2].clone(), txns2[0].clone(), txns2[1].clone(), txns2[2].clone()]
         .into_iter()
@@ -409,10 +408,10 @@ fn test_orphaned_mempool_transactions() {
     let stats = mempool.stats().unwrap();
     assert_eq!(stats.total_txs, 4);
     assert_eq!(stats.unconfirmed_txs, 1);
-    store.add_block(blocks[1].clone().into()).unwrap();
-    store.add_block(blocks[2].clone().into()).unwrap();
-    mempool.process_published_block(blocks[1].clone().into()).unwrap();
-    mempool.process_published_block(blocks[2].clone().into()).unwrap();
+    store.add_block(blocks[1].block.clone().into()).unwrap();
+    store.add_block(blocks[2].block.clone().into()).unwrap();
+    mempool.process_published_block(blocks[1].block.clone().into()).unwrap();
+    mempool.process_published_block(blocks[2].block.clone().into()).unwrap();
     let stats = mempool.stats().unwrap();
     assert_eq!(stats.total_txs, 3);
     assert_eq!(stats.unconfirmed_txs, 1);
@@ -737,7 +736,7 @@ fn block_event_and_reorg_event_handling() {
     // These blocks are manually constructed to allow the block event system to be used.
     let mut block1 = bob
         .blockchain_db
-        .prepare_block_merkle_roots(chain_block(&block0, vec![tx1], &consensus_manager))
+        .prepare_block_merkle_roots(chain_block(&block0.block, vec![tx1], &consensus_manager))
         .unwrap();
     find_header_with_achieved_difficulty(&mut block1.header, Difficulty::from(1));
 

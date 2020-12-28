@@ -342,6 +342,7 @@ mod test {
         tari_utilities::hex::{from_hex, Hex},
     };
     use tari_test_utils::unpack_enum;
+    use crate::proof_of_work::randomx_factory::RandomXFactory;
 
     // This tests checks the hash of monero-rs
     #[test]
@@ -829,19 +830,13 @@ mod test {
         ))
         .unwrap();
         let key = from_hex("2aca6501719a5c7ab7d4acbc7cc5d277b57ad8c27c6830788c2d5a596308e5b1").unwrap();
+        let rx = RandomXFactory::default();
 
-        let difficulty = get_random_x_difficulty(&input, &key).unwrap();
+        let difficulty = get_random_x_difficulty(&input, &rx.create(&key).unwrap() ).unwrap();
         assert_eq!(
             difficulty.1.to_hex(),
             "f68fbc8cc85bde856cd1323e9f8e6f024483038d728835de2f8c014ff6260000"
         );
         assert_eq!(difficulty.0, 430603.into());
-    }
-
-    #[test]
-    fn test_remove_quotes() {
-        let key = "\"2aca6501719a5c7ab7d4acbc7cc5d277b57ad8c27c6830788c2d5a596308e5b1\"";
-        let key_bytes = from_hex(&key.replace("\"", ""));
-        assert!(key_bytes.is_ok());
     }
 }
