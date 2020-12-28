@@ -755,29 +755,6 @@ fn store_and_retrieve_blocks() {
 }
 
 #[test]
-fn store_and_retrieve_chain_and_orphan_blocks_with_hashes() {
-    let validators = Validators::new(MockValidator::new(true), MockValidator::new(true), MockValidator::new(true));
-    let network = Network::LocalNet;
-    let rules = ConsensusManagerBuilder::new(network).build();
-    let db = create_test_db();
-    let store = BlockchainDatabase::new(db, &rules, validators, BlockchainDatabaseConfig::default(), false).unwrap();
-
-    let block0 = store.fetch_block(0).unwrap().clone();
-    let block1 = append_block(&store, &block0.clone().into_chain_block(), vec![], &rules, 1.into()).unwrap();
-    let orphan = create_orphan_block(10, vec![], &rules);
-    let mut txn = DbTransaction::new();
-    txn.insert_orphan(orphan.clone().into());
-    assert!(store.commit(txn).is_ok());
-
-    let hash0 = block0.hash();
-    let hash1 = block1.hash();
-    let hash2 = orphan.hash();
-    assert_eq!(store.fetch_block_by_hash(hash0.clone()).unwrap().unwrap().into_block(), block0.into_block());
-    assert_eq!(store.fetch_block_by_hash(hash1.clone()).unwrap().unwrap().into_chain_block(), block1);
-    assert_eq!(store.fetch_block_by_hash(hash2).unwrap().unwrap().into_block(), orphan);
-}
-
-#[test]
 // Ignore while pruned mode is not working
 #[ignore]
 fn store_and_retrieve_blocks_from_contents() {
