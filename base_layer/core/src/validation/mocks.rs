@@ -31,6 +31,7 @@ use std::sync::{
 };
 use crate::validation::MempoolTransactionValidation;
 use crate::transactions::transaction::Transaction;
+use tari_crypto::tari_utilities::Hashable;
 
 #[derive(Clone)]
 pub struct MockValidator {
@@ -85,12 +86,18 @@ impl<B: BlockchainBackend> HeaderValidation<B> for MockValidator {
     fn validate(
         &self,
         _db: &B,
-        _header: &BlockHeader,
-        _previous_data: &BlockHeaderAccumulatedData,
+        header: &BlockHeader,
+        previous_data: &BlockHeaderAccumulatedData,
     ) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError>
     {
         if self.is_valid.load(Ordering::SeqCst) {
-            Ok(BlockHeaderAccumulatedDataBuilder::default())
+
+            let accum_data = BlockHeaderAccumulatedDataBuilder::default()
+                .hash(header.hash())
+                .target_difficulty(1.into())
+                .achieved_difficulty(previous_data, header.pow_algo(), 1.into()).total_kernel_offset(&previous_data.total_kernel_offset, &header.total_kernel_offset);
+
+            Ok(accum_data)
         } else {
             Err(ValidationError::custom_error(
                 "This mock validator always returns an error",

@@ -64,6 +64,7 @@ use crate::transactions::types::CryptoFactories;
 use crate::proof_of_work::randomx_factory::RandomXFactory;
 use crate::validation::block_validators::{FullConsensusValidator, OrphanBlockValidator};
 use crate::validation::header_validator::HeaderValidator;
+use crate::validation::mocks::MockValidator;
 
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
@@ -106,7 +107,8 @@ pub fn create_store_with_consensus(rules: &ConsensusManager) -> BlockchainDataba
             rules.clone(),
             rx.clone()
         ),
-        HeaderValidator::new(rules.clone(), rx),
+        // HeaderValidator::new(rules.clone(), rx),
+        MockValidator::new(true),
         OrphanBlockValidator::new(rules.clone(), factories),
     );
     create_store_with_consensus_and_validators(rules, validators)
