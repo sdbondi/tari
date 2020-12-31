@@ -53,6 +53,8 @@ message BlockHeader {
     uint64 nonce = 10;
     // Proof of work metadata
     ProofOfWork pow = 11;
+    // Kernel MMR size
+    uint64 kernel_mmr_size = 12;
 }
 
 // Metadata required for validating the Proof of Work calculation
@@ -262,5 +264,5 @@ message Peer{
     /// used as information for more efficient protocol negotiation.
     repeated bytes supported_protocols = 11;
     /// User agent advertised by the peer
-    string user_agent = 12; 
+    string user_agent = 12;
 }

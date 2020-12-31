@@ -91,7 +91,8 @@ pub trait BlockchainBackend: Send + Sync {
     fn fetch_inputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionInput>, ChainStorageError>;
 
     /// Fetches the total merkle mountain range node count upto the specified height.
-    fn fetch_mmr_node_count(&self, tree: MmrTree, height: u64) -> Result<u32, ChainStorageError>;
+    fn fetch_mmr_size(&self, tree: MmrTree) -> Result<u64, ChainStorageError>;
+
     /// Fetches the leaf node hash and its deletion status for the nth leaf node in the given MMR tree. The height
     /// parameter is used to select the point in history used for the node deletion status.
     fn fetch_mmr_node(

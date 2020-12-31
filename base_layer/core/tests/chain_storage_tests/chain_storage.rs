@@ -92,9 +92,7 @@ fn write_and_fetch_metadata() {
 
     let state = InProgressHorizonSyncState {
         metadata: metadata.clone(),
-        initial_rangeproof_checkpoint_count: 1,
-        initial_utxo_checkpoint_count: 2,
-        initial_kernel_checkpoint_count: 3,
+
     };
     store.set_horizon_sync_state(state).unwrap();
     let state = store.get_horizon_sync_state().unwrap().unwrap();

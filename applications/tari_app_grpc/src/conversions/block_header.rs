@@ -39,6 +39,7 @@ impl From<BlockHeader> for grpc::BlockHeader {
             output_mr: h.output_mr.clone(),
             range_proof_mr: h.range_proof_mr.clone(),
             kernel_mr: h.kernel_mr.clone(),
+            kernel_mmr_size: h.kernel_mmr_size,
             total_kernel_offset: Vec::from(h.total_kernel_offset.as_bytes()),
             nonce: h.nonce,
             pow: Some(grpc::ProofOfWork {
@@ -76,6 +77,7 @@ impl TryFrom<grpc::BlockHeader> for BlockHeader {
             output_mr: header.output_mr,
             range_proof_mr: header.range_proof_mr,
             kernel_mr: header.kernel_mr,
+            kernel_mmr_size: header.kernel_mmr_size,
             total_kernel_offset,
             nonce: header.nonce,
             pow,

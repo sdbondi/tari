@@ -100,6 +100,8 @@ pub struct BlockHeader {
     /// This is the MMR root of the kernels
     #[serde(with = "hash_serializer")]
     pub kernel_mr: BlockHash,
+    /// The number of MMR leaves in the kernel MMR
+    pub kernel_mmr_size: u64,
     /// Sum of kernel offsets for all kernels in this block.
     pub total_kernel_offset: BlindingFactor,
     /// Nonce increment used to mine this block.
@@ -119,6 +121,7 @@ impl BlockHeader {
             output_mr: vec![0; BLOCK_HASH_LENGTH],
             range_proof_mr: vec![0; BLOCK_HASH_LENGTH],
             kernel_mr: vec![0; BLOCK_HASH_LENGTH],
+            kernel_mmr_size: 0,
             total_kernel_offset: BlindingFactor::default(),
             nonce: 0,
             pow: ProofOfWork::default(),
@@ -139,6 +142,7 @@ impl BlockHeader {
             output_mr: vec![0; BLOCK_HASH_LENGTH],
             range_proof_mr: vec![0; BLOCK_HASH_LENGTH],
             kernel_mr: vec![0; BLOCK_HASH_LENGTH],
+            kernel_mmr_size: prev.kernel_mmr_size,
             total_kernel_offset: BlindingFactor::default(),
             nonce: 0,
             pow: ProofOfWork::default(),
@@ -215,6 +219,7 @@ impl From<NewBlockHeaderTemplate> for BlockHeader {
             output_mr: vec![],
             range_proof_mr: vec![],
             kernel_mr: vec![],
+            kernel_mmr_size: 0,
             total_kernel_offset: header_template.total_kernel_offset,
             nonce: 0,
             pow: header_template.pow,

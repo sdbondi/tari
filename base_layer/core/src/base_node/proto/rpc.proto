@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "transaction.proto";
 import "block.proto";
+import "mmr_tree.proto";
 
 package tari.base_node;
 
@@ -44,3 +45,6 @@ message FindChainSplitResponse {
   uint64 tip_height = 3;
 }
 
+message SyncKernelsRequest {
+  uint64 starting_from = 2;
+}

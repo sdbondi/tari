@@ -40,6 +40,7 @@ use std::fmt::{Display, Formatter};
 use tari_common_types::types::BlockHash;
 use tari_crypto::tari_utilities::Hashable;
 use thiserror::Error;
+use crate::chain_storage::MmrTree;
 
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum BlockValidationError {
@@ -49,6 +50,8 @@ pub enum BlockValidationError {
     InvalidInput,
     #[error("Mismatched MMR roots")]
     MismatchedMmrRoots,
+    #[error("MMR size for {mmr_tree} does not match. Expected: {expected}, received: {actual}")]
+    MismatchedMmrSize{mmr_tree: MmrTree, expected: u64, actual: u64},
     #[error("The block contains transactions that should have been cut through.")]
     NoCutThrough,
     #[error("The block weight is above the maximum")]
@@ -183,6 +186,7 @@ impl BlockBuilder {
             let (inputs, outputs, kernels) = tx.body.dissolve();
             self = self.add_inputs(inputs);
             self = self.add_outputs(outputs);
+            self.header.kernel_mmr_size += kernels.len() as u64;
             self = self.add_kernels(kernels);
             self.header.total_kernel_offset = self.header.total_kernel_offset + tx.offset;
         }
@@ -194,6 +198,7 @@ impl BlockBuilder {
         let (inputs, outputs, kernels) = tx.body.dissolve();
         self = self.add_inputs(inputs);
         self = self.add_outputs(outputs);
+        self.header.kernel_mmr_size+= kernels.len() as u64;
         self = self.add_kernels(kernels);
         self.header.total_kernel_offset = &self.header.total_kernel_offset + &tx.offset;
         self

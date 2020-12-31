@@ -220,8 +220,8 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_inputs_in_block(header_hash)
     }
 
-    fn fetch_mmr_node_count(&self, tree: MmrTree, height: u64) -> Result<u32, ChainStorageError> {
-        self.db.fetch_mmr_node_count(tree, height)
+    fn fetch_mmr_size(&self, tree: MmrTree) -> Result<u64, ChainStorageError> {
+        self.db.fetch_mmr_size(tree)
     }
 
     fn fetch_mmr_node(

@@ -20,38 +20,36 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use std::fmt::{Display, Formatter, Error};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Error, Formatter};
-use tari_common_types::chain_metadata::ChainMetadata;
+use std::convert::TryFrom;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InProgressHorizonSyncState {
-    pub metadata: ChainMetadata,
-    // pub initial_kernel_checkpoint_count: u64,
-    // pub initial_utxo_checkpoint_count: u64,
-    // pub initial_rangeproof_checkpoint_count: u64,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
+pub enum MmrTree {
+    Utxo,
+    Kernel,
+    RangeProof,
 }
 
-impl InProgressHorizonSyncState {
-    pub fn new_with_metadata(metadata: ChainMetadata) -> Self {
-        Self {
-            metadata,
-            // initial_kernel_checkpoint_count: 0,
-            // initial_utxo_checkpoint_count: 0,
-            // initial_rangeproof_checkpoint_count: 0,
+impl Display for MmrTree {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            MmrTree::RangeProof => f.write_str("Range Proof"),
+            MmrTree::Utxo => f.write_str("UTXO"),
+            MmrTree::Kernel => f.write_str("Kernel"),
         }
     }
 }
 
-impl Display for InProgressHorizonSyncState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(
-            f,
-            "metadata = {}",
-            self.metadata,
-            // self.initial_kernel_checkpoint_count,
-            // self.initial_utxo_checkpoint_count,
-            // self.initial_rangeproof_checkpoint_count,
-        )
+impl TryFrom<i32> for MmrTree {
+    type Error = String;
+
+    fn try_from(v: i32) -> Result<Self, Self::Error> {
+        match v {
+            0 => Ok(MmrTree::Utxo),
+            1 => Ok(MmrTree::Kernel),
+            2 => Ok(MmrTree::RangeProof),
+            _ => Err("Invalid MmrTree".into()),
+        }
     }
 }

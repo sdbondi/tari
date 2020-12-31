@@ -410,10 +410,6 @@ where T: BlockchainBackend + 'static
                     block: Some(block),
                 })
             },
-            NodeCommsRequest::FetchMmrNodeCount(tree, height) => {
-                let node_count = self.blockchain_db.fetch_mmr_node_count(tree, height).await?;
-                Ok(NodeCommsResponse::MmrNodeCount(node_count))
-            },
             NodeCommsRequest::FetchMatchingMmrNodes(tree, pos, count, hist_height) => {
                 let mut added = Vec::<Vec<u8>>::with_capacity(count as usize);
                 let mut deleted = Bitmap::create();

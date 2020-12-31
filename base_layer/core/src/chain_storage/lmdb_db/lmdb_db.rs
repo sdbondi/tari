@@ -23,7 +23,7 @@ use crate::{
     blocks::{block_header::BlockHeader, Block},
     chain_storage::{
         accumulated_data::{BlockAccumulatedData, BlockHeaderAccumulatedData},
-        db_transaction::{DbKey, DbTransaction, DbValue, MetadataValue, MmrTree, WriteOperation},
+        db_transaction::{DbKey, DbTransaction, DbValue, MetadataValue, WriteOperation},
         error::ChainStorageError,
         lmdb_db::{
             lmdb::{
@@ -88,6 +88,7 @@ use tari_common_types::{
 use tari_crypto::tari_utilities::{hash::Hashable, hex::Hex, ByteArray};
 use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use tari_storage::lmdb_store::{db, LMDBBuilder, LMDBConfig, LMDBStore};
+use crate::chain_storage::MmrTree;
 
 type DatabaseRef = Arc<Database<'static>>;
 
@@ -923,20 +924,20 @@ impl BlockchainBackend for LMDBDatabase {
         )
     }
 
-    fn fetch_mmr_node_count(&self, _tree: MmrTree, _height: u64) -> Result<u32, ChainStorageError> {
-        debug!(target: LOG_TARGET, "Fetch MMR node count");
-        unimplemented!();
-        // let txn = ReadTransaction::new(&self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
-        // let tip_height = lmdb_len(&txn, &self.headers_db)?.saturating_sub(1) as u64;
-        // match tree {
-        //     MmrTree::Kernel => {
-        //         checkpoint_utils::fetch_mmr_nodes_added_count(&self.kernel_checkpoints, tip_height, height)
-        //     },
-        //     MmrTree::Utxo => checkpoint_utils::fetch_mmr_nodes_added_count(&self.utxo_checkpoints, tip_height,
-        // height),     MmrTree::RangeProof => {
-        //         checkpoint_utils::fetch_mmr_nodes_added_count(&self.range_proof_checkpoints, tip_height, height)
-        //     },
-        // }
+    fn fetch_mmr_size(&self, tree: MmrTree) -> Result<u64, ChainStorageError> {
+        let txn = ReadTransaction::new(&*self.env)?;
+        match tree {
+            MmrTree::Kernel => {
+                Ok(lmdb_len(&txn, &self.kernels_db)? as u64)
+            },
+            MmrTree::Utxo => {
+                Ok(lmdb_len(&txn, &self.utxos_db)? as u64)
+            },
+            MmrTree::RangeProof => {
+            //  lmdb_len(&txn, &self.utxo)
+                unimplemented!("Need to get rangeproof mmr size")
+            },
+        }
     }
 
     fn fetch_mmr_node(

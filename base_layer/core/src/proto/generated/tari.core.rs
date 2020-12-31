@@ -50,6 +50,9 @@ pub struct BlockHeader {
     /// Proof of work metadata
     #[prost(message, optional, tag = "11")]
     pub pow: ::std::option::Option<ProofOfWork>,
+    /// The size of the kernel MMR
+    #[prost(uint64, tag = "12")]
+    pub kernel_mmr_size: u64,
 }
 /// A Tari block. Blocks are linked together into a blockchain.
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -83,9 +83,6 @@ impl TryInto<ci::NodeCommsRequest> for ProtoNodeCommsRequest {
                 ci::NodeCommsRequest::GetNewBlockTemplate(PowAlgorithm::try_from(pow_algo)?)
             },
             GetNewBlock(block_template) => ci::NodeCommsRequest::GetNewBlock(block_template.try_into()?),
-            FetchMmrNodeCount(request) => {
-                ci::NodeCommsRequest::FetchMmrNodeCount(request.tree.try_into()?, request.height)
-            },
             FetchMatchingMmrNodes(request) => ci::NodeCommsRequest::FetchMatchingMmrNodes(
                 request.tree.try_into()?,
                 request.pos,
@@ -129,10 +126,6 @@ impl From<ci::NodeCommsRequest> for ProtoNodeCommsRequest {
             },
             GetNewBlockTemplate(pow_algo) => ProtoNodeCommsRequest::GetNewBlockTemplate(pow_algo as u64),
             GetNewBlock(block_template) => ProtoNodeCommsRequest::GetNewBlock(block_template.into()),
-            FetchMmrNodeCount(tree, height) => ProtoNodeCommsRequest::FetchMmrNodeCount(ProtoFetchMmrNodeCount {
-                tree: tree as i32,
-                height,
-            }),
             FetchMatchingMmrNodes(tree, pos, count, hist_height) => {
                 ProtoNodeCommsRequest::FetchMatchingMmrNodes(ProtoFetchMmrNodes {
                     tree: tree as i32,

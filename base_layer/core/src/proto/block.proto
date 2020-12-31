@@ -43,6 +43,8 @@ message BlockHeader {
     uint64 nonce = 10;
     // Proof of work metadata
     ProofOfWork pow = 11;
+    // The size of the kernel MMR
+    uint64 kernel_mmr_size = 12;
 }
 
 // A Tari block. Blocks are linked together into a blockchain.

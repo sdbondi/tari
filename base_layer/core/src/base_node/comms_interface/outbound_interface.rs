@@ -284,25 +284,6 @@ impl OutboundNodeCommsInterface {
             })
     }
 
-    /// Fetches the total merkle mountain range node count upto the specified height from remote base nodes.
-    pub async fn fetch_mmr_node_count(
-        &mut self,
-        tree: MmrTree,
-        height: u64,
-        node_id: Option<NodeId>,
-    ) -> Result<u32, CommsInterfaceError>
-    {
-        if let NodeCommsResponse::MmrNodeCount(node_count) = self
-            .request_sender
-            .call((NodeCommsRequest::FetchMmrNodeCount(tree, height), node_id))
-            .await??
-        {
-            Ok(node_count)
-        } else {
-            Err(CommsInterfaceError::UnexpectedApiResponse)
-        }
-    }
-
     /// Fetches the set of leaf node hashes and their deletion status' for the nth to nth+count leaf node index in the
     /// given MMR tree.
     pub async fn fetch_mmr_nodes(

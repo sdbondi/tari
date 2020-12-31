@@ -35,6 +35,7 @@ use crate::{
         FindChainSplitResponse,
         SyncBlocksRequest,
         SyncHeadersRequest,
+        SyncKernelsRequest
     },
 };
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus, Streaming};
@@ -71,6 +72,9 @@ pub trait BaseNodeSyncService: Send + Sync + 'static {
         &self,
         request: Request<()>,
     ) -> Result<Response<proto::base_node::ChainMetadata>, RpcStatus>;
+
+    #[rpc(method = 6)]
+    async fn sync_kernels(&self, request: Request<SyncKernelsRequest>) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus>;
 }
 
 pub fn create_base_node_sync_rpc_service<B: BlockchainBackend + 'static>(

@@ -100,6 +100,7 @@ impl TryFrom<proto::BlockHeader> for BlockHeader {
             output_mr: header.output_mr,
             range_proof_mr: header.range_proof_mr,
             kernel_mr: header.kernel_mr,
+            kernel_mmr_size: header.kernel_mmr_size,
             total_kernel_offset,
             nonce: header.nonce,
             pow,
@@ -120,6 +121,7 @@ impl From<BlockHeader> for proto::BlockHeader {
             total_kernel_offset: header.total_kernel_offset.to_vec(),
             nonce: header.nonce,
             pow: Some(proto::ProofOfWork::from(header.pow)),
+            kernel_mmr_size: header.kernel_mmr_size
         }
     }
 }

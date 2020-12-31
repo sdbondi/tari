@@ -121,7 +121,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
         match (state, event) {
             (Starting(s), Initialized) => Listening(s.into()),
             (Listening(s), InitialSync) => HeaderSync(s.into()),
-            (HeaderSync(_), HeadersSynchronized(conn)) => BlockSync(states::BlockSync::with_peer(conn)),
+            (HeaderSync(_), HeadersSynchronized(conn)) => HorizonStateSync(states::HorizonStateSync::with_peer(conn)),
             (HeaderSync(s), HeaderSyncFailed) => Waiting(s.into()),
             (HorizonStateSync(s), HorizonStateSynchronized) => BlockSync(s.into()),
             (HorizonStateSync(s), HorizonStateSyncFailure) => Waiting(s.into()),

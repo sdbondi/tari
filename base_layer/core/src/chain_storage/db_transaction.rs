@@ -398,33 +398,3 @@ impl Display for DbKey {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
-pub enum MmrTree {
-    Utxo,
-    Kernel,
-    RangeProof,
-}
-
-impl Display for MmrTree {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            MmrTree::RangeProof => f.write_str("Range Proof"),
-            MmrTree::Utxo => f.write_str("UTXO"),
-            MmrTree::Kernel => f.write_str("Kernel"),
-        }
-    }
-}
-
-impl TryFrom<i32> for MmrTree {
-    type Error = String;
-
-    fn try_from(v: i32) -> Result<Self, Self::Error> {
-        match v {
-            0 => Ok(MmrTree::Utxo),
-            1 => Ok(MmrTree::Kernel),
-            2 => Ok(MmrTree::RangeProof),
-            _ => Err("Invalid MmrTree".into()),
-        }
-    }
-}

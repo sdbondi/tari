@@ -30,6 +30,7 @@ use crate::{
         FindChainSplitResponse,
         SyncBlocksRequest,
         SyncHeadersRequest,
+        SyncKernelsRequest
     },
 };
 use futures::{channel::mpsc, stream, SinkExt};
@@ -241,6 +242,10 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         });
 
         Ok(Streaming::new(rx))
+    }
+
+    async fn sync_kernels(&self, request: Request<SyncKernelsRequest>) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus> {
+        unimplemented!()
     }
 
     async fn get_header_by_height(

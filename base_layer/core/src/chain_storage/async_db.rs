@@ -147,7 +147,7 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     //---------------------------------- MMR --------------------------------------------//
     make_async_fn!(prepare_block_merkle_roots(template: NewBlockTemplate) -> Block, "create_block");
 
-    make_async_fn!(fetch_mmr_node_count(tree: MmrTree, height: u64) -> u32, "fetch_mmr_node_count");
+    make_async_fn!(fetch_mmr_size(tree: MmrTree) -> u64, "fetch_mmr_node_count");
 
     make_async_fn!(fetch_mmr_nodes(tree: MmrTree, pos: u32, count: u32, hist_height:Option<u64>) -> Vec<(Vec<u8>, bool)>, "fetch_mmr_nodes");
 

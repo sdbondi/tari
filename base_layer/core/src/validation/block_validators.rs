@@ -215,6 +215,17 @@ fn check_mmr_roots<B: BlockchainBackend>(block: &Block, db: &B) -> Result<(), Va
         );
         return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrRoots));
     };
+    if header.kernel_mmr_size != mmr_roots.kernel_mmr_size {
+        warn!(
+            target: LOG_TARGET,
+            "Block header kernel MMR size in {} does not match. Expected: {}, Actual:{}",
+            block.hash().to_hex(),
+            header.kernel_mmr_size,
+            mmr_roots.kernel_mmr_size
+        );
+        return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrSize{mmr_tree: MmrTree::Kernel, expected: mmr_roots.kernel_mmr_size, actual: header.kernel_mmr_size}));
+
+    }
     if header.output_mr != mmr_roots.output_mr {
         warn!(
             target: LOG_TARGET,

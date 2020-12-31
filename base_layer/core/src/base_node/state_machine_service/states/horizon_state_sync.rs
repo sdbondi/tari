@@ -31,8 +31,8 @@ pub use self::config::HorizonSyncConfig;
 mod error;
 pub use error::HorizonSyncError;
 
-mod state_sync;
-use state_sync::HorizonStateSynchronization;
+mod horizon_state_synchronization;
+use horizon_state_synchronization::HorizonStateSynchronization;
 
 use super::{BlockSyncInfo, StateEvent, StateInfo};
 use crate::{
@@ -41,31 +41,37 @@ use crate::{
 };
 use log::*;
 use tari_common_types::chain_metadata::ChainMetadata;
+use tari_comms::PeerConnection;
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sync";
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct HorizonStateSync {
-    pub local_metadata: ChainMetadata,
-    pub network_metadata: ChainMetadata,
-    pub sync_peers: SyncPeers,
-    pub sync_height: u64,
+    // pub local_metadata: ChainMetadata,
+    // pub network_metadata: ChainMetadata,
+    // pub sync_peer: SyncPeers,
+    // pub sync_height: u64,
+    sync_peer: PeerConnection,
 }
 
 impl HorizonStateSync {
-    pub fn new(
-        local_metadata: ChainMetadata,
-        network_metadata: ChainMetadata,
-        sync_peers: SyncPeers,
-        sync_height: u64,
-    ) -> Self
-    {
-        Self {
-            local_metadata,
-            network_metadata,
-            sync_peers,
-            sync_height,
-        }
+    // pub fn new(
+    //     local_metadata: ChainMetadata,
+    //     network_metadata: ChainMetadata,
+    //     sync_peers: SyncPeers,
+    //     sync_height: u64,
+    // ) -> Self
+    // {
+    //     Self {
+    //         local_metadata,
+    //         network_metadata,
+    //         sync_peers,
+    //         sync_height,
+    //     }
+    // }
+
+    pub fn with_peer(sync_peer: PeerConnection) -> Self {
+        Self { sync_peer }
     }
 
     pub async fn next_event<B: BlockchainBackend + 'static>(
@@ -73,35 +79,37 @@ impl HorizonStateSync {
         shared: &mut BaseNodeStateMachine<B>,
     ) -> StateEvent
     {
-        shared.set_state_info(StateInfo::HorizonSync(BlockSyncInfo::new(
-            self.network_metadata.height_of_longest_chain(),
-            self.local_metadata.height_of_longest_chain(),
-            self.sync_peers.iter().map(|p| p.node_id.clone()).collect(),
-        )));
+        // shared.set_state_info(StateInfo::HorizonSync(BlockSyncInfo::new(
+        //     self.network_metadata.height_of_longest_chain(),
+        //     self.local_metadata.height_of_longest_chain(),
+        //     self.sync_peers.iter().map(|p| p.node_id.clone()).collect(),
+        // )));
 
-        assert!(
-            self.local_metadata.is_pruned_node(),
-            "Entered horizon state sync but node is not in pruned mode"
-        );
+        // assert!(
+        //     self.local_metadata.is_pruned_node(),
+        //     "Entered horizon state sync but node is not in pruned mode"
+        // );
 
-        info!(
-            target: LOG_TARGET,
-            "Synchronizing horizon state to height {}. Network tip height is {}.",
-            self.sync_height,
-            self.network_metadata.height_of_longest_chain()
-        );
-        let local_tip_height = self.local_metadata.height_of_longest_chain();
-        if local_tip_height >= self.sync_height {
-            debug!(target: LOG_TARGET, "Horizon state already synchronized.");
-            return StateEvent::HorizonStateSynchronized;
-        }
-        debug!(
-            target: LOG_TARGET,
-            "Horizon sync starting to height {}", self.sync_height
-        );
+        // info!(
+        //     target: LOG_TARGET,
+        //     "Synchronizing horizon state to height {}. Network tip height is {}.",
+        //     self.sync_height,
+        //     self.network_metadata.height_of_longest_chain()
+        // );
+        // let local_tip_height = self.local_metadata.height_of_longest_chain();
+        // if local_tip_height >= self.sync_height {
+        //     debug!(target: LOG_TARGET, "Horizon state already synchronized.");
+        //     return StateEvent::HorizonStateSynchronized;
+        // }
+        // debug!(
+        //     target: LOG_TARGET,
+        //     "Horizon sync starting to height {}", self.sync_height
+        // );
 
+        let local_metadata = shared.db.get_chain_metadata().await.expect("TODO: Fix");
+        let sync_height = shared.db.fetch_last_header().await.expect("TODO: fix").height;
         let mut horizon_header_sync =
-            HorizonStateSynchronization::new(shared, &mut self.sync_peers, &self.local_metadata, self.sync_height);
+            HorizonStateSynchronization::new(shared, self.sync_peer.clone(), &local_metadata, sync_height);
         match horizon_header_sync.synchronize().await {
             Ok(()) => {
                 info!(target: LOG_TARGET, "Horizon state has synchronised.");
