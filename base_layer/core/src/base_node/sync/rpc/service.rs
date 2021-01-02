@@ -245,7 +245,44 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
     }
 
     async fn sync_kernels(&self, request: Request<SyncKernelsRequest>) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus> {
-        unimplemented!()
+        let req = request.into_message();
+        const BATCH_SIZE: usize = 1000;
+        let (mut tx, rx) = mpsc::channel(BATCH_SIZE);
+        let db = self.db();
+
+        task::spawn(async move {
+            let iter = NonOverlappingIntegerPairIter::new(
+                req.start,
+                req.end,
+                BATCH_SIZE,
+            );
+            for (start, end) in iter {
+                if tx.is_closed() {
+                    break;
+                }
+                let res = db.fetch_kernels_by_mmr_position(start, end).await
+                    .map_err(RpcStatus::log_internal_error(LOG_TARGET));
+                match res {
+                    Ok(kernels) if kernels.is_empty() => {
+                        break;
+                    },
+                    Ok(kernels) => {
+                        let mut kernels =
+                            stream::iter(kernels.into_iter().map(proto::types::TransactionKernel::from).map(Ok).map(Ok));
+                        // Ensure task stops if the peer prematurely stops their RPC session
+                        if tx.send_all(&mut kernels).await.is_err() {
+                            break;
+                        }
+                    },
+                    Err(err) => {
+                        let _ = tx.send(Err(err)).await;
+                        break;
+                    },
+                }
+
+            }
+        });
+        Ok(Streaming::new(rx))
     }
 
     async fn get_header_by_height(

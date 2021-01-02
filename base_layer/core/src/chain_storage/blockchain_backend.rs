@@ -81,6 +81,9 @@ pub trait BlockchainBackend: Send + Sync {
         excess_sig: &Signature,
     ) -> Result<Option<(TransactionKernel, HashOutput)>, ChainStorageError>;
 
+    /// Fetch kernels by MMR position
+    fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError>;
+
     /// Fetch a specific output. Returns the output and the leaf index in the output MMR
     fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<(TransactionOutput, u32)>, ChainStorageError>;
 

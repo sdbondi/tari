@@ -166,8 +166,10 @@ pub struct FindChainSplitResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncKernelsRequest {
+    #[prost(uint64, tag = "1")]
+    pub start: u64,
     #[prost(uint64, tag = "2")]
-    pub starting_from: u64,
+    pub end: u64,
 }
 /// Request type for a received BaseNodeService request.
 #[derive(Clone, PartialEq, ::prost::Message)]

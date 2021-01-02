@@ -49,6 +49,7 @@ pub struct BaseNodeStateMachineConfig {
     pub horizon_sync_config: HorizonSyncConfig,
     pub sync_peer_config: SyncPeerConfig,
     pub orphan_db_clean_out_threshold: usize,
+    pub pruning_horizon: u64
 }
 
 /// A Tari full node, aka Base Node.
@@ -121,7 +122,13 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
         match (state, event) {
             (Starting(s), Initialized) => Listening(s.into()),
             (Listening(s), InitialSync) => HeaderSync(s.into()),
-            (HeaderSync(_), HeadersSynchronized(conn)) => HorizonStateSync(states::HorizonStateSync::with_peer(conn)),
+            (HeaderSync(_), HeadersSynchronized(conn)) => {
+                if self.config.pruning_horizon > 0 {
+                    HorizonStateSync(states::HorizonStateSync::with_peer(conn))
+                } else {
+                    BlockSync(states::BlockSync::with_peer(conn))
+                }
+            },
             (HeaderSync(s), HeaderSyncFailed) => Waiting(s.into()),
             (HorizonStateSync(s), HorizonStateSynchronized) => BlockSync(s.into()),
             (HorizonStateSync(s), HorizonStateSyncFailure) => Waiting(s.into()),

@@ -404,6 +404,11 @@ impl<B> BlockchainDatabase<B>
         db.fetch_kernel_by_excess_sig(&excess_sig)
     }
 
+    pub fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError> {
+        let db= self.db_read_access()?;
+        db.fetch_kernels_by_mmr_position(start, end)
+    }
+
     /// Returns the block header at the given block height.
     pub fn fetch_header(&self, height: u64) -> Result<Option<BlockHeader>, ChainStorageError> {
         let db = self.db_read_access()?;
@@ -1727,6 +1732,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
         }
     }
 
+    // TODO: We already have the first link in this chain, can be optimized to exclude it
     let reorg_chain = get_orphan_link_main_chain(db, &fork_header.accumulated_data.hash)?;
     // }
     let fork_height = reorg_chain
@@ -1738,7 +1744,9 @@ fn handle_possible_reorg<T: BlockchainBackend>(
         1;
 
     let num_added_blocks = reorg_chain.len();
-    let removed_blocks = reorganize_chain(db, block_validator, fork_height, &reorg_chain)?;
+    let removed_blocks =
+        reorganize_chain(db, block_validator, fork_height, tip_header.height(), &reorg_chain)?;
+
     let num_removed_blocks = removed_blocks.len();
 
     // reorg is required when any blocks are removed or more than one are added
@@ -1775,10 +1783,15 @@ fn reorganize_chain<T: BlockchainBackend>(
     backend: &mut T,
     block_validator: &dyn PostOrphanBodyValidation<T>,
     height: u64,
+    current_tip_height: u64,
     chain: &VecDeque<Arc<ChainBlock>>,
 ) -> Result<Vec<Arc<ChainBlock>>, ChainStorageError>
 {
-    let removed_blocks = rewind_to_height(backend, height)?;
+    let removed_blocks = if height < current_tip_height {
+        rewind_to_height(backend, height)?
+    }else {
+        vec![]
+    };
     debug!(
         target: LOG_TARGET,
         "Validate and add {} chain block(s) from height {}. Rewound blocks: [{}]",

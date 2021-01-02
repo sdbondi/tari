@@ -208,6 +208,10 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_kernel_by_excess_sig(excess_sig)
     }
 
+    fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError> {
+        self.db.fetch_kernels_by_mmr_position(start, end)
+    }
+
     fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<(TransactionOutput, u32)>, ChainStorageError> {
         self.db.fetch_output(output_hash)
     }

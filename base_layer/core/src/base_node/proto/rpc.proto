@@ -46,5 +46,6 @@ message FindChainSplitResponse {
 }
 
 message SyncKernelsRequest {
-  uint64 starting_from = 2;
+  uint64 start = 1;
+  uint64 end = 2;
 }

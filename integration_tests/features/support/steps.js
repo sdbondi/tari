@@ -45,6 +45,14 @@ Given(/I have a base node (.*) connected to node (.*)/, {timeout: 20*1000}, asyn
     await sleep(1000);
 });
 
+Given(/I have a pruned node (.*) connected to node (.*)/, {timeout: 20*1000}, async function (name, node) {
+    const miner =  new BaseNodeProcess(name, { pruningHorizon: 1});
+    miner.setPeerSeeds([this.nodes[node].peerAddress()]);
+    await miner.startNew();
+    this.addNode(name, miner);
+    await sleep(1000);
+});
+
 Given(/I have a base node (.*) unconnected/, {timeout: 20*1000}, async function (name) {
     const node = new BaseNodeProcess(name);
     await node.startNew();

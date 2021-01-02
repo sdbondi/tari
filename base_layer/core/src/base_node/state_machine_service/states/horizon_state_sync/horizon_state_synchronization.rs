@@ -119,7 +119,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
 
         let remote_num_kernels = header.kernel_mmr_size;
 
-
         if local_num_kernels >= remote_num_kernels {
             debug!(target: LOG_TARGET, "Local kernel set already synchronized");
             return Ok(());
@@ -133,13 +132,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
             remote_num_kernels - local_num_kernels,
         );
 
-        let chunks = self.chunked_count_iter(
-            local_num_kernels,
-            remote_num_kernels,
-            config.max_kernel_mmr_node_request_size,
-        );
-        for (pos, count) in chunks {
-            self.sync_kernel_nodes(pos, count).await?;
+            self.sync_kernel_nodes(local_num_kernels, remote_num_kernels).await?;
 
                 // let (kernel_hashes, _, sync_peer1) = helpers::request_mmr_nodes(
                 //     LOG_TARGET,
@@ -188,7 +181,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                 //         }
                 //     },
                 //     Err(e) => return Err(e),
-                };
                 // debug!(
                 //     target: LOG_TARGET,
                 //     "Retrying kernel sync. Attempt {} of {}", attempt, config.max_sync_request_retry_attempts
@@ -205,7 +197,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         unimplemented!()
     }
 
-    async fn sync_kernel_nodes(&mut self, pos: u64, count: u64) -> Result<(), HorizonSyncError> {
+    async fn sync_kernel_nodes(&mut self, start: u64, end: u64) -> Result<(), HorizonSyncError> {
         let peer = self.sync_peer.peer_node_id().clone();
         let mut client = self.sync_peer.connect_rpc::<rpc::BaseNodeSyncRpcClient>().await?;
         let latency = client.get_last_request_latency().await?;
@@ -217,7 +209,8 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         );
 
         let req = SyncKernelsRequest {
-            starting_from:pos
+            start,
+            end
         };
         let mut  kernel_stream = client.sync_kernels(req).await?;
         while let Some(kernel_chunk) = kernel_stream.next().await {

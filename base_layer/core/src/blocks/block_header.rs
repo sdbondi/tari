@@ -237,6 +237,7 @@ impl Hashable for BlockHeader {
             .chain(self.output_mr.as_bytes())
             .chain(self.range_proof_mr.as_bytes())
             .chain(self.kernel_mr.as_bytes())
+            .chain(self.kernel_mmr_size.to_le_bytes())
             .chain(self.total_kernel_offset.as_bytes())
             .chain(self.nonce.to_le_bytes())
             .chain(self.pow.to_bytes())
@@ -265,10 +266,11 @@ impl Display for BlockHeader {
         );
         fmt.write_str(&msg)?;
         let msg = format!(
-            "Merkle roots:\nOutputs: {}\nRange proofs: {}\nKernels: {}\n",
+            "Merkle roots:\nOutputs: {}\nRange proofs: {}\nKernels: {} ({})\n",
             self.output_mr.to_hex(),
             self.range_proof_mr.to_hex(),
-            self.kernel_mr.to_hex()
+            self.kernel_mr.to_hex(),
+            self.kernel_mmr_size
         );
         fmt.write_str(&msg)?;
         fmt.write_str(&format!(

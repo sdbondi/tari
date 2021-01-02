@@ -36,6 +36,8 @@ use lmdb_zero::{
 };
 use log::*;
 use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Display;
+
 pub const LOG_TARGET: &str = "c::cs::lmdb_db::lmdb";
 
 // TODO: Calling `access` for every lmdb operation has some overhead (an atomic read and set). Check if is possible to
@@ -294,6 +296,30 @@ where
         }
     }
     Ok(result)
+}
+
+pub fn lmdb_first_after<K, V>(
+    txn: &ConstTransaction<'_>,
+    db: &Database,
+    key: &K,
+) -> Result<Option<V>, ChainStorageError>
+    where
+        K: AsLmdbBytes + ?Sized + FromLmdbBytes,
+        V: DeserializeOwned,
+{
+    let access = txn.access();
+    let mut cursor = txn.cursor(db).map_err(|e| {
+        error!(target: LOG_TARGET, "Could not get read cursor from lmdb: {:?}", e);
+        ChainStorageError::AccessError(e.to_string())
+    })?;
+
+    match cursor.seek_range_k(&access, key) {
+        Ok(r) => {
+            let val = deserialize::<V>(r.1)?;
+            Ok(Some(val))
+        },
+        Err(_) => Ok(None)
+    }
 }
 
 // pub fn lmdb_list_keys(txn: &ConstTransaction<'_>, db: &Database) -> Result<Vec<Vec<u8>>, ChainStorageError> {
