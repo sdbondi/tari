@@ -73,6 +73,7 @@ pub fn get_ridcully_genesis_block() -> ChainBlock {
     block.header.output_mr = from_hex("a939fda2579fb0b6fd906111f61e37c5ea23eccd8b737eb7da517fde71a98078").unwrap();
     block.header.range_proof_mr = from_hex("90a557390ce185318375546cb1244ffda3bb62274cce591880e2d012c38b1755").unwrap();
     block.header.kernel_mr = from_hex("f5e08e66e9c0e5e3818d96a694f4f6eafd689f38cea2e52e771eab2cc7a3941a").unwrap();
+    block.header.kernel_mmr_size += 1;
     block.body.add_outputs(&mut utxos);
     block.body.add_kernels(&mut vec![kernel.unwrap()]);
     let accumulated_data = BlockHeaderAccumulatedData {

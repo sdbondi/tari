@@ -46,6 +46,8 @@ pub use blockchain_database::{
     fetch_header,
     fetch_headers,
     fetch_target_difficulty,
+    // TODO: This should be removed
+    include_legacy_deleted_hash,
     BlockAddResult,
     BlockchainDatabase,
     BlockchainDatabaseConfig,

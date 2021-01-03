@@ -41,9 +41,15 @@ use log::*;
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_crypto::tari_utilities::Hashable;
 use tari_comms::PeerConnection;
-use crate::chain_storage::ChainStorageError;
+use crate::chain_storage::{ChainStorageError, include_legacy_deleted_hash};
 use crate::proto::generated::base_node::SyncKernelsRequest;
 use futures::StreamExt;
+use std::convert::TryInto;
+use tari_mmr::MerkleMountainRange;
+use crate::transactions::types::HashDigest;
+use crate::validation::ValidationError;
+use crate::blocks::BlockValidationError;
+use tari_crypto::tari_utilities::hex::Hex;
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sync";
 
@@ -79,12 +85,14 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                 Ok(_) => Ok(()),
                 Err(err) if err.is_recoverable() => Err(err),
                 Err(err) => {
+                    warn!(target: LOG_TARGET, "Error during sync:{}", err);
                     self.rollback().await?;
                     Err(err)
                 },
             },
             Err(err) if err.is_recoverable() => Err(err),
             Err(err) => {
+                warn!(target: LOG_TARGET, "Error during sync:{}", err);
                 self.rollback().await?;
                 Err(err)
             },
@@ -213,8 +221,45 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
             end
         };
         let mut  kernel_stream = client.sync_kernels(req).await?;
-        while let Some(kernel_chunk) = kernel_stream.next().await {
 
+        let mut current_header = self.shared.db.fetch_header_containing_kernel_mmr(start + 1).await?;
+        debug!(target: LOG_TARGET, "Found current header in progress for kernels at mmr pos: {} height:{}", start, current_header.height());
+        // TODO: Allow for partial block kernels to be downloaded (maybe)
+        let mut kernels = vec![];
+        // let block = self.shared.db.fetch_block(current_header.height()).await?;
+        // let (_, _, mut kernels) = block.block.body.dissolve();
+        // debug!(target: LOG_TARGET, "{} of {} kernels have already been downloaded for this header", kernels.len(), current_header.header.kernel_mmr_size);
+        let mut txn =  self.shared.db.write_transaction();
+        let mut mmr_position = start;
+        while let Some(kernel) = kernel_stream.next().await {
+           let kernel : TransactionKernel = kernel?.try_into().map_err(HorizonSyncError::ConversionError)?;
+            debug!(target: LOG_TARGET, "Kernel received from sync peer: {}", kernel);
+           kernels.push(kernel.clone());
+           txn.insert_kernel_via_horizon_sync(kernel, current_header.hash().clone(), mmr_position as u32);
+            // TODO: validate kernel
+            if mmr_position == current_header.header.kernel_mmr_size - 1 {
+
+                // Validate root
+                let block_data =self.shared.db.fetch_block_accumulated_data(current_header.header.prev_hash.clone()).await?;
+                let kernel_pruned_set = block_data.dissolve().0;
+                debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_pruned_set);
+                let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernel_pruned_set);
+
+                for kernel in kernels.iter() {
+                    kernel_mmr.push(kernel.hash())?;
+                }
+                debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_mmr.get_pruned_hash_set()?);
+                let mmr_root = include_legacy_deleted_hash(kernel_mmr.get_merkle_root()?);
+                if mmr_root != current_header.header.kernel_mr {
+                    debug!(target: LOG_TARGET, "MMR did not match for kernels, {} != {}", mmr_root.to_hex(), current_header.header.kernel_mr.to_hex());
+                   return Err(HorizonSyncError::InvalidMmrRoot(MmrTree::Kernel));
+                }
+
+               // txn.update_kernel_pruned_hash_set(current_header.hash(), kernel_mmr.get_pruned_hash_set()?);
+                txn.commit().await?;
+                current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
+            }
+            mmr_position+=1;
         }
 
         unimplemented!()

@@ -55,6 +55,8 @@ pub trait BlockchainBackend: Send + Sync {
 
     fn fetch_chain_header_in_all_chains(&self, hash: &HashOutput) -> Result<Option<ChainHeader>, ChainStorageError>;
 
+    fn fetch_header_containing_kernel_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError>;
+
     /// Used to determine if the database is empty, i.e. a brand new database.
     /// This is called to decide if the genesis block should be created.
     fn is_empty(&self) -> Result<bool, ChainStorageError>;

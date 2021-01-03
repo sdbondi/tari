@@ -439,6 +439,10 @@ impl<B> BlockchainDatabase<B>
         })
     }
 
+    pub fn fetch_header_containing_kernel_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
+        let db= self.db_read_access()?;
+        db.fetch_header_containing_kernel_mmr(mmr_position)
+    }
     /// Find the first matching header in a list of block hashes, returning the index of the match and the BlockHeader.
     /// Or None if not found.
     pub fn find_headers_after_hash<I: IntoIterator<Item=HashOutput>>(
@@ -586,12 +590,12 @@ impl<B> BlockchainDatabase<B>
 
     /// Returns the sum of all UTXO commitments
     pub fn fetch_utxo_commitment_sum(&self, at_hash: &HashOutput) -> Result<Commitment, ChainStorageError> {
-        Ok(self.fetch_block_accumulated_data(at_hash)?.total_utxo_sum)
+        Ok(self.fetch_block_accumulated_data(at_hash.clone())?.total_utxo_sum)
     }
 
     /// Returns the sum of all kernels
     pub fn fetch_kernel_commitment_sum(&self, at_hash: &HashOutput) -> Result<Commitment, ChainStorageError> {
-        Ok(self.fetch_block_accumulated_data(at_hash)?.total_kernel_sum)
+        Ok(self.fetch_block_accumulated_data(at_hash.clone())?.total_kernel_sum)
     }
 
     /// Returns `n` hashes from height _h - offset_ where _h_ is the tip header height back to `h - n - offset`.
@@ -618,9 +622,9 @@ impl<B> BlockchainDatabase<B>
         Ok(headers.into_iter().map(|h| h.hash()).rev().collect())
     }
 
-    fn fetch_block_accumulated_data(&self, at_hash: &HashOutput) -> Result<BlockAccumulatedData, ChainStorageError> {
+    pub fn fetch_block_accumulated_data(&self, at_hash: HashOutput) -> Result<BlockAccumulatedData, ChainStorageError> {
         let db = self.db_read_access()?;
-        db.fetch_block_accumulated_data(at_hash)?
+        db.fetch_block_accumulated_data(&at_hash)?
             .ok_or_else(|| ChainStorageError::ValueNotFound {
                 entity: "BlockAccumulatedData".to_string(),
                 field: "at_ha".to_string(),
@@ -1342,7 +1346,7 @@ fn insert_block(txn: &mut DbTransaction, block: Arc<ChainBlock>) -> Result<(), C
     Ok(())
 }
 
-fn include_legacy_deleted_hash(mmr_root: HashOutput) -> HashOutput {
+pub fn include_legacy_deleted_hash(mmr_root: HashOutput) -> HashOutput {
     // TODO: Remove this function. It is here because previous
     //       versions of the code would include the deleted bitmap
     let bitmap_ser = Bitmap::create().serialize();

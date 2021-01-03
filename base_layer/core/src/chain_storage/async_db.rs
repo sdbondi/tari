@@ -25,6 +25,7 @@ use crate::{
     chain_storage::{
         accumulated_data::BlockHeaderAccumulatedData,
         blockchain_database::BlockAddResult,
+        BlockAccumulatedData,
         BlockchainBackend,
         BlockchainDatabase,
         ChainBlock,
@@ -159,6 +160,8 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     //---------------------------------- Headers --------------------------------------------//
     make_async_fn!(fetch_header(height: u64) -> Option<BlockHeader>, "fetch_header");
 
+    make_async_fn!(fetch_chain_header(height: u64) -> ChainHeader, "fetch_chain_header");
+
     make_async_fn!(fetch_header_and_accumulated_data(height: u64) -> (BlockHeader, BlockHeaderAccumulatedData), "fetch_header_and_accumulated_data");
 
     make_async_fn!(fetch_header_accumulated_data(hash: HashOutput) -> Option<BlockHeaderAccumulatedData>, "fetch_header_accumulated_data");
@@ -166,6 +169,8 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     make_async_fn!(fetch_headers<T: RangeBounds<u64>>(bounds: T) -> Vec<BlockHeader>, "fetch_headers");
 
     make_async_fn!(fetch_header_by_block_hash(hash: HashOutput) -> Option<BlockHeader>, "fetch_header_by_block_hash");
+
+    make_async_fn!(fetch_header_containing_kernel_mmr(mmr_position: u64) -> ChainHeader, "fetch_header_containing_kernel_mmr");
 
     make_async_fn!(fetch_chain_header_by_block_hash(hash: HashOutput) -> Option<ChainHeader>, "fetch_chain_header_by_block_hash");
 
@@ -202,6 +207,7 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
 
     make_async_fn!(fetch_block_with_utxo(commitment: Commitment) -> Option<HistoricalBlock>, "fetch_block_with_utxo");
 
+    make_async_fn!(fetch_block_accumulated_data(hash: HashOutput) -> BlockAccumulatedData, "fetch_block_accumulated_data");
     //---------------------------------- Horizon Sync --------------------------------------------//
     make_async_fn!(get_horizon_sync_state() -> Option<InProgressHorizonSyncState>, "get_horizon_sync_state");
 
@@ -252,6 +258,10 @@ impl<'a, B: BlockchainBackend + 'static> AsyncDbTransaction<'a, B> {
         }
     }
 
+    pub fn insert_kernel_via_horizon_sync(&mut self, kernel: TransactionKernel, header_hash: HashOutput, mmr_position: u32)-> &mut Self {
+        self.transaction.insert_kernel(kernel, header_hash, mmr_position);
+        self
+    }
     pub fn insert_header(&mut self, header: BlockHeader, accum_data: BlockHeaderAccumulatedData) -> &mut Self {
         self.transaction.insert_header(header, accum_data);
         self

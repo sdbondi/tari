@@ -73,6 +73,10 @@ impl BlockAccumulatedData {
     pub fn deleted(&self) -> &Bitmap {
         &self.deleted
     }
+
+    pub fn dissolve(self) -> (PrunedHashSet, PrunedHashSet, PrunedHashSet, Bitmap) {
+        (self.kernels, self.outputs, self.range_proofs, self.deleted)
+    }
 }
 
 impl Default for BlockAccumulatedData {

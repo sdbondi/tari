@@ -821,6 +821,36 @@ impl BlockchainBackend for LMDBDatabase {
         Ok(None)
     }
 
+    fn fetch_header_containing_kernel_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
+        let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
+
+        if let Some(height) = lmdb_first_after::<_, u64>(&txn, &self.kernel_mmr_size_index, &mmr_position.to_be_bytes())? {
+            let header: BlockHeader =
+                lmdb_get(&txn, &self.headers_db, &height)?.ok_or_else(|| ChainStorageError::ValueNotFound {
+                    entity: "BlockHeader".to_string(),
+                    field: "height".to_string(),
+                    value: height.to_string(),
+                })?;
+
+            let accum_data = self
+                .fetch_header_accumulated_data_by_height(height , &txn)?
+                .ok_or_else(|| ChainStorageError::ValueNotFound {
+                    entity: "BlockHeaderAccumulatedData".to_string(),
+                    field: "height".to_string(),
+                    value: height.to_string(),
+                })?;
+
+            Ok(ChainHeader{header, accumulated_data: accum_data })
+        }
+        else {
+            Err(ChainStorageError::ValueNotFound {
+                entity: "BlockHeader".to_string(),
+                field: "mmr_position".to_string(),
+                value: mmr_position.to_string()
+            })
+        }
+    }
+
     fn is_empty(&self) -> Result<bool, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env)?;
 
@@ -885,21 +915,23 @@ impl BlockchainBackend for LMDBDatabase {
 
     fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env)?;
-        if let Some(start_height) = lmdb_first_after(&txn, &self.kernel_mmr_size_index, &start.to_be_bytes())? {
+        if let Some(start_height) = lmdb_first_after(&txn, &self.kernel_mmr_size_index, &(start + 1).to_be_bytes())? {
 
-            let end_height : u64 = lmdb_first_after(&txn, &self.kernel_mmr_size_index, &end.to_be_bytes())?.unwrap_or(start_height);
+            let end_height : u64 = lmdb_first_after(&txn, &self.kernel_mmr_size_index, &(end + 1).to_be_bytes())?.unwrap_or(start_height);
 
             let previous_mmr_count = if start_height == 0
             {
                 0
             }else {
                 let header: BlockHeader  = lmdb_get(&txn, &self.headers_db, &(start_height - 1))?.expect("Header should exist");
+                debug!(target: LOG_TARGET, "Previous header:{}", header);
                 header.kernel_mmr_size
             };
 
             let mut result = Vec::with_capacity((end - start) as usize);
 
             let mut skip_amount = (start - previous_mmr_count) as usize;
+            debug!(target:LOG_TARGET, "Fetching kernels by MMR position. Start {}, end {}, starting in header at height {},  prev mmr count: {}, skipping the first:{}", start, end, start_height, previous_mmr_count, skip_amount);
 
             for height in start_height..=end_height {
                 let hash = lmdb_get::<_, BlockHeaderAccumulatedData>(&txn, &self.header_accumulated_data_db, &height)?.ok_or_else(|| ChainStorageError::ValueNotFound {

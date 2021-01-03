@@ -33,6 +33,6 @@ Feature: Block Sync
 
   Scenario: Pruned mode
     Given I have a base node NODE1 connected to all seed nodes
-    When I mine 20 blocks on NODE1
+    When I mine 5 blocks on NODE1
     Given I have a pruned node PNODE2 connected to node NODE1
-    Then all nodes are at height 20
+    Then all nodes are at height 5

@@ -260,6 +260,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
                 if tx.is_closed() {
                     break;
                 }
+                info!(target: LOG_TARGET, "Streaming kernels {} to {}", start, end);
                 let res = db.fetch_kernels_by_mmr_position(start, end).await
                     .map_err(RpcStatus::log_internal_error(LOG_TARGET));
                 match res {
