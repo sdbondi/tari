@@ -102,10 +102,9 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
     async fn begin_sync(&mut self) -> Result<(), HorizonSyncError> {
         debug!(target: LOG_TARGET, "Synchronizing kernels");
         self.synchronize_kernels().await?;
-        debug!(target: LOG_TARGET, "Check the deletion state of current UTXOs");
-        self.check_state_of_current_utxos().await?;
-        debug!(target: LOG_TARGET, "Synchronizing UTXOs and RangeProofs");
-        self.synchronize_utxos_and_rangeproofs().await?;
+        debug!(target: LOG_TARGET, "Synchronizing deleted UTXOs");
+        debug!(target: LOG_TARGET, "Synchronizing UTXOs");
+        self.synchronize_utxos().await?;
 
         Ok(())
     }
@@ -140,69 +139,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
             remote_num_kernels - local_num_kernels,
         );
 
-            self.sync_kernel_nodes(local_num_kernels, remote_num_kernels).await?;
-
-                // let (kernel_hashes, _, sync_peer1) = helpers::request_mmr_nodes(
-                //     LOG_TARGET,
-                //     self.shared,
-                //     self.sync_peers,
-                //     MmrTree::Kernel,
-                //     pos,
-                //     count,
-                //     self.horizon_sync_height,
-                //     config.max_sync_request_retry_attempts,
-                // )
-                // .await?;
-                // let (kernels, sync_peer2) = helpers::request_kernels(
-                //     LOG_TARGET,
-                //     self.shared,
-                //     self.sync_peers,
-                //     kernel_hashes.clone(),
-                //     config.max_sync_request_retry_attempts,
-                // )
-                // .await?;
-                //
-                // match self.validate_kernel_response(&kernel_hashes, &kernels) {
-                //     Ok(_) => {
-                //         let num_kernels = kernels.len();
-                //         self.db().horizon_sync_insert_kernels(kernels).await?;
-                //         trace!(
-                //             target: LOG_TARGET,
-                //             "{} kernels successfully added to database ({} remaining)",
-                //             num_kernels,
-                //             remote_num_kernels - pos,
-                //         );
-                //         break;
-                //     },
-                //     Err(err @ HorizonSyncError::EmptyResponse { .. }) |
-                //     Err(err @ HorizonSyncError::IncorrectResponse { .. }) |
-                //     Err(err @ HorizonSyncError::InvalidKernelSignature(_)) => {
-                //         warn!(target: LOG_TARGET, "{}", err);
-                //         // TODO: Fetching mmr nodes and kernels should both be attempted for the same peer
-                //         if sync_peer1 == sync_peer2 {
-                //             debug!(
-                //                 target: LOG_TARGET,
-                //                 "Banning peer {} from local node, because they supplied invalid kernels", sync_peer
-                //             );
-                //             self.ban_sync_peer(&sync_peer, "Peer supplied invalid kernels".to_string())
-                //                 .await?;
-                //         }
-                //     },
-                //     Err(e) => return Err(e),
-                // debug!(
-                //     target: LOG_TARGET,
-                //     "Retrying kernel sync. Attempt {} of {}", attempt, config.max_sync_request_retry_attempts
-                // );
-                // if attempt == num_sync_peers {
-                //     return Err(HorizonSyncError::MaxSyncAttemptsReached);
-                // }
-            // }
-
-
-        // self.validate_mmr_root(MmrTree::Kernel).await?;
-        //
-        // Ok(())
-        unimplemented!()
+            self.sync_kernel_nodes(local_num_kernels, remote_num_kernels).await
     }
 
     async fn sync_kernel_nodes(&mut self, start: u64, end: u64) -> Result<(), HorizonSyncError> {
@@ -258,30 +195,14 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
 
                 txn.update_pruned_hash_set(MmrTree::Kernel, current_header.hash().clone(), kernel_mmr.get_pruned_hash_set()?);
                 txn.commit().await?;
-                current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
+                if mmr_position < end - 1 {
+                    current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
+                }
             }
             mmr_position+=1;
         }
-
-        unimplemented!()
-    }
-
-    async fn validate_mmr_root(&self, _tree: MmrTree) -> Result<(), HorizonSyncError> {
-        unimplemented!()
-        // debug!(target: LOG_TARGET, "Validating {} MMR root", tree);
-        // if async_db::validate_merkle_root(self.db(), MmrTree::Kernel, self.horizon_sync_height).await? {
-        //     debug!(
-        //         target: LOG_TARGET,
-        //         "{} MMR root is VALID at height {}", tree, self.horizon_sync_height
-        //     );
-        //     Ok(())
-        // } else {
-        //     warn!(
-        //         target: LOG_TARGET,
-        //         "{} MMR root is INVALID at height {}", tree, self.horizon_sync_height
-        //     );
-        //     Err(HorizonSyncError::InvalidMmrRoot(tree))
-        // }
+        // TODO: Total kernel sum in horizon block
+        Ok(())
     }
 
     async fn ban_sync_peer(&mut self, sync_peer: &SyncPeer, reason: String) -> Result<(), HorizonSyncError> {
