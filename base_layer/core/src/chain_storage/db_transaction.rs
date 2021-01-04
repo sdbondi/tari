@@ -45,6 +45,8 @@ use tari_crypto::tari_utilities::{
     hex::{to_hex, Hex},
     Hashable,
 };
+use crate::chain_storage::MmrTree;
+use tari_mmr::pruned_hashset::PrunedHashSet;
 
 #[derive(Debug)]
 pub struct DbTransaction {
@@ -150,6 +152,16 @@ impl DbTransaction {
         self
     }
 
+
+    pub fn update_pruned_hash_set(&mut self, mmr_tree: MmrTree, header_hash: HashOutput, pruned_hash_set: PrunedHashSet) -> &mut Self {
+       self.operations.push(WriteOperation::UpdatePrunedHashSet{
+           mmr_tree,
+           header_hash,
+           pruned_hash_set: Box::new(pruned_hash_set)
+       });
+        self
+    }
+
     /// Add the BlockHeader and contents of a `Block` (i.e. inputs, outputs and kernels) to the database.
     /// If the `BlockHeader` already exists, then just the contents are updated along with the relevant accumulated
     /// data.
@@ -231,6 +243,11 @@ pub enum WriteOperation {
     DeleteOrphanChainTip(HashOutput),
     InsertOrphanChainTip(HashOutput),
     InsertMoneroSeedHeight(Box<String>, u64),
+    UpdatePrunedHashSet{
+        mmr_tree: MmrTree,
+        header_hash: HashOutput,
+        pruned_hash_set: Box<PrunedHashSet>
+    }
 }
 
 impl fmt::Display for WriteOperation {
@@ -299,6 +316,9 @@ impl fmt::Display for WriteOperation {
             InsertChainOrphanBlock(block) => {
                 write!(f, "InsertChainOrphanBlock({})", block.accumulated_data.hash.to_hex())
             },
+            UpdatePrunedHashSet { mmr_tree, header_hash, pruned_hash_set } => {
+                write!(f, "Update pruned hash set: {} header: {}", mmr_tree, header_hash.to_hex())
+            }
         }
     }
 }

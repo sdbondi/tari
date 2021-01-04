@@ -52,6 +52,7 @@ use rand::{rngs::OsRng, RngCore};
 use std::{mem, ops::RangeBounds, sync::Arc, time::Instant};
 use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_mmr::Hash;
+use tari_mmr::pruned_hashset::PrunedHashSet;
 
 const LOG_TARGET: &str = "c::bn::async_db";
 
@@ -262,6 +263,12 @@ impl<'a, B: BlockchainBackend + 'static> AsyncDbTransaction<'a, B> {
         self.transaction.insert_kernel(kernel, header_hash, mmr_position);
         self
     }
+
+    pub fn update_pruned_hash_set(&mut self, mmr_tree: MmrTree, header_hash: HashOutput, pruned_hash_set: PrunedHashSet) -> &mut Self {
+        self.transaction.update_pruned_hash_set(mmr_tree, header_hash, pruned_hash_set);
+        self
+    }
+
     pub fn insert_header(&mut self, header: BlockHeader, accum_data: BlockHeaderAccumulatedData) -> &mut Self {
         self.transaction.insert_header(header, accum_data);
         self

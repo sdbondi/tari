@@ -245,9 +245,10 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                 debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_pruned_set);
                 let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernel_pruned_set);
 
-                for kernel in kernels.iter() {
+                for kernel in kernels.drain(..) {
                     kernel_mmr.push(kernel.hash())?;
                 }
+
                 debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_mmr.get_pruned_hash_set()?);
                 let mmr_root = include_legacy_deleted_hash(kernel_mmr.get_merkle_root()?);
                 if mmr_root != current_header.header.kernel_mr {
@@ -255,7 +256,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                    return Err(HorizonSyncError::InvalidMmrRoot(MmrTree::Kernel));
                 }
 
-               // txn.update_kernel_pruned_hash_set(current_header.hash(), kernel_mmr.get_pruned_hash_set()?);
+                txn.update_pruned_hash_set(MmrTree::Kernel, current_header.hash().clone(), kernel_mmr.get_pruned_hash_set()?);
                 txn.commit().await?;
                 current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
             }
