@@ -46,6 +46,7 @@ use tari_crypto::tari_utilities::{
 };
 use crate::chain_storage::MmrTree;
 use tari_mmr::pruned_hashset::PrunedHashSet;
+use croaring::Bitmap;
 
 #[derive(Debug)]
 pub struct DbTransaction {
@@ -142,6 +143,18 @@ impl DbTransaction {
         self
     }
 
+    pub fn insert_pruned_utxo(&mut self, output_hash: HashOutput, proof_hash: HashOutput, header_hash: HashOutput, mmr_leaf_index: u32) -> &mut Self {
+        self.operations.push(WriteOperation::InsertPrunedOutput {
+            header_hash,
+            output_hash,
+            proof_hash,
+            mmr_position: mmr_leaf_index,
+        });
+        self
+    }
+
+
+
     pub fn insert_input(&mut self, input: TransactionInput, header_hash: HashOutput, mmr_leaf_index: u32) -> &mut Self {
         self.operations.push(WriteOperation::InsertInput {
             header_hash,
@@ -160,6 +173,13 @@ impl DbTransaction {
        });
         self
     }
+
+    pub fn update_deleted(&mut self, header_hash: HashOutput, deleted: Bitmap) -> &mut Self {
+    self.operations.push(WriteOperation::UpdateDeletedBlockAccumulatedData {
+    header_hash, deleted
+    });
+    self
+}
 
     /// Add the BlockHeader and contents of a `Block` (i.e. inputs, outputs and kernels) to the database.
     /// If the `BlockHeader` already exists, then just the contents are updated along with the relevant accumulated
@@ -237,6 +257,12 @@ pub enum WriteOperation {
         output: Box<TransactionOutput>,
         mmr_position: u32,
     },
+    InsertPrunedOutput {
+        header_hash: HashOutput,
+        output_hash: HashOutput,
+        proof_hash: HashOutput,
+        mmr_position: u32
+    },
     Delete(DbKey),
     DeleteBlock(HashOutput),
     DeleteOrphanChainTip(HashOutput),
@@ -246,7 +272,12 @@ pub enum WriteOperation {
         mmr_tree: MmrTree,
         header_hash: HashOutput,
         pruned_hash_set: Box<PrunedHashSet>
+    },
+    UpdateDeletedBlockAccumulatedData {
+        header_hash: HashOutput,
+        deleted: Bitmap
     }
+
 }
 
 impl fmt::Display for WriteOperation {
@@ -317,6 +348,12 @@ impl fmt::Display for WriteOperation {
             },
             UpdatePrunedHashSet { mmr_tree, header_hash, pruned_hash_set } => {
                 write!(f, "Update pruned hash set: {} header: {}", mmr_tree, header_hash.to_hex())
+            }
+            InsertPrunedOutput { header_hash: _, output_hash: _, proof_hash: _, mmr_position: _ } => {
+                write!(f, "Insert pruned output")
+            }
+            UpdateDeletedBlockAccumulatedData { header_hash: _, deleted: _ } => {
+                write!(f, "Update deleted data for block")
             }
         }
     }

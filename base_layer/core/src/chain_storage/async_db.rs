@@ -176,6 +176,9 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
 
     make_async_fn!(fetch_header_containing_kernel_mmr(mmr_position: u64) -> ChainHeader, "fetch_header_containing_kernel_mmr");
 
+
+    make_async_fn!(fetch_header_containing_utxo_mmr(mmr_position: u64) -> ChainHeader, "fetch_header_containing_utxo_mmr");
+
     make_async_fn!(fetch_chain_header_by_block_hash(hash: HashOutput) -> Option<ChainHeader>, "fetch_chain_header_by_block_hash");
 
     make_async_fn!(
@@ -269,8 +272,24 @@ impl<'a, B: BlockchainBackend + 'static> AsyncDbTransaction<'a, B> {
         self
     }
 
+    pub fn insert_output_via_horizon_sync(&mut self, output: TransactionOutput, header_hash: HashOutput, mmr_position: u32)-> &mut Self {
+        self.transaction.insert_utxo(output, header_hash, mmr_position);
+        self
+    }
+
+    pub fn insert_pruned_output_via_horizon_sync(&mut self, output_hash: HashOutput, proof_hash: HashOutput, header_hash: HashOutput, mmr_position: u32) -> &mut Self {
+        self.transaction.insert_pruned_utxo(output_hash, proof_hash, header_hash, mmr_position);
+        self
+    }
+
+
     pub fn update_pruned_hash_set(&mut self, mmr_tree: MmrTree, header_hash: HashOutput, pruned_hash_set: PrunedHashSet) -> &mut Self {
         self.transaction.update_pruned_hash_set(mmr_tree, header_hash, pruned_hash_set);
+        self
+    }
+
+    pub fn update_deleted(&mut self, header_hash: HashOutput, deleted: Bitmap) -> &mut Self {
+        self.transaction.update_deleted(header_hash, deleted);
         self
     }
 

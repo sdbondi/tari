@@ -94,6 +94,7 @@ use crate::chain_storage::lmdb_db::{LMDB_DB_KERNEL_MMR_SIZE_INDEX, LMDB_DB_UTXO_
 use tari_mmr::pruned_hashset::PrunedHashSet;
 use crate::chain_storage::error::OrNotFound;
 use croaring::Bitmap;
+use crate::chain_storage::accumulated_data::DeletedBitmap;
 
 type DatabaseRef = Arc<Database<'static>>;
 
@@ -198,6 +199,9 @@ impl LMDBDatabase {
                     mmr_position,
                 } => {
                     self.insert_output(&write_txn, header_hash, *output, mmr_position)?;
+                },
+                InsertPrunedOutput { header_hash , output_hash, proof_hash, mmr_position } => {
+self.insert_pruned_output(&write_txn, header_hash, output_hash, proof_hash, mmr_position)?;
                 }
                 InsertInput {
                     header_hash,
@@ -268,9 +272,23 @@ impl LMDBDatabase {
                         MmrTree::Kernel => {
                             block_accum_data.kernels = *pruned_hash_set
                         }
-                        _ => unimplemented!("Updating of other mmr trees is not implemented")
+
+                        MmrTree::Utxo => {
+                            block_accum_data.outputs = *pruned_hash_set
+                        }
+                        MmrTree::RangeProof => {
+                            block_accum_data.range_proofs = *pruned_hash_set
+                        }
                     }
 
+                    self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
+                },
+
+                UpdateDeletedBlockAccumulatedData { header_hash, deleted } => {
+                    let height = self.fetch_height_from_hash(&write_txn, &header_hash).or_not_found("BlockHash",  "hash",  header_hash.to_hex())?;
+                    let mut block_accum_data = self.fetch_block_accumulated_data(&write_txn, height)?.unwrap_or_else(|| BlockAccumulatedData::default());
+
+                    block_accum_data.deleted = DeletedBitmap{ deleted };
                     self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
                 }
             }
@@ -326,6 +344,36 @@ impl LMDBDatabase {
                 hash: output_hash,
                 range_proof_hash: proof_hash,
             }),
+        )
+    }
+
+    fn insert_pruned_output(
+        &mut self,
+        txn: &WriteTransaction<'_>,
+        header_hash: HashOutput,
+        output_hash: HashOutput,
+        proof_hash: HashOutput,
+        mmr_position: u32,
+    ) -> Result<(), ChainStorageError>
+    {
+        let key = format!(
+            "{}-{:010}-{}-{}",
+            header_hash.to_hex(),
+            mmr_position,
+            output_hash.to_hex(),
+            proof_hash.to_hex()
+        );
+        lmdb_insert(
+            txn,
+            &*self.txos_hash_to_index_db,
+            output_hash.as_slice(),
+            &(mmr_position, key.clone()),
+        )?;
+        lmdb_insert::<_, Option<TransactionOutputRowData>>(
+            txn,
+            &*self.utxos_db,
+            key.as_str(),
+            &None,
         )
     }
 
@@ -884,7 +932,37 @@ impl BlockchainBackend for LMDBDatabase {
         }
     }
 
-    fn is_empty(&self) -> Result<bool, ChainStorageError> {
+    // TODO: Can be merged with the method above
+    fn fetch_header_containing_utxo_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
+        let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
+
+        if let Some(height) = lmdb_first_after::<_, u64>(&txn, &self.output_mmr_size_index, &mmr_position.to_be_bytes())? {
+            let header: BlockHeader =
+                lmdb_get(&txn, &self.headers_db, &height)?.ok_or_else(|| ChainStorageError::ValueNotFound {
+                    entity: "BlockHeader".to_string(),
+                    field: "height".to_string(),
+                    value: height.to_string(),
+                })?;
+
+            let accum_data = self
+                .fetch_header_accumulated_data_by_height(height, &txn)?
+                .ok_or_else(|| ChainStorageError::ValueNotFound {
+                    entity: "BlockHeaderAccumulatedData".to_string(),
+                    field: "height".to_string(),
+                    value: height.to_string(),
+                })?;
+
+            Ok(ChainHeader { header, accumulated_data: accum_data })
+        } else {
+            Err(ChainStorageError::ValueNotFound {
+                entity: "BlockHeader".to_string(),
+                field: "mmr_position".to_string(),
+                value: mmr_position.to_string(),
+            })
+        }
+    }
+
+        fn is_empty(&self) -> Result<bool, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env)?;
 
         Ok(lmdb_len(&txn, &self.headers_db)? == 0)

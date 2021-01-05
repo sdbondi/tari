@@ -36,8 +36,8 @@ use tari_mmr::error::MerkleMountainRangeError;
 pub enum HorizonSyncError {
     #[error("Peer sent an empty response")]
     EmptyResponse,
-    #[error("Peer sent an invalid response")]
-    IncorrectResponse,
+    #[error("Peer sent an invalid response: {0}")]
+    IncorrectResponse(String),
     #[error("Exceeded maximum sync attempts")]
     MaxSyncAttemptsReached,
     #[error("Chain storage error: {0}")]

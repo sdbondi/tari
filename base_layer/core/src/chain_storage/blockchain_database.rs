@@ -450,6 +450,12 @@ impl<B> BlockchainDatabase<B>
         let db= self.db_read_access()?;
         db.fetch_header_containing_kernel_mmr(mmr_position)
     }
+
+    pub fn fetch_header_containing_utxo_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
+        let db= self.db_read_access()?;
+        db.fetch_header_containing_utxo_mmr(mmr_position)
+    }
+
     /// Find the first matching header in a list of block hashes, returning the index of the match and the BlockHeader.
     /// Or None if not found.
     pub fn find_headers_after_hash<I: IntoIterator<Item=HashOutput>>(
@@ -721,6 +727,7 @@ impl<B> BlockchainDatabase<B>
         block.header.kernel_mmr_size = roots.kernel_mmr_size;
         block.header.output_mr = roots.output_mr;
         block.header.range_proof_mr = roots.range_proof_mr;
+        block.header.output_mmr_size  = roots.output_mmr_size;
         Ok(block)
     }
 

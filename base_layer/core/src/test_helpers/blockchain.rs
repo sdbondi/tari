@@ -182,6 +182,10 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_header_containing_kernel_mmr(mmr_position)
     }
 
+    fn fetch_header_containing_utxo_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
+        self.db.fetch_header_containing_utxo_mmr(mmr_position)
+    }
+
     fn is_empty(&self) -> Result<bool, ChainStorageError> {
         self.db.is_empty()
     }
