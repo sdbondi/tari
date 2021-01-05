@@ -97,6 +97,8 @@ pub struct BlockHeader {
     /// This is the MMR root of the range proofs
     #[serde(with = "hash_serializer")]
     pub range_proof_mr: BlockHash,
+    /// The size (number  of leaves) of the output and range proof MMRs at the time of this header
+    pub output_mmr_size: u64,
     /// This is the MMR root of the kernels
     #[serde(with = "hash_serializer")]
     pub kernel_mr: BlockHash,
@@ -120,6 +122,7 @@ impl BlockHeader {
             timestamp: EpochTime::now(),
             output_mr: vec![0; BLOCK_HASH_LENGTH],
             range_proof_mr: vec![0; BLOCK_HASH_LENGTH],
+            output_mmr_size: 0,
             kernel_mr: vec![0; BLOCK_HASH_LENGTH],
             kernel_mmr_size: 0,
             total_kernel_offset: BlindingFactor::default(),
@@ -141,6 +144,7 @@ impl BlockHeader {
             timestamp: EpochTime::now(),
             output_mr: vec![0; BLOCK_HASH_LENGTH],
             range_proof_mr: vec![0; BLOCK_HASH_LENGTH],
+            output_mmr_size: prev.output_mmr_size,
             kernel_mr: vec![0; BLOCK_HASH_LENGTH],
             kernel_mmr_size: prev.kernel_mmr_size,
             total_kernel_offset: BlindingFactor::default(),
@@ -192,7 +196,9 @@ impl BlockHeader {
             .chain(self.timestamp.as_u64().to_le_bytes())
             .chain(self.output_mr.as_bytes())
             .chain(self.range_proof_mr.as_bytes())
+            .chain(self.output_mmr_size.to_le_bytes())
             .chain(self.kernel_mr.as_bytes())
+            .chain(self.kernel_mmr_size.to_le_bytes())
             .chain(self.total_kernel_offset.as_bytes())
             .result()
             .to_vec()
@@ -218,6 +224,8 @@ impl From<NewBlockHeaderTemplate> for BlockHeader {
             timestamp: EpochTime::now(),
             output_mr: vec![],
             range_proof_mr: vec![],
+            // TODO: put  mmr sizes in template
+            output_mmr_size: 0,
             kernel_mr: vec![],
             kernel_mmr_size: 0,
             total_kernel_offset: header_template.total_kernel_offset,
@@ -230,17 +238,9 @@ impl From<NewBlockHeaderTemplate> for BlockHeader {
 impl Hashable for BlockHeader {
     fn hash(&self) -> Vec<u8> {
         HashDigest::new()
-            .chain(self.version.to_le_bytes())
-            .chain(self.height.to_le_bytes())
-            .chain(self.prev_hash.as_bytes())
-            .chain(self.timestamp.as_u64().to_le_bytes())
-            .chain(self.output_mr.as_bytes())
-            .chain(self.range_proof_mr.as_bytes())
-            .chain(self.kernel_mr.as_bytes())
-            .chain(self.kernel_mmr_size.to_le_bytes())
-            .chain(self.total_kernel_offset.as_bytes())
-            .chain(self.nonce.to_le_bytes())
+            .chain(self.merged_mining_hash())
             .chain(self.pow.to_bytes())
+            .chain(self.nonce.to_le_bytes())
             .result()
             .to_vec()
     }
@@ -266,8 +266,9 @@ impl Display for BlockHeader {
         );
         fmt.write_str(&msg)?;
         let msg = format!(
-            "Merkle roots:\nOutputs: {}\nRange proofs: {}\nKernels: {} ({})\n",
+            "Merkle roots:\nOutputs: {} ({})\nRange proofs: {}\nKernels: {} ({})\n",
             self.output_mr.to_hex(),
+            self.output_mmr_size,
             self.range_proof_mr.to_hex(),
             self.kernel_mr.to_hex(),
             self.kernel_mmr_size

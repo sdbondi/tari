@@ -171,6 +171,47 @@ pub struct SyncKernelsRequest {
     #[prost(uint64, tag = "2")]
     pub end: u64,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncUtxosRequest {
+    #[prost(uint64, tag = "1")]
+    pub start: u64,
+    #[prost(bytes, tag = "2")]
+    pub end_header_hash: std::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncUtxosResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub utxos: ::std::vec::Vec<SyncUtxo>,
+    /// present if a utxo in utxos is the last in a block so that the merkle root can be
+    /// checked
+    #[prost(bytes, repeated, tag = "2")]
+    pub deleted_bitmaps: ::std::vec::Vec<std::vec::Vec<u8>>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncUtxo {
+    /// The output. optional, if deleted at the time of the requested height,
+    /// will be empty and `hash` and `rangeproof_hash` will be populated instead
+    #[prost(message, optional, tag = "1")]
+    pub output: ::std::option::Option<super::types::TransactionOutput>,
+    /// Only present if 'output` is empty
+    #[prost(bytes, tag = "2")]
+    pub hash: std::vec::Vec<u8>,
+    /// Only present if `output` is empty
+    #[prost(bytes, tag = "3")]
+    pub rangeproof_hash: std::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncDeletedBitmapsRequest {
+    #[prost(bytes, tag = "1")]
+    pub start: std::vec::Vec<u8>,
+    #[prost(bytes, tag = "2")]
+    pub end: std::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncDeletedBitmapsResponse {
+    #[prost(bytes, repeated, tag = "1")]
+    pub deleted: ::std::vec::Vec<std::vec::Vec<u8>>,
+}
 /// Request type for a received BaseNodeService request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BaseNodeServiceRequest {

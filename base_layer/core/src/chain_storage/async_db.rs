@@ -38,6 +38,7 @@ use crate::{
         MetadataValue,
         MmrTree,
         TargetDifficulties,
+        PrunedOutput
     },
     common::rolling_vec::RollingVec,
     proof_of_work::{PowAlgorithm, TargetDifficultyWindow},
@@ -53,6 +54,7 @@ use std::{mem, ops::RangeBounds, sync::Arc, time::Instant};
 use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_mmr::Hash;
 use tari_mmr::pruned_hashset::PrunedHashSet;
+use croaring::Bitmap;
 
 const LOG_TARGET: &str = "c::bn::async_db";
 
@@ -143,6 +145,7 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
 
     make_async_fn!(fetch_utxos(hashes: Vec<HashOutput>, is_spent_as_of: Option<HashOutput>) -> Vec<Option<(TransactionOutput, bool)>>, "fetch_utxos");
 
+    make_async_fn!(fetch_utxos_by_mmr_position(start: u64, end: u64, end_header_hash: HashOutput) -> (Vec<PrunedOutput>, Vec<Bitmap>), "fetch_utxos_by_mmr_position");
     //---------------------------------- Kernel --------------------------------------------//
     make_async_fn!(fetch_kernel_by_excess_sig(excess_sig: Signature) -> Option<(TransactionKernel, HashOutput)>, "fetch_kernel_by_excess_sig");
 
@@ -209,6 +212,8 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     make_async_fn!(fetch_block_with_utxo(commitment: Commitment) -> Option<HistoricalBlock>, "fetch_block_with_utxo");
 
     make_async_fn!(fetch_block_accumulated_data(hash: HashOutput) -> BlockAccumulatedData, "fetch_block_accumulated_data");
+
+    make_async_fn!(fetch_block_accumulated_data_by_height(height: u64) -> Option<BlockAccumulatedData>, "fetch_block_accumulated_data_by_height");
     //---------------------------------- Horizon Sync --------------------------------------------//
     make_async_fn!(get_horizon_sync_state() -> Option<InProgressHorizonSyncState>, "get_horizon_sync_state");
 

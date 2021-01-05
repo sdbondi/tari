@@ -37,6 +37,7 @@ use lmdb_zero::{
 use log::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Display;
+use std::fmt::Debug;
 
 pub const LOG_TARGET: &str = "c::cs::lmdb_db::lmdb";
 
@@ -66,14 +67,14 @@ where T: DeserializeOwned {
 
 pub fn lmdb_insert<K, V>(txn: &WriteTransaction<'_>, db: &Database, key: &K, val: &V) -> Result<(), ChainStorageError>
 where
-    K: AsLmdbBytes + ?Sized,
+    K: AsLmdbBytes + ?Sized + Debug,
     V: Serialize,
 {
     let val_buf = serialize(val)?;
     txn.access().put(&db, key, &val_buf, put::NOOVERWRITE).map_err(|e| {
         error!(
             target: LOG_TARGET,
-            "Could not insert value into lmdb transaction: {:?}", e
+            "Could not insert value for key:{:?} into database: {:?}", key, e
         );
         ChainStorageError::AccessError(e.to_string())
     })
@@ -373,6 +374,39 @@ where
     }
     Ok(result)
 }
+
+// pub fn lmdb_first_matching_value<F, K, V>(
+//     txn: &ConstTransaction<'_>,
+//     db: &Database,
+//     f: F,
+// ) -> Result<Option<(K,V)>, ChainStorageError>
+//     where
+//         K: AsLmdbBytes + Sized + FromLmdbBytes,
+//         F: Fn(&V) -> bool,
+//         V: DeserializeOwned,
+// {
+//     let access = txn.access();
+//     let mut cursor = txn.cursor(db).map_err(|e| {
+//         error!(target: LOG_TARGET, "Could not get read cursor from lmdb: {:?}", e);
+//         ChainStorageError::AccessError(e.to_string())
+//     })?;
+//     let iter = CursorIter::new(
+//         MaybeOwned::Borrowed(&mut cursor),
+//         &access,
+//         |c, a| c.first(a),
+//         Cursor::next::<K, [u8]>,
+//     )?;
+//
+//     for row in iter {
+//         // result.push(Vec::from(row?.0));
+//         let row = row?;
+//         let val = deserialize::<V>(row.1)?;
+//         if f(val)? {
+//             return  Ok(Some((row.0.clone(), row.1.clone())));
+//         }
+//     }
+//     Ok(None)
+// }
 
 // pub fn lmdb_list_values<V>(txn: &ConstTransaction<'_>, db: &Database) -> Result<Vec<V>, ChainStorageError>
 // where V: DeserializeOwned {

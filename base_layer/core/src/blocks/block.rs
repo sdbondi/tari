@@ -185,6 +185,7 @@ impl BlockBuilder {
         for tx in iter {
             let (inputs, outputs, kernels) = tx.body.dissolve();
             self = self.add_inputs(inputs);
+            self.header.output_mmr_size += outputs.len() as u64;
             self = self.add_outputs(outputs);
             self.header.kernel_mmr_size += kernels.len() as u64;
             self = self.add_kernels(kernels);
@@ -197,6 +198,7 @@ impl BlockBuilder {
     pub fn add_transaction(mut self, tx: Transaction) -> Self {
         let (inputs, outputs, kernels) = tx.body.dissolve();
         self = self.add_inputs(inputs);
+        self.header.output_mmr_size += outputs.len() as u64;
         self = self.add_outputs(outputs);
         self.header.kernel_mmr_size+= kernels.len() as u64;
         self = self.add_kernels(kernels);

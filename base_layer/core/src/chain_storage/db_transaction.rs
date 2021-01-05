@@ -35,7 +35,6 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    convert::TryFrom,
     fmt,
     fmt::{Display, Error, Formatter},
     sync::Arc,

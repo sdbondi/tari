@@ -244,6 +244,17 @@ fn check_mmr_roots<B: BlockchainBackend>(block: &Block, db: &B) -> Result<(), Va
         );
         return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrRoots));
     };
+    if header.output_mmr_size != mmr_roots.output_mmr_size {
+        warn!(
+            target: LOG_TARGET,
+            "Block header output MMR size in {} does not match. Expected: {}, Actual:{}",
+            block.hash().to_hex(),
+            header.output_mmr_size,
+            mmr_roots.output_mmr_size
+        );
+        return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrSize{mmr_tree: MmrTree::Utxo, expected: mmr_roots.output_mmr_size, actual: header.output_mmr_size}));
+
+    }
     Ok(())
 }
 
@@ -374,6 +385,18 @@ impl<B: BlockchainBackend> BlockValidator<B> {
             );
             return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrRoots));
         }
+        if header.kernel_mmr_size != mmr_roots.kernel_mmr_size {
+            warn!(
+                target: LOG_TARGET,
+                "Block header kernel MMR size in {} does not match MMR size",
+                block.hash().to_hex()
+            );
+            return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrSize {
+                mmr_tree: MmrTree::Kernel,
+                expected: header.kernel_mmr_size,
+                actual: mmr_roots.kernel_mmr_size
+            }));
+        }
         if header.output_mr != mmr_roots.output_mr {
             warn!(
                 target: LOG_TARGET,
@@ -389,6 +412,18 @@ impl<B: BlockchainBackend> BlockValidator<B> {
                 block.hash().to_hex()
             );
             return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrRoots));
+        }
+        if header.output_mmr_size != mmr_roots.output_mmr_size {
+            warn!(
+                target: LOG_TARGET,
+                "Block header output MMR size in {} does not match MMR size",
+                block.hash().to_hex()
+            );
+            return Err(ValidationError::BlockError(BlockValidationError::MismatchedMmrSize {
+                mmr_tree: MmrTree::Utxo,
+                expected: header.output_mmr_size,
+                actual: mmr_roots.output_mmr_size
+            }));
         }
         Ok(())
     }

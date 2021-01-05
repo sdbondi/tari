@@ -143,3 +143,23 @@ impl<U> Optional<U> for Result<U, ChainStorageError> {
         }
     }
 }
+
+pub trait OrNotFound<U> {
+    fn or_not_found(self, entity: &str, field: &str, value: String) -> Result<U, ChainStorageError>;
+}
+
+impl<U> OrNotFound<U> for Result<Option<U>, ChainStorageError> {
+    fn or_not_found(self, entity: &str, field: &str, value: String) -> Result<U, ChainStorageError> {
+        match self {
+            Ok(inner) => match inner {
+                None => Err(ChainStorageError::ValueNotFound {
+                    entity: entity.to_string(),
+                    field: field.to_string(),
+                    value
+                }),
+                Some(v) => Ok(v),
+            },
+            Err(err) => Err(err),
+        }
+    }
+}

@@ -53,6 +53,9 @@ pub struct BlockHeader {
     /// The size of the kernel MMR
     #[prost(uint64, tag = "12")]
     pub kernel_mmr_size: u64,
+    /// The size of the output MMR
+    #[prost(uint64, tag = "13")]
+    pub output_mmr_size: u64,
 }
 /// A Tari block. Blocks are linked together into a blockchain.
 #[derive(Clone, PartialEq, ::prost::Message)]

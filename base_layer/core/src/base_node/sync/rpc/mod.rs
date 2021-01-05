@@ -35,11 +35,13 @@ use crate::{
         FindChainSplitResponse,
         SyncBlocksRequest,
         SyncHeadersRequest,
-        SyncKernelsRequest
+        SyncKernelsRequest,
+        SyncUtxosRequest, SyncUtxosResponse
     },
 };
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus, Streaming};
 use tari_comms_rpc_macros::tari_rpc;
+use crate::proto::generated::base_node::{SyncDeletedBitmapsRequest, SyncDeletedBitmapsResponse};
 
 #[tari_rpc(protocol_name = b"t/blksync/1", server_struct = BaseNodeSyncRpcServer, client_struct = BaseNodeSyncRpcClient)]
 pub trait BaseNodeSyncService: Send + Sync + 'static {
@@ -73,8 +75,20 @@ pub trait BaseNodeSyncService: Send + Sync + 'static {
         request: Request<()>,
     ) -> Result<Response<proto::base_node::ChainMetadata>, RpcStatus>;
 
+    // TODO: Change to SyncKernelsResponse
+    // TODO: include hash of horizon block as end
     #[rpc(method = 6)]
     async fn sync_kernels(&self, request: Request<SyncKernelsRequest>) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus>;
+
+    #[rpc(method = 7)]
+    async  fn sync_utxos(&self, request: Request<SyncUtxosRequest>)  ->
+    Result<Streaming<SyncUtxosResponse>,  RpcStatus>;
+
+    #[rpc(method = 8)]
+    async fn sync_delete_bitmaps(&self, request: Request<SyncDeletedBitmapsRequest>) ->
+    Result<Streaming<SyncDeletedBitmapsResponse>,  RpcStatus>;
+
+
 }
 
 pub fn create_base_node_sync_rpc_service<B: BlockchainBackend + 'static>(

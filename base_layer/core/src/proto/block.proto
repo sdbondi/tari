@@ -45,6 +45,8 @@ message BlockHeader {
     ProofOfWork pow = 11;
     // The size of the kernel MMR
     uint64 kernel_mmr_size = 12;
+    // The size of the output MMR
+    uint64 output_mmr_size = 13;
 }
 
 // A Tari block. Blocks are linked together into a blockchain.

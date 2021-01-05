@@ -63,7 +63,8 @@ use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use uint::static_assertions::_core::ops::RangeBounds;
-use crate::chain_storage::MmrTree;
+use crate::chain_storage::{MmrTree, OrNotFound};
+use crate::chain_storage::pruned_output::PrunedOutput;
 
 const LOG_TARGET: &str = "c::cs::database";
 
@@ -409,7 +410,13 @@ impl<B> BlockchainDatabase<B>
         db.fetch_kernels_by_mmr_position(start, end)
     }
 
-    /// Returns the block header at the given block height.
+    pub fn fetch_utxos_by_mmr_position(&self, start: u64, end: u64, end_header_hash: HashOutput ) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError> {
+        let db = self.db_read_access()?;
+        let accum_data = db.fetch_block_accumulated_data(&end_header_hash).or_not_found("BlockAccumulatedData", "hash",  end_header_hash.to_hex())?;
+        db.fetch_utxos_by_mmr_position(start, end, accum_data.deleted())
+    }
+
+        /// Returns the block header at the given block height.
     pub fn fetch_header(&self, height: u64) -> Result<Option<BlockHeader>, ChainStorageError> {
         let db = self.db_read_access()?;
         match fetch_header(&*db, height) {
@@ -627,9 +634,14 @@ impl<B> BlockchainDatabase<B>
         db.fetch_block_accumulated_data(&at_hash)?
             .ok_or_else(|| ChainStorageError::ValueNotFound {
                 entity: "BlockAccumulatedData".to_string(),
-                field: "at_ha".to_string(),
+                field: "at_hash".to_string(),
                 value: at_hash.to_hex(),
             })
+    }
+
+    pub fn fetch_block_accumulated_data_by_height(&self, height: u64) -> Result<Option<BlockAccumulatedData>, ChainStorageError> {
+        let db = self.db_read_access()?;
+        db.fetch_block_accumulated_data_by_height(height)
     }
 
     /// Returns the orphan block with the given hash.
@@ -1178,6 +1190,7 @@ pub struct MmrRoots {
     pub kernel_mmr_size: u64,
     pub output_mr: BlockHash,
     pub range_proof_mr: BlockHash,
+    pub output_mmr_size: u64
 }
 
 pub fn calculate_mmr_roots<T: BlockchainBackend>(db: &T, block: &Block) -> Result<MmrRoots, ChainStorageError> {
@@ -1198,6 +1211,7 @@ pub fn calculate_mmr_roots<T: BlockchainBackend>(db: &T, block: &Block) -> Resul
             value: header.prev_hash.to_hex(),
         })?;
 
+    let deleted = deleted.deleted;
     let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernels);
     let mut output_mmr = MutableMmr::<HashDigest, _>::new(outputs, deleted)?;
     let mut proof_mmr = MerkleMountainRange::<HashDigest, _>::new(range_proofs);
@@ -1235,6 +1249,7 @@ pub fn calculate_mmr_roots<T: BlockchainBackend>(db: &T, block: &Block) -> Resul
         kernel_mr: include_legacy_deleted_hash(kernel_mmr.get_merkle_root()?),
         kernel_mmr_size: kernel_mmr.get_leaf_count()? as u64,
         output_mr: output_mmr.get_merkle_root()?,
+        output_mmr_size: proof_mmr.get_leaf_count()? as u64,
         range_proof_mr: include_legacy_deleted_hash(proof_mmr.get_merkle_root()?),
     };
     Ok(mmr_roots)

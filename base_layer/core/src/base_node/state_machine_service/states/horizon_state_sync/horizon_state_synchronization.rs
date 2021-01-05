@@ -102,16 +102,14 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
     async fn begin_sync(&mut self) -> Result<(), HorizonSyncError> {
         debug!(target: LOG_TARGET, "Synchronizing kernels");
         self.synchronize_kernels().await?;
-        debug!(target: LOG_TARGET, "Synchronizing deleted UTXOs");
-        debug!(target: LOG_TARGET, "Synchronizing UTXOs");
-        self.synchronize_utxos().await?;
-
+        debug!(target: LOG_TARGET, "Synchronizing outputs");
+        self.synchronize_outputs().await?;
+        //self.synchronize_utxos().await?;
+    unimplemented!("Need to sync  utxos");
         Ok(())
     }
 
-    // Synchronize kernels upto the horizon sync height from remote sync peers.
     async fn synchronize_kernels(&mut self) -> Result<(), HorizonSyncError> {
-        let config = self.shared.config.horizon_sync_config;
         let local_num_kernels = self
             .db()
             .fetch_mmr_size(MmrTree::Kernel)
@@ -148,7 +146,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         let latency = client.get_last_request_latency().await?;
         debug!(
             target: LOG_TARGET,
-            "Initiating header sync with peer `{}` (latency = {}ms)",
+            "Initiating kernel sync with peer `{}` (latency = {}ms)",
             self.sync_peer.peer_node_id(),
             latency.unwrap_or_default().as_millis()
         );
@@ -204,6 +202,102 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         // TODO: Total kernel sum in horizon block
         Ok(())
     }
+
+    async fn synchronize_outputs(&mut self) -> Result<(), HorizonSyncError> {
+        let local_num_outputs = self
+            .db()
+            .fetch_mmr_size(MmrTree::Utxo)
+            .await?;
+
+        let header= self.db().fetch_header(self.horizon_sync_height).await?.ok_or_else(||
+            ChainStorageError::ValueNotFound {
+                entity: "Header".to_string(),
+                field: "height".to_string(),
+                value: self.horizon_sync_height.to_string()
+            })?;
+
+        let remote_num_outputs = header.output_mmr_size;
+
+        if local_num_outputs >= remote_num_outputs {
+            debug!(target: LOG_TARGET, "Local output set already synchronized");
+            return Ok(());
+        }
+
+        debug!(
+            target: LOG_TARGET,
+            "Requesting outputs from {} to {} ({} remaining)",
+            local_num_outputs,
+            remote_num_outputs,
+            remote_num_outputs - local_num_outputs,
+        );
+
+        self.sync_output_nodes(local_num_outputs, remote_num_outputs).await
+    }
+
+    async fn sync_output_nodes(&mut self, start: u64, end: u64) -> Result<(), HorizonSyncError> {
+        let peer = self.sync_peer.peer_node_id().clone();
+        let mut client = self.sync_peer.connect_rpc::<rpc::BaseNodeSyncRpcClient>().await?;
+        let latency = client.get_last_request_latency().await?;
+        debug!(
+            target: LOG_TARGET,
+            "Initiating output sync with peer `{}` (latency = {}ms)",
+            self.sync_peer.peer_node_id(),
+            latency.unwrap_or_default().as_millis()
+        );
+
+        // let req = SyncKernelsRequest {
+        //     start,
+        //     end
+        // };
+        // let mut  kernel_stream = client.sync_kernels(req).await?;
+        //
+        // let mut current_header = self.shared.db.fetch_header_containing_kernel_mmr(start + 1).await?;
+        // debug!(target: LOG_TARGET, "Found current header in progress for kernels at mmr pos: {} height:{}", start, current_header.height());
+        // // TODO: Allow for partial block kernels to be downloaded (maybe)
+        // let mut kernels = vec![];
+        // // let block = self.shared.db.fetch_block(current_header.height()).await?;
+        // // let (_, _, mut kernels) = block.block.body.dissolve();
+        // // debug!(target: LOG_TARGET, "{} of {} kernels have already been downloaded for this header", kernels.len(), current_header.header.kernel_mmr_size);
+        // let mut txn =  self.shared.db.write_transaction();
+        // let mut mmr_position = start;
+        // while let Some(kernel) = kernel_stream.next().await {
+        //     let kernel : TransactionKernel = kernel?.try_into().map_err(HorizonSyncError::ConversionError)?;
+        //     debug!(target: LOG_TARGET, "Kernel received from sync peer: {}", kernel);
+        //     kernels.push(kernel.clone());
+        //     txn.insert_kernel_via_horizon_sync(kernel, current_header.hash().clone(), mmr_position as u32);
+        //     // TODO: validate kernel
+        //     if mmr_position == current_header.header.kernel_mmr_size - 1 {
+        //
+        //         // Validate root
+        //         let block_data =self.shared.db.fetch_block_accumulated_data(current_header.header.prev_hash.clone()).await?;
+        //         let kernel_pruned_set = block_data.dissolve().0;
+        //         debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_pruned_set);
+        //         let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernel_pruned_set);
+        //
+        //         for kernel in kernels.drain(..) {
+        //             kernel_mmr.push(kernel.hash())?;
+        //         }
+        //
+        //         debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_mmr.get_pruned_hash_set()?);
+        //         let mmr_root = include_legacy_deleted_hash(kernel_mmr.get_merkle_root()?);
+        //         if mmr_root != current_header.header.kernel_mr {
+        //             debug!(target: LOG_TARGET, "MMR did not match for kernels, {} != {}", mmr_root.to_hex(), current_header.header.kernel_mr.to_hex());
+        //             return Err(HorizonSyncError::InvalidMmrRoot(MmrTree::Kernel));
+        //         }
+        //
+        //         txn.update_pruned_hash_set(MmrTree::Kernel, current_header.hash().clone(), kernel_mmr.get_pruned_hash_set()?);
+        //         txn.commit().await?;
+        //         if mmr_position < end - 1 {
+        //             current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
+        //         }
+        //     }
+        //     mmr_position+=1;
+        // }
+        // // TODO: Total kernel sum in horizon block
+        // Ok(())
+        unimplemented!()
+    }
+
 
     async fn ban_sync_peer(&mut self, sync_peer: &SyncPeer, reason: String) -> Result<(), HorizonSyncError> {
         unimplemented!()
