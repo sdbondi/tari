@@ -179,7 +179,7 @@ fn add_multiple_blocks() {
     let block0 = store.fetch_block(0).unwrap();
     assert_eq!(metadata.best_block(), block0.hash());
     // Add another block
-    let block1 = append_block(&store, &block0.into_chain_block(), vec![], &consensus_manager, 1.into()).unwrap();
+    let block1 = append_block(&store, &block0.into_chain_block().unwrap(), vec![], &consensus_manager, 1.into()).unwrap();
     let metadata = store.get_chain_metadata().unwrap();
     let hash = block1.hash();
     assert_eq!(metadata.height_of_longest_chain(), 1);
@@ -209,7 +209,7 @@ fn test_checkpoints() {
     // Get the checkpoint
     let block_a = db.fetch_block(0).unwrap();
     assert_eq!(block_a.confirmations(), 2);
-    assert_eq!(blocks[0].block, block_a.block);
+    assert_eq!(&blocks[0].block, block_a.block());
     let block_b = db.fetch_block(1).unwrap();
     assert_eq!(block_b.confirmations(), 1);
     let block1 = serde_json::to_string(&block1.block).unwrap();
@@ -776,23 +776,23 @@ fn store_and_retrieve_blocks() {
     let store = BlockchainDatabase::new(db, &rules, validators, BlockchainDatabaseConfig::default(), false).unwrap();
 
     let block0 = store.fetch_block(0).unwrap().clone();
-    let block1 = append_block(&store, &block0.clone().into_chain_block(), vec![], &rules, 1.into()).unwrap();
+    let block1 = append_block(&store, &block0.clone().into_chain_block().unwrap(), vec![], &rules, 1.into()).unwrap();
     let block2 = append_block(&store, &block1, vec![], &rules, 1.into()).unwrap();
     assert_eq!(
-        store.fetch_block(0).unwrap().into_chain_block(),
-        block0.clone().into_chain_block()
+        store.fetch_block(0).unwrap().into_chain_block().unwrap(),
+        block0.clone().into_chain_block().unwrap()
     );
-    assert_eq!(store.fetch_block(1).unwrap().into_chain_block(), block1);
-    assert_eq!(store.fetch_block(2).unwrap().into_chain_block(), block2);
+    assert_eq!(store.fetch_block(1).unwrap().into_chain_block().unwrap(), block1);
+    assert_eq!(store.fetch_block(2).unwrap().into_chain_block().unwrap(), block2);
 
     let block3 = append_block(&store, &block2, vec![], &rules, 1.into()).unwrap();
     assert_eq!(
-        store.fetch_block(0).unwrap().into_chain_block(),
-        block0.into_chain_block()
+        store.fetch_block(0).unwrap().into_chain_block().unwrap(),
+        block0.into_chain_block().unwrap()
     );
-    assert_eq!(store.fetch_block(1).unwrap().into_chain_block(), block1);
-    assert_eq!(store.fetch_block(2).unwrap().into_chain_block(), block2);
-    assert_eq!(store.fetch_block(3).unwrap().into_chain_block(), block3);
+    assert_eq!(store.fetch_block(1).unwrap().into_chain_block().unwrap(), block1);
+    assert_eq!(store.fetch_block(2).unwrap().into_chain_block().unwrap(), block2);
+    assert_eq!(store.fetch_block(3).unwrap().into_chain_block().unwrap(), block3);
 }
 
 #[test]

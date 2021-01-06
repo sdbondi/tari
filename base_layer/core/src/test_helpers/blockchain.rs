@@ -244,7 +244,7 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_output(output_hash)
     }
 
-    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError> {
+    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<PrunedOutput>, ChainStorageError> {
         self.db.fetch_outputs_in_block(header_hash)
     }
 
@@ -254,35 +254,6 @@ impl BlockchainBackend for TempDatabase {
 
     fn fetch_mmr_size(&self, tree: MmrTree) -> Result<u64, ChainStorageError> {
         self.db.fetch_mmr_size(tree)
-    }
-
-    fn fetch_mmr_node(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        hist_height: Option<u64>,
-    ) -> Result<(HashOutput, bool), ChainStorageError>
-    {
-        self.db.fetch_mmr_node(tree, pos, hist_height)
-    }
-
-    fn fetch_mmr_nodes(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: Option<u64>,
-    ) -> Result<Vec<(HashOutput, bool)>, ChainStorageError>
-    {
-        self.db.fetch_mmr_nodes(tree, pos, count, hist_height)
-    }
-
-    fn insert_mmr_node(&mut self, tree: MmrTree, hash: HashOutput, deleted: bool) -> Result<(), ChainStorageError> {
-        self.db.insert_mmr_node(tree, hash, deleted)
-    }
-
-    fn delete_mmr_node(&mut self, tree: MmrTree, hash: &HashOutput) -> Result<(), ChainStorageError> {
-        self.db.delete_mmr_node(tree, hash)
     }
 
     fn fetch_mmr_leaf_index(&self, tree: MmrTree, hash: &HashOutput) -> Result<Option<u32>, ChainStorageError> {

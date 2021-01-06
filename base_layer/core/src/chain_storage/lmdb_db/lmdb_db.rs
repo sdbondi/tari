@@ -1240,15 +1240,22 @@ impl BlockchainBackend for LMDBDatabase {
         }
     }
 
-    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError> {
+    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<PrunedOutput>, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env)?;
-        unimplemented!("Need to account for pruned outputs");
-        // Ok(
-        //     lmdb_fetch_keys_starting_with(header_hash.to_hex().as_str(), &txn, &self.utxos_db)?
-        //         .into_iter()
-        //         .map(|f: TransactionOutputRowData| f.output)
-        //         .collect(),
-        // )
+         Ok(
+             lmdb_fetch_keys_starting_with(header_hash.to_hex().as_str(), &txn, &self.utxos_db)?
+                 .into_iter()
+                 .map(|f: TransactionOutputRowData| match f.output {
+                     Some(o) => PrunedOutput::NotPruned {
+                         output: o
+                     },
+                     None => PrunedOutput::Pruned {
+                         output_hash: f.hash,
+                         range_proof_hash: f.range_proof_hash
+                     }
+                 })
+                 .collect(),
+         )
     }
 
     fn fetch_inputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionInput>, ChainStorageError> {
@@ -1271,95 +1278,6 @@ impl BlockchainBackend for LMDBDatabase {
                 unimplemented!("Need to get rangeproof mmr size")
             },
         }
-    }
-
-    fn fetch_mmr_node(
-        &self,
-        _tree: MmrTree,
-        _pos: u32,
-        _hist_height: Option<u64>,
-    ) -> Result<(Vec<u8>, bool), ChainStorageError>
-    {
-        debug!(target: LOG_TARGET, "Fetch MMR node");
-        unimplemented!();
-        // let (hash, deleted) = match tree {
-        //     MmrTree::Kernel => {
-        //         self.kernel_mmr.fetch_mmr_node(pos)?
-        //     },
-        //     MmrTree::Utxo => {
-        //         let (hash, mut deleted) = self.utxo_mmr.fetch_mmr_node(pos)?;
-        //         // Check if the MMR node was deleted after the historic height then its deletion status should
-        // change.         // TODO: Find a more efficient way to query the historic deletion status of an MMR
-        // node.         if deleted {
-        //             if let Some(hist_height) = hist_height {
-        //                 let tip_height = lmdb_len(&self.env, &self.headers_db)?.saturating_sub(1) as u64;
-        //                 for height in hist_height + 1..=tip_height {
-        //                     let cp = self.fetch_checkpoint_at_height(MmrTree::Utxo, height)?;
-        //                     if cp.nodes_deleted().contains(pos) {
-        //                         deleted = false;
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //         (hash, deleted)
-        //     },
-        //     MmrTree::RangeProof => self.range_proof_mmr.fetch_mmr_node(pos)?,
-        // };
-        //
-        // let hash = hash.ok_or_else(|| {
-        //     ChainStorageError::UnexpectedResult(format!("A leaf node hash in the {} MMR tree was not found", tree))
-        // })?;
-        //
-        // Ok((hash, deleted))
-    }
-
-    fn fetch_mmr_nodes(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: Option<u64>,
-    ) -> Result<Vec<(Vec<u8>, bool)>, ChainStorageError>
-    {
-        let mut leaf_nodes = Vec::<(Vec<u8>, bool)>::with_capacity(count as usize);
-        for pos in pos..pos + count {
-            leaf_nodes.push(self.fetch_mmr_node(tree, pos, hist_height)?);
-        }
-        Ok(leaf_nodes)
-    }
-
-    fn insert_mmr_node(&mut self, _tree: MmrTree, _hash: Hash, _deleted: bool) -> Result<(), ChainStorageError> {
-        debug!(target: LOG_TARGET, "Insert MMR node");
-        unimplemented!();
-        // match tree {
-        //     MmrTree::Kernel => self.curr_kernel_checkpoint.push_addition(hash),
-        //     MmrTree::Utxo => {
-        //         self.curr_utxo_checkpoint.push_addition(hash);
-        //         if deleted {
-        //             let leaf_index = self
-        //                 .curr_utxo_checkpoint
-        //                 .accumulated_nodes_added_count()
-        //                 .saturating_sub(1);
-        //             self.curr_utxo_checkpoint.push_deletion(leaf_index);
-        //         }
-        //     },
-        //     MmrTree::RangeProof => self.curr_range_proof_checkpoint.push_addition(hash),
-        // };
-        // Ok(())
-    }
-
-    fn delete_mmr_node(&mut self, _tree: MmrTree, _hash: &Hash) -> Result<(), ChainStorageError> {
-        debug!(target: LOG_TARGET, "Delete MMR node");
-        // match tree {
-        //     MmrTree::Kernel | MmrTree::RangeProof => {},
-        //     MmrTree::Utxo => {
-        //         if let Some(leaf_index) = self.utxo_mmr.find_leaf_index(&hash)? {
-        //             self.curr_utxo_checkpoint.push_deletion(leaf_index);
-        //         }
-        //     },
-        // };
-        // Ok(())
-        unimplemented!()
     }
 
     fn fetch_mmr_leaf_index(&self, tree: MmrTree, hash: &Hash) -> Result<Option<u32>, ChainStorageError> {

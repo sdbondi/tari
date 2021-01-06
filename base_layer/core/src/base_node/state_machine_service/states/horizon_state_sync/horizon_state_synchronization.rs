@@ -661,7 +661,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                 MetadataKey::EffectivePrunedHeight,
                 MetadataValue::EffectivePrunedHeight(header.height()),
             )
-            .commit();
+            .commit().await?;
 
         Ok(())
         // let validator = self.shared.sync_validators.final_state.clone();

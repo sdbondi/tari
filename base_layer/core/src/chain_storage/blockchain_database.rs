@@ -770,31 +770,7 @@ where B: BlockchainBackend
         db.fetch_mmr_size(tree)
     }
 
-    /// Fetches the set of leaf node hashes and their deletion status' for the given MMR tree.
-    pub fn fetch_mmr_nodes(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: Option<u64>,
-    ) -> Result<Vec<(Hash, bool)>, ChainStorageError>
-    {
-        let db = self.db_read_access()?;
-        db.fetch_mmr_nodes(tree, pos, count, hist_height)
-    }
 
-    /// Inserts an MMR node consisting of a leaf node hash and its deletion status into the given MMR tree.
-    pub fn insert_mmr_node(&self, tree: MmrTree, hash: Hash, deleted: bool) -> Result<(), ChainStorageError> {
-        let mut db = self.db_write_access()?;
-        db.insert_mmr_node(tree, hash, deleted)
-    }
-
-    /// Marks the MMR node corresponding to the provided hash as deleted.
-    #[allow(clippy::ptr_arg)]
-    pub fn delete_mmr_node(&self, tree: MmrTree, hash: &Hash) -> Result<(), ChainStorageError> {
-        let mut db = self.db_write_access()?;
-        db.delete_mmr_node(tree, hash)
-    }
 
     /// Tries to add a block to the longest chain.
     ///
@@ -1446,10 +1422,22 @@ fn fetch_block<T: BlockchainBackend>(db: &T, height: u64) -> Result<HistoricalBl
     let kernels = db.fetch_kernels_in_block(&accumulated_data.hash)?;
     let outputs = db.fetch_outputs_in_block(&accumulated_data.hash)?;
     let inputs = db.fetch_inputs_in_block(&accumulated_data.hash)?;
+    let mut unpruned = vec![];
+    let mut pruned = vec![];
+    for output in outputs {
+        match output {
+            PrunedOutput::Pruned { output_hash, range_proof_hash } => {
+                pruned.push((output_hash, range_proof_hash));
+            },
+            PrunedOutput::NotPruned { output } => {
+                unpruned.push(output)
+            },
+        }
+    }
     let block = header
         .into_builder()
         .add_inputs(inputs)
-        .add_outputs(outputs)
+        .add_outputs(unpruned)
         .add_kernels(kernels)
         .build();
     trace!(
@@ -1458,7 +1446,7 @@ fn fetch_block<T: BlockchainBackend>(db: &T, height: u64) -> Result<HistoricalBl
         height,
         mark.elapsed()
     );
-    Ok(HistoricalBlock::new(block, tip_height - height + 1, accumulated_data))
+    Ok(HistoricalBlock::new(block, tip_height - height + 1, accumulated_data, pruned))
 }
 
 fn fetch_blocks<T: BlockchainBackend>(
@@ -1654,10 +1642,7 @@ fn rewind_to_height<T: BlockchainBackend>(db: &mut T, height: u64) -> Result<Vec
     );
     for h in 0..steps_back {
         let block = fetch_block(db, block_height - h)?;
-        let block = Arc::new(ChainBlock {
-            block: block.block,
-            accumulated_data: block.accumulated_data,
-        });
+        let block = Arc::new(block.clone().into_chain_block()?);
         txn.delete_block(block.block.hash());
         txn.insert_chained_orphan(block.clone());
         removed_blocks.push(block);

@@ -219,7 +219,7 @@ pub struct BaseNodeServiceRequest {
     pub request_key: u64,
     #[prost(
         oneof = "base_node_service_request::Request",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 18, 19"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 16, 17, 18, 19"
     )]
     pub request: ::std::option::Option<base_node_service_request::Request>,
 }
@@ -256,9 +256,6 @@ pub mod base_node_service_request {
         /// Get headers in best chain following any headers in this list
         #[prost(message, tag = "12")]
         FetchHeadersAfter(super::FetchHeadersAfter),
-        /// Indicates a FetchMatchingMmrNodes request.
-        #[prost(message, tag = "14")]
-        FetchMatchingMmrNodes(super::FetchMatchingMmrNodes),
         /// Indicates a FetchMatchingTxos request.
         #[prost(message, tag = "15")]
         FetchMatchingTxos(super::HashOutputs),
@@ -309,17 +306,6 @@ pub struct FetchMmrNodeCount {
     pub tree: i32,
     #[prost(uint64, tag = "2")]
     pub height: u64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct FetchMatchingMmrNodes {
-    #[prost(enumeration = "MmrTree", tag = "1")]
-    pub tree: i32,
-    #[prost(uint32, tag = "2")]
-    pub pos: u32,
-    #[prost(uint32, tag = "3")]
-    pub count: u32,
-    #[prost(uint64, tag = "4")]
-    pub hist_height: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TxSubmissionResponse {

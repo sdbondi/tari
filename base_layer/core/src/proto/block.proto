@@ -68,11 +68,13 @@ message HistoricalBlock {
     // confirmation.
     uint64 confirmations = 1;
     // An array of commitments of the outputs from this block that have subsequently been spent.
-    repeated tari.types.Commitment spent_commitments = 2;
+//    repeated tari.types.Commitment spent_commitments = 2;
     // The underlying block
     Block block = 3;
 
     BlockHeaderAccumulatedData accumulated_data = 4;
+    repeated bytes pruned_output_hashes = 5;
+    repeated bytes pruned_proof_hashes = 6;
 }
 
 
@@ -82,6 +84,8 @@ message BlockHeaderAccumulatedData {
     uint64 accumulated_blake_difficulty = 3;
     uint64 target_difficulty = 4;
     bytes total_kernel_offset = 5;
+    bytes hash = 6;
+    bytes total_accumulated_difficulty = 7;
 }
 
 // The NewBlockHeaderTemplate is used for the construction of a new mineable block. It contains all the metadata for the block that the Base Node is able to complete on behalf of a Miner.

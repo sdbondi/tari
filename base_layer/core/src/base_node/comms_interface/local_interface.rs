@@ -154,26 +154,6 @@ impl LocalNodeCommsInterface {
         self.block_event_sender.send(Arc::new(event)).unwrap_or(0)
     }
 
-    /// Fetches the set of leaf node hashes and their deletion status' for the nth to nth+count leaf node index in the
-    /// given MMR tree.
-    pub async fn fetch_mmr_nodes(
-        &mut self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: u64,
-    ) -> Result<(Vec<HashOutput>, Vec<u8>), CommsInterfaceError>
-    {
-        match self
-            .request_sender
-            .call(NodeCommsRequest::FetchMatchingMmrNodes(tree, pos, count, hist_height))
-            .await??
-        {
-            NodeCommsResponse::MmrNodes(added, deleted) => Ok((added, deleted)),
-            _ => Err(CommsInterfaceError::UnexpectedApiResponse),
-        }
-    }
-
     pub async fn fetch_matching_utxos(
         &mut self,
         hashes: Vec<HashOutput>,

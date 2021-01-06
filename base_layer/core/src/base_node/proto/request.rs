@@ -29,7 +29,6 @@ use crate::{
             base_node_service_request::Request as ProtoNodeCommsRequest,
             BlockHeights,
             FetchHeadersAfter as ProtoFetchHeadersAfter,
-            FetchMatchingMmrNodes as ProtoFetchMmrNodes,
             FetchMmrNodeCount as ProtoFetchMmrNodeCount,
             HashOutputs,
         },
@@ -83,12 +82,6 @@ impl TryInto<ci::NodeCommsRequest> for ProtoNodeCommsRequest {
                 ci::NodeCommsRequest::GetNewBlockTemplate(PowAlgorithm::try_from(pow_algo)?)
             },
             GetNewBlock(block_template) => ci::NodeCommsRequest::GetNewBlock(block_template.try_into()?),
-            FetchMatchingMmrNodes(request) => ci::NodeCommsRequest::FetchMatchingMmrNodes(
-                request.tree.try_into()?,
-                request.pos,
-                request.count,
-                request.hist_height,
-            ),
             FetchKernelByExcessSig(sig) => ci::NodeCommsRequest::FetchKernelByExcessSig(
                 Signature::try_from(sig).map_err(|err: ByteArrayError| err.to_string())?,
             ),
@@ -126,14 +119,6 @@ impl From<ci::NodeCommsRequest> for ProtoNodeCommsRequest {
             },
             GetNewBlockTemplate(pow_algo) => ProtoNodeCommsRequest::GetNewBlockTemplate(pow_algo as u64),
             GetNewBlock(block_template) => ProtoNodeCommsRequest::GetNewBlock(block_template.into()),
-            FetchMatchingMmrNodes(tree, pos, count, hist_height) => {
-                ProtoNodeCommsRequest::FetchMatchingMmrNodes(ProtoFetchMmrNodes {
-                    tree: tree as i32,
-                    pos,
-                    count,
-                    hist_height,
-                })
-            },
             FetchKernelByExcessSig(signature) => ProtoNodeCommsRequest::FetchKernelByExcessSig(signature.into()),
         }
     }

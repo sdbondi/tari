@@ -22,10 +22,13 @@
 
 use crate::{
     blocks::Block,
-    chain_storage::{BlockHeaderAccumulatedData, ChainBlock},
+    chain_storage::{BlockHeaderAccumulatedData, ChainBlock, ChainStorageError},
     transactions::types::HashOutput,
 };
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
+use std::fmt;
+use tari_crypto::tari_utilities::hex::Hex;
 
 /// The representation of a historical block in the blockchain. It is essentially identical to a protocol-defined
 /// block but contains some extra metadata that clients such as Block Explorers will find interesting.
@@ -35,17 +38,19 @@ pub struct HistoricalBlock {
     /// confirmation.
     pub confirmations: u64,
     /// The underlying block
-    pub block: Block,
+    block: Block,
     /// Accumulated data
     pub accumulated_data: BlockHeaderAccumulatedData,
+    pruned_outputs: Vec<(HashOutput, HashOutput)>
 }
 
 impl HistoricalBlock {
-    pub fn new(block: Block, confirmations: u64, accumulated_data: BlockHeaderAccumulatedData) -> Self {
+    pub fn new(block: Block, confirmations: u64, accumulated_data: BlockHeaderAccumulatedData, pruned_outputs: Vec<(HashOutput, HashOutput)>) -> Self {
         HistoricalBlock {
             block,
             confirmations,
             accumulated_data,
+            pruned_outputs
         }
     }
 
@@ -62,17 +67,55 @@ impl HistoricalBlock {
         &self.accumulated_data.hash
     }
 
-    pub fn into_block(self) -> Block {
-        self.block
+    pub fn is_pruned(&self) -> bool {
+        !self.pruned_outputs.is_empty()
     }
 
-    pub fn into_chain_block(self) -> ChainBlock {
-        ChainBlock {
-            accumulated_data: self.accumulated_data,
-            block: self.block,
+    pub fn into_block(self) -> Result<Block, ChainStorageError> {
+        if self.is_pruned() {
+            Err(ChainStorageError::BeyondPruningHorizon)
+        }
+        else {
+            Ok(self.block)
         }
     }
+
+    pub fn into_chain_block(self) -> Result<ChainBlock, ChainStorageError> {
+        if self.is_pruned() {
+            Err(ChainStorageError::BeyondPruningHorizon)
+        } else {
+            Ok(ChainBlock {
+                accumulated_data: self.accumulated_data,
+                block: self.block,
+            })
+        }
+    }
+
+    pub fn pruned_outputs(&self) -> &[(HashOutput, HashOutput)] {
+        self.pruned_outputs.as_slice()
+    }
+
+    pub fn dissolve(self) -> (Block, BlockHeaderAccumulatedData,u64) {
+        (self.block, self.accumulated_data, self.confirmations)
+    }
 }
+
+
+impl Display for HistoricalBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+
+        writeln!(f, "{}", self.block())?;
+
+        if self.is_pruned() {
+            writeln!(f, "Pruned outputs: ")?;
+            for (output, proof) in &self.pruned_outputs {
+               writeln!(f, "Output hash: {} Proof:{}", output.to_hex(), proof.to_hex())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 
 impl From<HistoricalBlock> for Block {
     fn from(block: HistoricalBlock) -> Self {

@@ -283,29 +283,4 @@ impl OutboundNodeCommsInterface {
                 CommsInterfaceError::InternalChannelError(format!("Failed to send on block_sender: {}", err))
             })
     }
-
-    /// Fetches the set of leaf node hashes and their deletion status' for the nth to nth+count leaf node index in the
-    /// given MMR tree.
-    pub async fn fetch_mmr_nodes(
-        &mut self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: u64,
-        node_id: Option<NodeId>,
-    ) -> Result<(Vec<HashOutput>, Vec<u8>), CommsInterfaceError>
-    {
-        if let NodeCommsResponse::MmrNodes(added, deleted) = self
-            .request_sender
-            .call((
-                NodeCommsRequest::FetchMatchingMmrNodes(tree, pos, count, hist_height),
-                node_id,
-            ))
-            .await??
-        {
-            Ok((added, deleted))
-        } else {
-            Err(CommsInterfaceError::UnexpectedApiResponse)
-        }
-    }
 }

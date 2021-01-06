@@ -31,6 +31,7 @@ use prost_types::Timestamp;
 use std::convert::{TryFrom, TryInto};
 use tari_common_types::types::BLOCK_HASH_LENGTH;
 use tari_crypto::tari_utilities::{epoch_time::EpochTime, ByteArray};
+use itertools::zip;
 
 /// Utility function that converts a `prost::Timestamp` to a `chrono::DateTime`
 pub(crate) fn timestamp_to_datetime(timestamp: Timestamp) -> EpochTime {
@@ -167,22 +168,28 @@ impl TryFrom<proto::HistoricalBlock> for HistoricalBlock {
             .map(TryInto::try_into)
             .ok_or_else(|| "block in historical block not provided".to_string())??;
 
-        Ok(Self {
-            confirmations: historical_block.confirmations,
-            block,
-            // TODO: populate this
-            accumulated_data: Default::default(),
-        })
+        let accumulated_data = historical_block.accumulated_data.map(TryInto::try_into)
+            .ok_or_else(|| "accumulated_data in historical block not provided".to_string())??;
+
+        let pruned = zip(historical_block.pruned_output_hashes, historical_block.pruned_proof_hashes).collect();
+
+        Ok(HistoricalBlock::new(block,historical_block.confirmations, accumulated_data, pruned))
     }
 }
 
 impl From<HistoricalBlock> for proto::HistoricalBlock {
     fn from(block: HistoricalBlock) -> Self {
+
+
+        let pruned_output_hashes = block.pruned_outputs().iter().map(|x| x.0.clone()).collect();
+        let pruned_proof_hashes = block.pruned_outputs().iter().map(|x| x.1.clone()).collect();
+        let (block, accumulated_data, confirmations) = block.dissolve();
         Self {
-            confirmations: block.confirmations,
-            spent_commitments: vec![],
-            block: Some(block.block.into()),
-            accumulated_data: Some(block.accumulated_data.into()),
+            confirmations,
+            accumulated_data: Some(accumulated_data.into()),
+            block: Some(block.into()),
+            pruned_output_hashes,
+            pruned_proof_hashes
         }
     }
 }
@@ -195,9 +202,32 @@ impl From<BlockHeaderAccumulatedData> for proto::BlockHeaderAccumulatedData {
             accumulated_blake_difficulty: source.accumulated_blake_difficulty.into(),
             target_difficulty: source.target_difficulty.into(),
             total_kernel_offset: source.total_kernel_offset.to_vec(),
+            hash: source.hash,
+            total_accumulated_difficulty: Vec::from(source.total_accumulated_difficulty.to_le_bytes())
         }
     }
 }
+
+impl TryFrom<proto::BlockHeaderAccumulatedData> for BlockHeaderAccumulatedData {
+    type Error = String;
+
+    fn try_from(source: proto::BlockHeaderAccumulatedData) -> Result<Self, Self::Error> {
+        let mut acc_diff = [0; 16];
+        acc_diff.copy_from_slice(&source.total_accumulated_difficulty[0..16]);
+        let accumulated_difficulty = u128::from_le_bytes(acc_diff);
+
+        Ok(Self{
+            hash: source.hash,
+            achieved_difficulty: source.achieved_difficulty.into(),
+            total_accumulated_difficulty: accumulated_difficulty,
+            accumulated_monero_difficulty: source.accumulated_monero_difficulty.into(),
+            accumulated_blake_difficulty: source.accumulated_blake_difficulty.into(),
+            target_difficulty: source.target_difficulty.into(),
+            total_kernel_offset: BlindingFactor::from_bytes(source.total_kernel_offset.as_slice()).map_err(|err| format!("Invalid value for total_kernel_offset: {}", err))?,
+        })
+    }
+}
+
 
 //--------------------------------- NewBlockTemplate -------------------------------------------//
 

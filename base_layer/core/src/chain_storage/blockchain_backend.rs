@@ -106,7 +106,7 @@ pub trait BlockchainBackend: Send + Sync {
     fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<(TransactionOutput, u32)>, ChainStorageError>;
 
     /// Fetch all outputs in a block
-    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionOutput>, ChainStorageError>;
+    fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<PrunedOutput>, ChainStorageError>;
 
     /// Fetch all inputs in a block
     fn fetch_inputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<TransactionInput>, ChainStorageError>;
@@ -114,28 +114,6 @@ pub trait BlockchainBackend: Send + Sync {
     /// Fetches the total merkle mountain range node count upto the specified height.
     fn fetch_mmr_size(&self, tree: MmrTree) -> Result<u64, ChainStorageError>;
 
-    /// Fetches the leaf node hash and its deletion status for the nth leaf node in the given MMR tree. The height
-    /// parameter is used to select the point in history used for the node deletion status.
-    fn fetch_mmr_node(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        hist_height: Option<u64>,
-    ) -> Result<(Hash, bool), ChainStorageError>;
-    /// Fetches the set of leaf node hashes and their deletion status' for the nth to nth+count leaf node index in the
-    /// given MMR tree. The height parameter is used to select the point in history used for the node deletion status.
-    fn fetch_mmr_nodes(
-        &self,
-        tree: MmrTree,
-        pos: u32,
-        count: u32,
-        hist_height: Option<u64>,
-    ) -> Result<Vec<(Hash, bool)>, ChainStorageError>;
-    /// Inserts an MMR node consisting of a leaf node hash and its deletion status into the given MMR tree.
-    fn insert_mmr_node(&mut self, tree: MmrTree, hash: Hash, deleted: bool) -> Result<(), ChainStorageError>;
-    /// Marks the MMR node corresponding to the provided hash as deleted.
-    #[allow(clippy::ptr_arg)]
-    fn delete_mmr_node(&mut self, tree: MmrTree, hash: &Hash) -> Result<(), ChainStorageError>;
     /// Fetches the leaf index of the provided leaf node hash in the given MMR tree.
     #[allow(clippy::ptr_arg)]
     fn fetch_mmr_leaf_index(&self, tree: MmrTree, hash: &Hash) -> Result<Option<u32>, ChainStorageError>;

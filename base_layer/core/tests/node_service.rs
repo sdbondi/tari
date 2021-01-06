@@ -591,7 +591,7 @@ fn local_get_metadata() {
     let (mut node, consensus_manager) =
         BaseNodeBuilder::new(network).start(&mut runtime, temp_dir.path().to_str().unwrap());
     let db = &node.blockchain_db;
-    let block0 = db.fetch_block(0).unwrap().into_chain_block();
+    let block0 = db.fetch_block(0).unwrap().into_chain_block().unwrap();
     let block1 = append_block(db, &block0, vec![], &consensus_manager, 1.into()).unwrap();
     let block2 = append_block(db, &block1, vec![], &consensus_manager, 1.into()).unwrap();
 

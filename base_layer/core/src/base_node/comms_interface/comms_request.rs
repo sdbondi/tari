@@ -55,7 +55,6 @@ pub enum NodeCommsRequest {
     FetchBlocksWithUtxos(Vec<Commitment>),
     GetNewBlockTemplate(PowAlgorithm),
     GetNewBlock(NewBlockTemplate),
-    FetchMatchingMmrNodes(MmrTree, u32, u32, u64),
     FetchKernelByExcessSig(Signature),
 }
 
@@ -82,10 +81,6 @@ impl Display for NodeCommsRequest {
             NodeCommsRequest::FetchBlocksWithUtxos(v) => f.write_str(&format!("FetchBlocksWithUtxos (n={})", v.len())),
             NodeCommsRequest::GetNewBlockTemplate(algo) => f.write_str(&format!("GetNewBlockTemplate ({})", algo)),
             NodeCommsRequest::GetNewBlock(b) => f.write_str(&format!("GetNewBlock (Block Height={})", b.header.height)),
-            NodeCommsRequest::FetchMatchingMmrNodes(tree, pos, count, hist_height) => f.write_str(&format!(
-                "FetchMatchingMmrNodes (tree={},pos={},count={},hist_height={})",
-                tree, pos, count, hist_height
-            )),
             NodeCommsRequest::FetchKernelByExcessSig(s) => f.write_str(&format!(
                 "FetchKernelByExcessSig (signature=({}, {}))",
                 s.get_public_nonce().to_hex(),

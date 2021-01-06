@@ -534,7 +534,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
                 };
                 let result_size = blocks.len();
                 for block in blocks {
-                    match tx.send(Ok(block.into())).await {
+                    match tx.send(block.try_into().map_err(|err| Status::internal(format!("Could not provide block: {}", err)))).await {
                         Ok(_) => (),
                         Err(err) => {
                             warn!(target: LOG_TARGET, "Error sending header via GRPC:  {}", err);
@@ -610,7 +610,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
                 Ok(data) => data,
             };
             for block in blocks {
-                match tx.send(Ok(block.into())).await {
+                match tx.send(block.try_into().map_err(|err| Status::internal(format!("Could not provide block:{}", err)))).await {
                     Ok(_) => (),
                     Err(err) => {
                         warn!(target: LOG_TARGET, "Error sending header via GRPC:  {}", err);

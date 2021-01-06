@@ -410,35 +410,6 @@ where T: BlockchainBackend + 'static
                     block: Some(block),
                 })
             },
-            NodeCommsRequest::FetchMatchingMmrNodes(tree, pos, count, hist_height) => {
-                let mut added = Vec::<Vec<u8>>::with_capacity(count as usize);
-                let mut deleted = Bitmap::create();
-                match self
-                    .blockchain_db
-                    .fetch_mmr_nodes(tree, pos, count, Some(hist_height))
-                    .await
-                {
-                    Ok(mmr_nodes) => {
-                        for (index, (leaf_hash, deletion_status)) in mmr_nodes.into_iter().enumerate() {
-                            added.push(leaf_hash);
-                            if deletion_status {
-                                deleted.add(pos + index as u32);
-                            }
-                        }
-                    },
-                    // We need to suppress the error as another node might ask for mmr nodes we dont have, so we
-                    // return ok([])
-                    Err(e) => warn!(
-                        target: LOG_TARGET,
-                        "Could not provide requested mmr nodes (pos:{},count:{}) to peer because: {}",
-                        pos,
-                        count,
-                        e.to_string()
-                    ),
-                }
-                deleted.run_optimize();
-                Ok(NodeCommsResponse::MmrNodes(added, deleted.serialize()))
-            },
             NodeCommsRequest::FetchKernelByExcessSig(signature) => {
                 let mut kernels = Vec::<TransactionKernel>::new();
 
@@ -500,7 +471,7 @@ where T: BlockchainBackend + 'static
 
         match block.pop() {
             Some(block) => {
-                self.handle_block(Arc::new(block.block), true.into(), Some(source_peer))
+                self.handle_block(Arc::new(block.into_block()?), true.into(), Some(source_peer))
                     .await
             },
             None => {

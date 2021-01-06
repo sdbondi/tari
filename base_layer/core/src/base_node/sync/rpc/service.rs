@@ -141,9 +141,13 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
                         let mut blocks = stream::iter(
                             blocks
                                 .into_iter()
-                                .map(|hb| hb.block)
-                                .map(proto::base_node::BlockBodyResponse::from)
-                                .map(Ok)
+                                .map(|hb| hb.into_block().map_err(RpcStatus::log_internal_error(LOG_TARGET)))
+                                .map(| block|
+match block {
+    Ok(b) => Ok(proto::base_node::BlockBodyResponse::from(b)),
+    Err(err) => Err(err)
+
+})
                                 .map(Ok),
                         );
 
