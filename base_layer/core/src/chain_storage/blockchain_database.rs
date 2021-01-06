@@ -905,13 +905,13 @@ where B: BlockchainBackend
         }
 
         let (start, end) = (start.unwrap(), end.unwrap());
-        if start < metadata.effective_pruned_height() {
-            return Err(ChainStorageError::ValueNotFound {
-                entity: "Block".to_string(),
-                field: "start height".to_string(),
-                value: start.to_string(),
-            });
-        }
+        // if start < metadata.effective_pruned_height() {
+        //     return Err(ChainStorageError::ValueNotFound {
+        //         entity: "Block".to_string(),
+        //         field: "start height".to_string(),
+        //         value: start.to_string(),
+        //     });
+        // }
 
         if end > metadata.height_of_longest_chain() {
             return Err(ChainStorageError::ValueNotFound {
@@ -1589,13 +1589,13 @@ fn check_for_valid_height<T: BlockchainBackend>(db: &T, height: u64) -> Result<u
             height, tip_height
         )));
     }
-    let pruned_height = metadata.effective_pruned_height();
-    if height < pruned_height {
-        return Err(ChainStorageError::InvalidQuery(format!(
-            "Cannot get block at height {}. Effective pruned height is {}",
-            height, pruned_height
-        )));
-    }
+    // let pruned_height = metadata.effective_pruned_height();
+    // if height < pruned_height {
+    //     return Err(ChainStorageError::InvalidQuery(format!(
+    //         "Cannot get block at height {}. Effective pruned height is {}",
+    //         height, pruned_height
+    //     )));
+    // }
     Ok(tip_height)
 }
 
