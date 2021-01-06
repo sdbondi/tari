@@ -1,6 +1,7 @@
 use crate::{
     blocks::{Block, BlockHeader},
     chain_storage::{
+        pruned_output::PrunedOutput,
         BlockAccumulatedData,
         BlockHeaderAccumulatedData,
         ChainHeader,
@@ -15,10 +16,9 @@ use crate::{
         types::{HashOutput, Signature},
     },
 };
+use croaring::Bitmap;
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_mmr::Hash;
-use croaring::Bitmap;
-use crate::chain_storage::pruned_output::PrunedOutput;
 
 /// Identify behaviour for Blockchain database back ends. Implementations must support `Send` and `Sync` so that
 /// `BlockchainDatabase` can be thread-safe. The backend *must* also execute transactions atomically; i.e., every
@@ -73,7 +73,7 @@ pub trait BlockchainBackend: Send + Sync {
 
     fn fetch_block_accumulated_data_by_height(
         &self,
-        height: u64
+        height: u64,
     ) -> Result<Option<BlockAccumulatedData>, ChainStorageError>;
 
     /// Fetch all the kernels in a block
@@ -95,7 +95,12 @@ pub trait BlockchainBackend: Send + Sync {
     /// Fetch kernels by MMR position
     fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError>;
 
-    fn fetch_utxos_by_mmr_position(&self, start: u64, end: u64, deleted: &Bitmap) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError>;
+    fn fetch_utxos_by_mmr_position(
+        &self,
+        start: u64,
+        end: u64,
+        deleted: &Bitmap,
+    ) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError>;
 
     /// Fetch a specific output. Returns the output and the leaf index in the output MMR
     fn fetch_output(&self, output_hash: &HashOutput) -> Result<Option<(TransactionOutput, u32)>, ChainStorageError>;

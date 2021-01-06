@@ -49,7 +49,7 @@ pub struct BaseNodeStateMachineConfig {
     pub horizon_sync_config: HorizonSyncConfig,
     pub sync_peer_config: SyncPeerConfig,
     pub orphan_db_clean_out_threshold: usize,
-    pub pruning_horizon: u64
+    pub pruning_horizon: u64,
 }
 
 /// A Tari full node, aka Base Node.

@@ -24,6 +24,7 @@
 // Version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0.
 use crate::{
     blocks::BlockHeader,
+    chain_storage::MmrTree,
     consensus::ConsensusConstants,
     proof_of_work::ProofOfWork,
     tari_utilities::hex::Hex,
@@ -40,7 +41,6 @@ use std::fmt::{Display, Formatter};
 use tari_common_types::types::BlockHash;
 use tari_crypto::tari_utilities::Hashable;
 use thiserror::Error;
-use crate::chain_storage::MmrTree;
 
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum BlockValidationError {
@@ -51,7 +51,11 @@ pub enum BlockValidationError {
     #[error("Mismatched MMR roots")]
     MismatchedMmrRoots,
     #[error("MMR size for {mmr_tree} does not match. Expected: {expected}, received: {actual}")]
-    MismatchedMmrSize{mmr_tree: MmrTree, expected: u64, actual: u64},
+    MismatchedMmrSize {
+        mmr_tree: MmrTree,
+        expected: u64,
+        actual: u64,
+    },
     #[error("The block contains transactions that should have been cut through.")]
     NoCutThrough,
     #[error("The block weight is above the maximum")]
@@ -200,7 +204,7 @@ impl BlockBuilder {
         self = self.add_inputs(inputs);
         self.header.output_mmr_size += outputs.len() as u64;
         self = self.add_outputs(outputs);
-        self.header.kernel_mmr_size+= kernels.len() as u64;
+        self.header.kernel_mmr_size += kernels.len() as u64;
         self = self.add_kernels(kernels);
         self.header.total_kernel_offset = &self.header.total_kernel_offset + &tx.offset;
         self

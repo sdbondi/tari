@@ -46,7 +46,6 @@ pub use blockchain_database::{
     fetch_header,
     fetch_headers,
     fetch_target_difficulty,
-    // TODO: This should be removed
     include_legacy_deleted_hash,
     BlockAddResult,
     BlockchainDatabase,
@@ -92,4 +91,3 @@ pub use lmdb_db::{
 
 mod target_difficulties;
 pub use target_difficulties::TargetDifficulties;
-

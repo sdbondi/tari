@@ -123,7 +123,7 @@ impl From<BlockHeader> for proto::BlockHeader {
             nonce: header.nonce,
             pow: Some(proto::ProofOfWork::from(header.pow)),
             kernel_mmr_size: header.kernel_mmr_size,
-            output_mmr_size: header.output_mmr_size
+            output_mmr_size: header.output_mmr_size,
         }
     }
 }

@@ -155,7 +155,7 @@ impl<U> OrNotFound<U> for Result<Option<U>, ChainStorageError> {
                 None => Err(ChainStorageError::ValueNotFound {
                     entity: entity.to_string(),
                     field: field.to_string(),
-                    value
+                    value,
                 }),
                 Some(v) => Ok(v),
             },

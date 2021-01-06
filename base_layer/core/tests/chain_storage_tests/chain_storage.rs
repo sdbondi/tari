@@ -92,7 +92,6 @@ fn write_and_fetch_metadata() {
 
     let state = InProgressHorizonSyncState {
         metadata: metadata.clone(),
-
     };
     store.set_horizon_sync_state(state).unwrap();
     let state = store.get_horizon_sync_state().unwrap().unwrap();

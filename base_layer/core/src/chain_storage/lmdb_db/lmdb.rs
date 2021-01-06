@@ -36,8 +36,7 @@ use lmdb_zero::{
 };
 use log::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Display;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 pub const LOG_TARGET: &str = "c::cs::lmdb_db::lmdb";
 
@@ -304,9 +303,9 @@ pub fn lmdb_first_after<K, V>(
     db: &Database,
     key: &K,
 ) -> Result<Option<V>, ChainStorageError>
-    where
-        K: AsLmdbBytes + ?Sized + FromLmdbBytes,
-        V: DeserializeOwned,
+where
+    K: AsLmdbBytes + ?Sized + FromLmdbBytes,
+    V: DeserializeOwned,
 {
     let access = txn.access();
     let mut cursor = txn.cursor(db).map_err(|e| {
@@ -319,7 +318,7 @@ pub fn lmdb_first_after<K, V>(
             let val = deserialize::<V>(r.1)?;
             Ok(Some(val))
         },
-        Err(_) => Ok(None)
+        Err(_) => Ok(None),
     }
 }
 

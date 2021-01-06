@@ -22,15 +22,14 @@
 
 use crate::{
     base_node::{comms_interface::CommsInterfaceError, state_machine_service::states::helpers::BaseNodeRequestError},
-    chain_storage::ChainStorageError,
+    chain_storage::{ChainStorageError, MmrTree},
     transactions::transaction::TransactionError,
+    validation::ValidationError,
 };
-use thiserror::Error;
-use tokio::task;
-use crate::validation::ValidationError;
-use crate::chain_storage::MmrTree;
 use tari_comms::protocol::rpc::{RpcError, RpcStatus};
 use tari_mmr::error::MerkleMountainRangeError;
+use thiserror::Error;
+use tokio::task;
 
 #[derive(Debug, Error)]
 pub enum HorizonSyncError {
@@ -59,9 +58,9 @@ pub enum HorizonSyncError {
     #[error("RPC status: {0}")]
     RpcStatus(#[from] RpcStatus),
     #[error("Could not convert data:{0}")]
-ConversionError(String),
+    ConversionError(String),
     #[error("MerkleMountainRangeError: {0}")]
-    MerkleMountainRangeError(#[from] MerkleMountainRangeError)
+    MerkleMountainRangeError(#[from] MerkleMountainRangeError),
 }
 
 impl HorizonSyncError {

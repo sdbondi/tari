@@ -37,8 +37,8 @@ use crate::{
         MetadataKey,
         MetadataValue,
         MmrTree,
+        PrunedOutput,
         TargetDifficulties,
-        PrunedOutput
     },
     common::rolling_vec::RollingVec,
     proof_of_work::{PowAlgorithm, TargetDifficultyWindow},
@@ -48,13 +48,12 @@ use crate::{
         types::{Commitment, HashOutput, Signature},
     },
 };
+use croaring::Bitmap;
 use log::*;
 use rand::{rngs::OsRng, RngCore};
 use std::{mem, ops::RangeBounds, sync::Arc, time::Instant};
 use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
-use tari_mmr::Hash;
-use tari_mmr::pruned_hashset::PrunedHashSet;
-use croaring::Bitmap;
+use tari_mmr::{pruned_hashset::PrunedHashSet, Hash};
 
 const LOG_TARGET: &str = "c::bn::async_db";
 
@@ -146,10 +145,12 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     make_async_fn!(fetch_utxos(hashes: Vec<HashOutput>, is_spent_as_of: Option<HashOutput>) -> Vec<Option<(TransactionOutput, bool)>>, "fetch_utxos");
 
     make_async_fn!(fetch_utxos_by_mmr_position(start: u64, end: u64, end_header_hash: HashOutput) -> (Vec<PrunedOutput>, Vec<Bitmap>), "fetch_utxos_by_mmr_position");
+
     //---------------------------------- Kernel --------------------------------------------//
     make_async_fn!(fetch_kernel_by_excess_sig(excess_sig: Signature) -> Option<(TransactionKernel, HashOutput)>, "fetch_kernel_by_excess_sig");
 
     make_async_fn!(fetch_kernels_by_mmr_position(start: u64, end: u64) -> Vec<TransactionKernel>, "fetch_kernels_by_mmr_position");
+
     //---------------------------------- MMR --------------------------------------------//
     make_async_fn!(prepare_block_merkle_roots(template: NewBlockTemplate) -> Block, "create_block");
 
@@ -175,7 +176,6 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     make_async_fn!(fetch_header_by_block_hash(hash: HashOutput) -> Option<BlockHeader>, "fetch_header_by_block_hash");
 
     make_async_fn!(fetch_header_containing_kernel_mmr(mmr_position: u64) -> ChainHeader, "fetch_header_containing_kernel_mmr");
-
 
     make_async_fn!(fetch_header_containing_utxo_mmr(mmr_position: u64) -> ChainHeader, "fetch_header_containing_utxo_mmr");
 
@@ -217,6 +217,7 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
     make_async_fn!(fetch_block_accumulated_data(hash: HashOutput) -> BlockAccumulatedData, "fetch_block_accumulated_data");
 
     make_async_fn!(fetch_block_accumulated_data_by_height(height: u64) -> Option<BlockAccumulatedData>, "fetch_block_accumulated_data_by_height");
+
     //---------------------------------- Horizon Sync --------------------------------------------//
     make_async_fn!(get_horizon_sync_state() -> Option<InProgressHorizonSyncState>, "get_horizon_sync_state");
 
@@ -267,24 +268,50 @@ impl<'a, B: BlockchainBackend + 'static> AsyncDbTransaction<'a, B> {
         }
     }
 
-    pub fn insert_kernel_via_horizon_sync(&mut self, kernel: TransactionKernel, header_hash: HashOutput, mmr_position: u32)-> &mut Self {
+    pub fn insert_kernel_via_horizon_sync(
+        &mut self,
+        kernel: TransactionKernel,
+        header_hash: HashOutput,
+        mmr_position: u32,
+    ) -> &mut Self
+    {
         self.transaction.insert_kernel(kernel, header_hash, mmr_position);
         self
     }
 
-    pub fn insert_output_via_horizon_sync(&mut self, output: TransactionOutput, header_hash: HashOutput, mmr_position: u32)-> &mut Self {
+    pub fn insert_output_via_horizon_sync(
+        &mut self,
+        output: TransactionOutput,
+        header_hash: HashOutput,
+        mmr_position: u32,
+    ) -> &mut Self
+    {
         self.transaction.insert_utxo(output, header_hash, mmr_position);
         self
     }
 
-    pub fn insert_pruned_output_via_horizon_sync(&mut self, output_hash: HashOutput, proof_hash: HashOutput, header_hash: HashOutput, mmr_position: u32) -> &mut Self {
-        self.transaction.insert_pruned_utxo(output_hash, proof_hash, header_hash, mmr_position);
+    pub fn insert_pruned_output_via_horizon_sync(
+        &mut self,
+        output_hash: HashOutput,
+        proof_hash: HashOutput,
+        header_hash: HashOutput,
+        mmr_position: u32,
+    ) -> &mut Self
+    {
+        self.transaction
+            .insert_pruned_utxo(output_hash, proof_hash, header_hash, mmr_position);
         self
     }
 
-
-    pub fn update_pruned_hash_set(&mut self, mmr_tree: MmrTree, header_hash: HashOutput, pruned_hash_set: PrunedHashSet) -> &mut Self {
-        self.transaction.update_pruned_hash_set(mmr_tree, header_hash, pruned_hash_set);
+    pub fn update_pruned_hash_set(
+        &mut self,
+        mmr_tree: MmrTree,
+        header_hash: HashOutput,
+        pruned_hash_set: PrunedHashSet,
+    ) -> &mut Self
+    {
+        self.transaction
+            .update_pruned_hash_set(mmr_tree, header_hash, pruned_hash_set);
         self
     }
 

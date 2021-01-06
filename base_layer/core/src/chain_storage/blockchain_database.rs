@@ -30,11 +30,14 @@ use crate::{
         },
         db_transaction::{DbKey, DbTransaction, DbValue, MetadataKey, MetadataValue},
         error::ChainStorageError,
+        pruned_output::PrunedOutput,
         BlockchainBackend,
         ChainBlock,
         ChainHeader,
         HistoricalBlock,
         InProgressHorizonSyncState,
+        MmrTree,
+        OrNotFound,
         TargetDifficulties,
     },
     common::rolling_vec::RollingVec,
@@ -63,8 +66,6 @@ use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use uint::static_assertions::_core::ops::RangeBounds;
-use crate::chain_storage::{MmrTree, OrNotFound};
-use crate::chain_storage::pruned_output::PrunedOutput;
 
 const LOG_TARGET: &str = "c::cs::database";
 
@@ -128,7 +129,7 @@ impl BlockAddResult {
             BlockAddResult::ChainReorg(a, r) => {
                 assert_eq!(num_added, a.len(), "Number of added reorged blocks was different");
                 assert_eq!(num_removed, r.len(), "Number of removed reorged blocks was different");
-            }
+            },
             BlockAddResult::Ok(_) => panic!("Expected reorg result, but was Ok()"),
             BlockAddResult::BlockExists => panic!("Expected reorg result, but was BlockExists"),
             BlockAddResult::OrphanBlock => panic!("Expected reorg result, but was OrphanBlock"),
@@ -217,7 +218,7 @@ pub struct BlockchainDatabase<B> {
 
 #[allow(clippy::ptr_arg)]
 impl<B> BlockchainDatabase<B>
-    where B: BlockchainBackend
+where B: BlockchainBackend
 {
     /// Creates a new `BlockchainDatabase` using the provided backend.
     pub fn new(
@@ -247,7 +248,7 @@ impl<B> BlockchainDatabase<B>
         }
         if cleanup_orphans_at_startup {
             match blockchain_db.cleanup_all_orphans() {
-                Ok(_) => info!(target: LOG_TARGET, "Orphan database cleaned out at startup.", ),
+                Ok(_) => info!(target: LOG_TARGET, "Orphan database cleaned out at startup.",),
                 Err(e) => warn!(
                     target: LOG_TARGET,
                     "Orphan database could not be cleaned out at startup: ({}).", e
@@ -405,18 +406,33 @@ impl<B> BlockchainDatabase<B>
         db.fetch_kernel_by_excess_sig(&excess_sig)
     }
 
-    pub fn fetch_kernels_by_mmr_position(&self, start: u64, end: u64) -> Result<Vec<TransactionKernel>, ChainStorageError> {
-        let db= self.db_read_access()?;
+    pub fn fetch_kernels_by_mmr_position(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> Result<Vec<TransactionKernel>, ChainStorageError>
+    {
+        let db = self.db_read_access()?;
         db.fetch_kernels_by_mmr_position(start, end)
     }
 
-    pub fn fetch_utxos_by_mmr_position(&self, start: u64, end: u64, end_header_hash: HashOutput ) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError> {
+    pub fn fetch_utxos_by_mmr_position(
+        &self,
+        start: u64,
+        end: u64,
+        end_header_hash: HashOutput,
+    ) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError>
+    {
         let db = self.db_read_access()?;
-        let accum_data = db.fetch_block_accumulated_data(&end_header_hash).or_not_found("BlockAccumulatedData", "hash",  end_header_hash.to_hex())?;
+        let accum_data = db.fetch_block_accumulated_data(&end_header_hash).or_not_found(
+            "BlockAccumulatedData",
+            "hash",
+            end_header_hash.to_hex(),
+        )?;
         db.fetch_utxos_by_mmr_position(start, end, accum_data.deleted())
     }
 
-        /// Returns the block header at the given block height.
+    /// Returns the block header at the given block height.
     pub fn fetch_header(&self, height: u64) -> Result<Option<BlockHeader>, ChainStorageError> {
         let db = self.db_read_access()?;
         match fetch_header(&*db, height) {
@@ -447,18 +463,18 @@ impl<B> BlockchainDatabase<B>
     }
 
     pub fn fetch_header_containing_kernel_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
-        let db= self.db_read_access()?;
+        let db = self.db_read_access()?;
         db.fetch_header_containing_kernel_mmr(mmr_position)
     }
 
     pub fn fetch_header_containing_utxo_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
-        let db= self.db_read_access()?;
+        let db = self.db_read_access()?;
         db.fetch_header_containing_utxo_mmr(mmr_position)
     }
 
     /// Find the first matching header in a list of block hashes, returning the index of the match and the BlockHeader.
     /// Or None if not found.
-    pub fn find_headers_after_hash<I: IntoIterator<Item=HashOutput>>(
+    pub fn find_headers_after_hash<I: IntoIterator<Item = HashOutput>>(
         &self,
         ordered_hashes: I,
         count: u64,
@@ -495,7 +511,7 @@ impl<B> BlockchainDatabase<B>
                             })?;
                     let headers = fetch_headers(&*db, header.height + 1, end_height)?;
                     return Ok(Some((i, headers)));
-                }
+                },
                 None => continue,
             };
         }
@@ -628,7 +644,7 @@ impl<B> BlockchainDatabase<B>
             Some(h) => h,
             None => {
                 return Ok(Vec::new());
-            }
+            },
         };
         let start = end_height.saturating_sub(n as u64 - 1);
         let headers = fetch_headers(&*db, start, end_height)?;
@@ -645,7 +661,11 @@ impl<B> BlockchainDatabase<B>
             })
     }
 
-    pub fn fetch_block_accumulated_data_by_height(&self, height: u64) -> Result<Option<BlockAccumulatedData>, ChainStorageError> {
+    pub fn fetch_block_accumulated_data_by_height(
+        &self,
+        height: u64,
+    ) -> Result<Option<BlockAccumulatedData>, ChainStorageError>
+    {
         let db = self.db_read_access()?;
         db.fetch_block_accumulated_data_by_height(height)
     }
@@ -727,7 +747,7 @@ impl<B> BlockchainDatabase<B>
         block.header.kernel_mmr_size = roots.kernel_mmr_size;
         block.header.output_mr = roots.output_mr;
         block.header.range_proof_mr = roots.range_proof_mr;
-        block.header.output_mmr_size  = roots.output_mmr_size;
+        block.header.output_mmr_size = roots.output_mmr_size;
         Ok(block)
     }
 
@@ -833,8 +853,8 @@ impl<B> BlockchainDatabase<B>
         match block_add_result {
             BlockAddResult::OrphanBlock | BlockAddResult::ChainReorg(_, _) => {
                 cleanup_orphans(&mut *db, self.config.orphan_storage_capacity)?
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         // Cleanup of backend when in pruned mode.
@@ -845,7 +865,7 @@ impl<B> BlockchainDatabase<B>
                 self.config.pruning_horizon,
                 new_height,
             )?,
-            _ => {}
+            _ => {},
         }
 
         trace!(
@@ -1005,15 +1025,15 @@ impl<B> BlockchainDatabase<B>
                 );
                 debug!(target: LOG_TARGET, "Existing PendingHorizonSyncState = ({})", state);
                 Ok(state)
-            }
+            },
             None => {
                 let metadata = db.fetch_chain_metadata()?;
 
                 let state = InProgressHorizonSyncState {
                     metadata,
-                    // initial_kernel_checkpoint_count: db.count_checkpoints(MmrTree::Kernel)? as u64,
-                    // initial_utxo_checkpoint_count: db.count_checkpoints(MmrTree::Utxo)? as u64,
-                    // initial_rangeproof_checkpoint_count: db.count_checkpoints(MmrTree::Utxo)? as u64,
+                    /* initial_kernel_checkpoint_count: db.count_checkpoints(MmrTree::Kernel)? as u64,
+                     * initial_utxo_checkpoint_count: db.count_checkpoints(MmrTree::Utxo)? as u64,
+                     * initial_rangeproof_checkpoint_count: db.count_checkpoints(MmrTree::Utxo)? as u64, */
                 };
                 debug!(target: LOG_TARGET, "Preparing database for horizon sync. ({})", state);
 
@@ -1026,7 +1046,7 @@ impl<B> BlockchainDatabase<B>
 
                 // During horizon state syncing the blockchain backend will be in an inconsistent state until the
                 // entire horizon state has been synced. Reset the local chain metadata will limit
-                //other nodes and local service from requesting data while the horizon sync is in
+                // other nodes and local service from requesting data while the horizon sync is in
                 // progress.
                 // txn.set_metadata(MetadataKey::ChainHeight,
                 //                  MetadataValue::ChainHeight(0));
@@ -1038,7 +1058,7 @@ impl<B> BlockchainDatabase<B>
                 db.write(txn)?;
 
                 Ok(state)
-            }
+            },
         }
     }
 
@@ -1197,7 +1217,7 @@ pub struct MmrRoots {
     pub kernel_mmr_size: u64,
     pub output_mr: BlockHash,
     pub range_proof_mr: BlockHash,
-    pub output_mmr_size: u64
+    pub output_mmr_size: u64,
 }
 
 pub fn calculate_mmr_roots<T: BlockchainBackend>(db: &T, block: &Block) -> Result<MmrRoots, ChainStorageError> {
@@ -1284,7 +1304,7 @@ pub fn fetch_headers<T: BlockchainBackend>(
         match db.fetch(&DbKey::BlockHeader(h))? {
             Some(DbValue::BlockHeader(header)) => {
                 headers.push(*header);
-            }
+            },
             Some(_) => unreachable!(),
             None => break,
         }
@@ -1358,12 +1378,12 @@ fn insert_block(txn: &mut DbTransaction, block: Arc<ChainBlock>) -> Result<(), C
         MetadataKey::ChainHeight,
         MetadataValue::ChainHeight(block.block.header.height),
     )
-        .set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(block_hash))
-        .set_metadata(
-            MetadataKey::AccumulatedWork,
-            MetadataValue::AccumulatedWork(accumulated_difficulty),
-        )
-        .insert_block(block);
+    .set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(block_hash))
+    .set_metadata(
+        MetadataKey::AccumulatedWork,
+        MetadataValue::AccumulatedWork(accumulated_difficulty),
+    )
+    .insert_block(block);
 
     Ok(())
 }
@@ -1740,7 +1760,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
                 fork_header.header.height,
                 fork_header.accumulated_data.hash.to_hex()
             );
-        }
+        },
         Ordering::Less | Ordering::Equal => {
             debug!(
                 target: LOG_TARGET,
@@ -1755,7 +1775,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
                 "Orphan block received: #{} ", new_block.header.height
             );
             return Ok(BlockAddResult::OrphanBlock);
-        }
+        },
     }
 
     // TODO: We already have the first link in this chain, can be optimized to exclude it
@@ -1770,8 +1790,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
         1;
 
     let num_added_blocks = reorg_chain.len();
-    let removed_blocks =
-        reorganize_chain(db, block_validator, fork_height, tip_header.height(), &reorg_chain)?;
+    let removed_blocks = reorganize_chain(db, block_validator, fork_height, tip_header.height(), &reorg_chain)?;
 
     let num_removed_blocks = removed_blocks.len();
 
@@ -1815,7 +1834,7 @@ fn reorganize_chain<T: BlockchainBackend>(
 {
     let removed_blocks = if height < current_tip_height {
         rewind_to_height(backend, height)?
-    }else {
+    } else {
         vec![]
     };
     debug!(
@@ -1950,7 +1969,7 @@ fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(
             accumulated_data: accumulated_data.clone(),
             block: block.as_ref().clone(),
         }
-            .into(),
+        .into(),
     );
 
     for new_tip in find_orphan_descendant_tips_of(&*db, &block.header, &accumulated_data, validator, &mut txn)? {
@@ -1993,7 +2012,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                         block: child.clone(),
                         accumulated_data: accum_data.clone(),
                     }
-                        .into(),
+                    .into(),
                 );
                 res.extend(find_orphan_descendant_tips_of(
                     db,
@@ -2002,7 +2021,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                     validator,
                     txn,
                 )?);
-            }
+            },
             Err(e) => {
                 // Warn for now, idk might lower to debug later.
                 warn!(
@@ -2012,7 +2031,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                     e
                 );
                 txn.delete_orphan(child.hash());
-            }
+            },
         };
     }
     Ok(res)

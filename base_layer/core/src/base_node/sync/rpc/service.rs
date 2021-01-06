@@ -22,25 +22,28 @@
 
 use crate::{
     base_node::sync::rpc::BaseNodeSyncService,
-    chain_storage::{async_db::AsyncBlockchainDb, BlockchainBackend},
+    chain_storage::{async_db::AsyncBlockchainDb, BlockchainBackend, OrNotFound, PrunedOutput},
     iterators::NonOverlappingIntegerPairIter,
     proto,
     proto::generated::base_node::{
         FindChainSplitRequest,
         FindChainSplitResponse,
         SyncBlocksRequest,
+        SyncDeletedBitmapsRequest,
+        SyncDeletedBitmapsResponse,
         SyncHeadersRequest,
-        SyncKernelsRequest
+        SyncKernelsRequest,
+        SyncUtxo,
+        SyncUtxosRequest,
+        SyncUtxosResponse,
     },
 };
 use futures::{channel::mpsc, stream, SinkExt};
 use log::*;
 use std::cmp;
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus, Streaming};
-use tokio::task;
-use crate::proto::generated::base_node::{SyncDeletedBitmapsRequest, SyncDeletedBitmapsResponse, SyncUtxosRequest, SyncUtxosResponse, SyncUtxo};
-use crate::chain_storage::{OrNotFound, PrunedOutput};
 use tari_crypto::tari_utilities::hex::Hex;
+use tokio::task;
 
 const LOG_TARGET: &str = "c::base_node::sync_rpc";
 
@@ -335,32 +338,39 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         Ok(Response::new(chain_metadata.into()))
     }
 
-    async fn sync_kernels(&self, request: Request<SyncKernelsRequest>) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus> {
+    async fn sync_kernels(
+        &self,
+        request: Request<SyncKernelsRequest>,
+    ) -> Result<Streaming<proto::types::TransactionKernel>, RpcStatus>
+    {
         let req = request.into_message();
         const BATCH_SIZE: usize = 1000;
         let (mut tx, rx) = mpsc::channel(BATCH_SIZE);
         let db = self.db();
 
         task::spawn(async move {
-            let iter = NonOverlappingIntegerPairIter::new(
-                req.start,
-                req.end,
-                BATCH_SIZE,
-            );
+            let iter = NonOverlappingIntegerPairIter::new(req.start, req.end, BATCH_SIZE);
             for (start, end) in iter {
                 if tx.is_closed() {
                     break;
                 }
                 info!(target: LOG_TARGET, "Streaming kernels {} to {}", start, end);
-                let res = db.fetch_kernels_by_mmr_position(start, end).await
+                let res = db
+                    .fetch_kernels_by_mmr_position(start, end)
+                    .await
                     .map_err(RpcStatus::log_internal_error(LOG_TARGET));
                 match res {
                     Ok(kernels) if kernels.is_empty() => {
                         break;
                     },
                     Ok(kernels) => {
-                        let mut kernels =
-                            stream::iter(kernels.into_iter().map(proto::types::TransactionKernel::from).map(Ok).map(Ok));
+                        let mut kernels = stream::iter(
+                            kernels
+                                .into_iter()
+                                .map(proto::types::TransactionKernel::from)
+                                .map(Ok)
+                                .map(Ok),
+                        );
                         // Ensure task stops if the peer prematurely stops their RPC session
                         if tx.send_all(&mut kernels).await.is_err() {
                             break;
@@ -371,7 +381,6 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
                         break;
                     },
                 }
-
             }
         });
         Ok(Streaming::new(rx))
@@ -385,50 +394,54 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         let db = self.db();
 
         task::spawn(async move {
-            let end_header = match  db.fetch_header_by_block_hash(req.end_header_hash.clone()).await.or_not_found("BlockHeader", "hash", req.end_header_hash.to_hex()).map_err(RpcStatus::log_internal_error(LOG_TARGET))  {
+            let end_header = match db
+                .fetch_header_by_block_hash(req.end_header_hash.clone())
+                .await
+                .or_not_found("BlockHeader", "hash", req.end_header_hash.to_hex())
+                .map_err(RpcStatus::log_internal_error(LOG_TARGET))
+            {
                 Ok(header) => header,
                 Err(err) => {
                     tx.send(Err(err)).await;
                     return;
-                }
+                },
             };
 
-            let iter = NonOverlappingIntegerPairIter::new(
-                req.start,
-                end_header.output_mmr_size,
-                UTXOS_PER_BATCH,
-            );
+            let iter = NonOverlappingIntegerPairIter::new(req.start, end_header.output_mmr_size, UTXOS_PER_BATCH);
             for (start, end) in iter {
                 if tx.is_closed() {
                     break;
                 }
                 info!(target: LOG_TARGET, "Streaming utxos {} to {}", start, end);
-                let res = db.fetch_utxos_by_mmr_position(start, end, req.end_header_hash.clone()).await
+                let res = db
+                    .fetch_utxos_by_mmr_position(start, end, req.end_header_hash.clone())
+                    .await
                     .map_err(RpcStatus::log_internal_error(LOG_TARGET));
                 match res {
-
                     Ok((utxos, deleted)) => {
                         if utxos.is_empty() {
                             break;
                         }
                         let response = SyncUtxosResponse {
-                            utxos: utxos.into_iter().map(|pruned_output| match pruned_output{
-                                PrunedOutput::Pruned { output_hash, range_proof_hash } => {
-                                    SyncUtxo {
+                            utxos: utxos
+                                .into_iter()
+                                .map(|pruned_output| match pruned_output {
+                                    PrunedOutput::Pruned {
+                                        output_hash,
+                                        range_proof_hash,
+                                    } => SyncUtxo {
                                         output: None,
                                         hash: output_hash,
-                                        rangeproof_hash: range_proof_hash
-                                    }
-                                },
-                                PrunedOutput::NotPruned { output } => {
-                                    SyncUtxo {
-                                       output: Some(output.into()) ,
+                                        rangeproof_hash: range_proof_hash,
+                                    },
+                                    PrunedOutput::NotPruned { output } => SyncUtxo {
+                                        output: Some(output.into()),
                                         hash: vec![],
-                                        rangeproof_hash: vec![]
-                                    }
-                                },
-                            }).collect(),
-                            deleted_bitmaps: deleted.into_iter().map(|d| d.serialize()).collect()
+                                        rangeproof_hash: vec![],
+                                    },
+                                })
+                                .collect(),
+                            deleted_bitmaps: deleted.into_iter().map(|d| d.serialize()).collect(),
                         };
 
                         // Ensure task stops if the peer prematurely stops their RPC session
@@ -441,13 +454,16 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
                         break;
                     },
                 }
-
             }
         });
         Ok(Streaming::new(rx))
     }
 
-    async fn sync_delete_bitmaps(&self, request: Request<SyncDeletedBitmapsRequest>) -> Result<Streaming<SyncDeletedBitmapsResponse>, RpcStatus> {
+    async fn sync_delete_bitmaps(
+        &self,
+        request: Request<SyncDeletedBitmapsRequest>,
+    ) -> Result<Streaming<SyncDeletedBitmapsResponse>, RpcStatus>
+    {
         unimplemented!()
         // let req = request.into_message();
         // const BATCH_SIZE: usize = 100;
@@ -456,16 +472,16 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         // let db = self.db();
         //
         // task::spawn(async move {
-        //     let start = match  db.fetch_header_by_block_hash(req.start).await.or_not_found("BlockHeader", "hash", req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {
-        //         Ok(head) => head,
+        //     let start = match  db.fetch_header_by_block_hash(req.start).await.or_not_found("BlockHeader", "hash",
+        // req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {         Ok(head) => head,
         //         Err(err) =>  {
         //             tx.send(Err(err)).await;
         //             return;
         //         }
         //     };
         //     asdfasdag
-        //     let end = match  db.fetch_header_by_block_hash(req.end).await.or_not_found("BlockHeader", "hash", req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {
-        //         Ok(head) => head,
+        //     let end = match  db.fetch_header_by_block_hash(req.end).await.or_not_found("BlockHeader", "hash",
+        // req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {         Ok(head) => head,
         //         Err(err) =>  {
         //             tx.send(Err(err)).await;
         //             return;
@@ -478,8 +494,9 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         //         if tx.is_closed() {
         //             break;
         //         }
-        //         let res = db.fetch_block_accumulated_data_by_height(height).await.or_not_found("BlockAccumulatedData", "height", height.to_string())
-        //             .map_err(RpcStatus::log_internal_error(LOG_TARGET));
+        //         let res =
+        // db.fetch_block_accumulated_data_by_height(height).await.or_not_found("BlockAccumulatedData", "height",
+        // height.to_string())             .map_err(RpcStatus::log_internal_error(LOG_TARGET));
         //         let mut deleted_vec = vec![];
         //         match res {
         //             Ok(deleted) => {
@@ -505,6 +522,5 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
         //     }
         // });
         // Ok(Streaming::new(rx))
-
     }
 }

@@ -52,7 +52,7 @@ pub const LMDB_DB_ORPHAN_PARENT_MAP_INDEX: &str = "orphan_parent_map_index";
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TransactionOutputRowData {
-    pub output: TransactionOutput,
+    pub output: Option<TransactionOutput>,
     pub header_hash: HashOutput,
     pub mmr_position: u32,
     pub hash: HashOutput,

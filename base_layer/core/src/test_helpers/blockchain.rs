@@ -36,6 +36,7 @@ use crate::{
         DbValue,
         LMDBDatabase,
         MmrTree,
+        PrunedOutput,
         Validators,
     },
     consensus::{
@@ -54,6 +55,7 @@ use crate::{
         mocks::MockValidator,
     },
 };
+use croaring::Bitmap;
 use std::{
     fs,
     ops::Deref,
@@ -62,8 +64,6 @@ use std::{
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_storage::lmdb_store::LMDBConfig;
 use tari_test_utils::paths::create_temporary_data_path;
-use croaring::Bitmap;
-use crate::chain_storage::PrunedOutput;
 
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
@@ -198,7 +198,11 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_block_accumulated_data(header_hash)
     }
 
-    fn fetch_block_accumulated_data_by_height(&self, height: u64) -> Result<Option<BlockAccumulatedData>, ChainStorageError> {
+    fn fetch_block_accumulated_data_by_height(
+        &self,
+        height: u64,
+    ) -> Result<Option<BlockAccumulatedData>, ChainStorageError>
+    {
         self.db.fetch_block_accumulated_data_by_height(height)
     }
 
@@ -226,7 +230,13 @@ impl BlockchainBackend for TempDatabase {
         self.db.fetch_kernels_by_mmr_position(start, end)
     }
 
-    fn fetch_utxos_by_mmr_position(&self, start: u64, end: u64, deleted: &Bitmap) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError> {
+    fn fetch_utxos_by_mmr_position(
+        &self,
+        start: u64,
+        end: u64,
+        deleted: &Bitmap,
+    ) -> Result<(Vec<PrunedOutput>, Vec<Bitmap>), ChainStorageError>
+    {
         self.db.fetch_utxos_by_mmr_position(start, end, deleted)
     }
 

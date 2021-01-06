@@ -1,5 +1,4 @@
-use crate::transactions::transaction::TransactionOutput;
-use crate::transactions::types::HashOutput;
+use crate::transactions::{transaction::TransactionOutput, types::HashOutput};
 
 //  Copyright 2020, The Tari Project
 //
@@ -23,6 +22,11 @@ use crate::transactions::types::HashOutput;
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 pub enum PrunedOutput {
-    Pruned{output_hash: HashOutput, range_proof_hash: HashOutput},
-    NotPruned{ output: TransactionOutput}
+    Pruned {
+        output_hash: HashOutput,
+        range_proof_hash: HashOutput,
+    },
+    NotPruned {
+        output: TransactionOutput,
+    },
 }

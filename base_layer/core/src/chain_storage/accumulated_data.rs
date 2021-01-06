@@ -39,11 +39,10 @@ use serde::{
 use std::fmt;
 use tari_mmr::pruned_hashset::PrunedHashSet;
 
-
 #[derive(Debug)]
 // Helper struct to serialize and deserialize Bitmap
 pub struct DeletedBitmap {
-    pub(super) deleted: Bitmap
+    pub(super) deleted: Bitmap,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,9 +69,7 @@ impl BlockAccumulatedData {
             kernels,
             outputs,
             range_proofs,
-            deleted: DeletedBitmap{
-                deleted
-            },
+            deleted: DeletedBitmap { deleted },
             total_kernel_sum,
             total_utxo_sum,
         }
@@ -93,7 +90,9 @@ impl Default for BlockAccumulatedData {
         Self {
             kernels: Default::default(),
             outputs: Default::default(),
-            deleted: DeletedBitmap{ deleted: Bitmap::create()},
+            deleted: DeletedBitmap {
+                deleted: Bitmap::create(),
+            },
             range_proofs: Default::default(),
             total_kernel_sum: Default::default(),
             total_utxo_sum: Default::default(),
@@ -113,9 +112,7 @@ impl Serialize for DeletedBitmap {
 impl<'de> Deserialize<'de> for DeletedBitmap {
     fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
     where D: Deserializer<'de> {
-        const FIELDS: &[&str] = &[
-            "deleted",
-        ];
+        const FIELDS: &[&str] = &["deleted"];
 
         deserializer.deserialize_struct("DeletedBitmap", FIELDS, DeletedBitmapVisitor)
     }
@@ -148,7 +145,7 @@ impl<'de> Visitor<'de> for DeletedBitmapVisitor {
         let mut deleted = None;
         while let Some(key) = map.next_key()? {
             match key {
-                 Field::Deleted => {
+                Field::Deleted => {
                     if deleted.is_some() {
                         return Err(de::Error::duplicate_field("deleted"));
                     }
