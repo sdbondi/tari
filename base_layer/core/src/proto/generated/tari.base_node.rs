@@ -200,18 +200,6 @@ pub struct SyncUtxo {
     #[prost(bytes, tag = "3")]
     pub rangeproof_hash: std::vec::Vec<u8>,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SyncDeletedBitmapsRequest {
-    #[prost(bytes, tag = "1")]
-    pub start: std::vec::Vec<u8>,
-    #[prost(bytes, tag = "2")]
-    pub end: std::vec::Vec<u8>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SyncDeletedBitmapsResponse {
-    #[prost(bytes, repeated, tag = "1")]
-    pub deleted: ::std::vec::Vec<std::vec::Vec<u8>>,
-}
 /// Request type for a received BaseNodeService request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BaseNodeServiceRequest {

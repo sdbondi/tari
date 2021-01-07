@@ -29,8 +29,6 @@ use crate::{
         FindChainSplitRequest,
         FindChainSplitResponse,
         SyncBlocksRequest,
-        SyncDeletedBitmapsRequest,
-        SyncDeletedBitmapsResponse,
         SyncHeadersRequest,
         SyncKernelsRequest,
         SyncUtxo,
@@ -461,70 +459,5 @@ match block {
             }
         });
         Ok(Streaming::new(rx))
-    }
-
-    async fn sync_delete_bitmaps(
-        &self,
-        request: Request<SyncDeletedBitmapsRequest>,
-    ) -> Result<Streaming<SyncDeletedBitmapsResponse>, RpcStatus>
-    {
-        unimplemented!()
-        // let req = request.into_message();
-        // const BATCH_SIZE: usize = 100;
-        // let (mut tx, rx) = mpsc::channel(BATCH_SIZE);
-        //
-        // let db = self.db();
-        //
-        // task::spawn(async move {
-        //     let start = match  db.fetch_header_by_block_hash(req.start).await.or_not_found("BlockHeader", "hash",
-        // req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {         Ok(head) => head,
-        //         Err(err) =>  {
-        //             tx.send(Err(err)).await;
-        //             return;
-        //         }
-        //     };
-        //     asdfasdag
-        //     let end = match  db.fetch_header_by_block_hash(req.end).await.or_not_found("BlockHeader", "hash",
-        // req.start.to_hex()) .map_err(RpcStatus::log_internal_error(LOG_TARGET)) {         Ok(head) => head,
-        //         Err(err) =>  {
-        //             tx.send(Err(err)).await;
-        //             return;
-        //         }
-        //     };
-        //
-        //     info!(target: LOG_TARGET, "Streaming deleted bitmaps {} to {}", start, end);
-        //
-        //     for height in start.height..end.height {
-        //         if tx.is_closed() {
-        //             break;
-        //         }
-        //         let res =
-        // db.fetch_block_accumulated_data_by_height(height).await.or_not_found("BlockAccumulatedData", "height",
-        // height.to_string())             .map_err(RpcStatus::log_internal_error(LOG_TARGET));
-        //         let mut deleted_vec = vec![];
-        //         match res {
-        //             Ok(deleted) => {
-        //                 // TODO: Get diff with previous deleted.
-        //                 deleted_vec.push(deleted.deleted().unwrap());
-        //             }
-        //
-        //             Err(err) => {
-        //                 let _ = tx.send(Err(err)).await;
-        //                 break;
-        //             },
-        //         }
-        //         // TODO: add multiple deleted's in one response.
-        //     let mut deleted =
-        //         stream::iter(deleted_vec.into_iter().map(|d| SyncDeletedBitmapsResponse{
-        //             deleted: vec![d.serialize()]
-        //         }).map(Ok).map(Ok));
-        //     // Ensure task stops if the peer prematurely stops their RPC session
-        //     if tx.send_all(&mut deleted).await.is_err() {
-        //         break;
-        //     }
-        //
-        //     }
-        // });
-        // Ok(Streaming::new(rx))
     }
 }

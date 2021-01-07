@@ -34,8 +34,6 @@ use crate::{
         FindChainSplitRequest,
         FindChainSplitResponse,
         SyncBlocksRequest,
-        SyncDeletedBitmapsRequest,
-        SyncDeletedBitmapsResponse,
         SyncHeadersRequest,
         SyncKernelsRequest,
         SyncUtxosRequest,
@@ -87,12 +85,6 @@ pub trait BaseNodeSyncService: Send + Sync + 'static {
 
     #[rpc(method = 7)]
     async fn sync_utxos(&self, request: Request<SyncUtxosRequest>) -> Result<Streaming<SyncUtxosResponse>, RpcStatus>;
-
-    #[rpc(method = 8)]
-    async fn sync_delete_bitmaps(
-        &self,
-        request: Request<SyncDeletedBitmapsRequest>,
-    ) -> Result<Streaming<SyncDeletedBitmapsResponse>, RpcStatus>;
 }
 
 pub fn create_base_node_sync_rpc_service<B: BlockchainBackend + 'static>(

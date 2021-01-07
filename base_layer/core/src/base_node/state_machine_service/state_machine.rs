@@ -135,7 +135,6 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
             (BlockSync(s), BlocksSynchronized) => Listening(s.into()),
             (BlockSync(s), BlockSyncFailed) => Waiting(s.into()),
             (Listening(_), FallenBehind(Lagging(_, sync_peers))) => HeaderSync(sync_peers.into()),
-            // TODO: The transition to horizon sync should be determined by header sync
             (Listening(_), FallenBehind(LaggingBehindHorizon(_, sync_peers))) => HeaderSync(sync_peers.into()),
             (Waiting(s), Continue) => Listening(s.into()),
             (_, FatalError(s)) => Shutdown(states::Shutdown::with_reason(s)),

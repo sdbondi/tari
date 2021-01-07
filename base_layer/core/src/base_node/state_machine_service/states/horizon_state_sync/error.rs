@@ -51,6 +51,8 @@ pub enum HorizonSyncError {
     InvalidKernelSignature(TransactionError),
     #[error("Validation failed for {0} MMR")]
     InvalidMmrRoot(MmrTree),
+    #[error("Invalid range proof for output:{0} : {1}")]
+    InvalidRangeProof(String, String),
     #[error("Base node request error: {0}")]
     BaseNodeRequestError(#[from] BaseNodeRequestError),
     #[error("RPC error: {0}")]
@@ -61,15 +63,4 @@ pub enum HorizonSyncError {
     ConversionError(String),
     #[error("MerkleMountainRangeError: {0}")]
     MerkleMountainRangeError(#[from] MerkleMountainRangeError),
-}
-
-impl HorizonSyncError {
-    pub fn is_recoverable(&self) -> bool {
-        use HorizonSyncError::*;
-        match self {
-            FinalStateValidationFailed(_) | InvalidMmrRoot(_) => false,
-            InvalidMmrRoot(_) => false,
-            _ => true,
-        }
-    }
 }
