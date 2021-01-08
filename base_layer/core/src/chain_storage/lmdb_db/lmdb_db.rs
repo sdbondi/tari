@@ -301,6 +301,19 @@ impl LMDBDatabase {
                     block_accum_data.deleted = DeletedBitmap { deleted };
                     self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
                 },
+                PruneOutputsByMmrPosition(positions) => {
+                    for pos in positions {
+                        let (_height, hash) =
+                            lmdb_first_after::<_, (u64, Vec<u8>)>(&write_txn, &self.output_mmr_size_index, &pos.to_be_bytes()).or_not_found("BlockHeader","mmr_position", pos.to_string())?;
+                        let key = format!(
+                            "{}-{:010}",
+                            hash.to_hex(),
+                            pos,
+                        );
+                        info!(target: LOG_TARGET, "Pruning output: {}", key);
+                        self.prune_output(&write_txn, key.as_str())?;
+                    }
+                }
             }
         }
         write_txn
@@ -320,6 +333,12 @@ impl LMDBDatabase {
         Ok(())
     }
 
+    fn prune_output(&mut self, txn: &WriteTransaction<'_>, key: &str) -> Result<(), ChainStorageError> {
+        let mut output:TransactionOutputRowData = lmdb_get(txn, &self.utxos_db, key).or_not_found("TransactionOutput", "key", key.to_string())?;
+        output.output = None;
+        lmdb_replace(txn, &self.utxos_db, key, &output)
+    }
+
     fn insert_output(
         &mut self,
         txn: &WriteTransaction<'_>,
@@ -331,11 +350,9 @@ impl LMDBDatabase {
         let output_hash = output.hash();
         let proof_hash = output.proof.hash();
         let key = format!(
-            "{}-{:010}-{}-{}",
+            "{}-{:010}",
             header_hash.to_hex(),
             mmr_position,
-            output_hash.to_hex(),
-            proof_hash.to_hex()
         );
         lmdb_insert(
             txn,
@@ -496,7 +513,7 @@ impl LMDBDatabase {
             txn,
             &self.output_mmr_size_index,
             &header.output_mmr_size.to_be_bytes(),
-            &header.height,
+            &(header.height, header.hash().as_slice()),
         )?;
         Ok(true)
     }
@@ -958,8 +975,8 @@ impl BlockchainBackend for LMDBDatabase {
     fn fetch_header_containing_utxo_mmr(&self, mmr_position: u64) -> Result<ChainHeader, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
 
-        if let Some(height) =
-            lmdb_first_after::<_, u64>(&txn, &self.output_mmr_size_index, &mmr_position.to_be_bytes())?
+        if let Some((height, _hash)) =
+            lmdb_first_after::<_, (u64, Vec<u8>)>(&txn, &self.output_mmr_size_index, &mmr_position.to_be_bytes())?
         {
             let header: BlockHeader =
                 lmdb_get(&txn, &self.headers_db, &height)?.ok_or_else(|| ChainStorageError::ValueNotFound {

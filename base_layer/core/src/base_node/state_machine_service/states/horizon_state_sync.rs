@@ -69,8 +69,8 @@ impl HorizonStateSync {
             Ok(m) => m,
             Err(err) => return StateEvent::FatalError(err.to_string())
         };
-        if local_metadata.height_of_longest_chain() != 0 {
-            return StateEvent::FatalError("Running horizon sync when chain tip is not at 0 is not supported at the moment".to_string());
+        if local_metadata.height_of_longest_chain() > local_metadata.effective_pruned_height() {
+            return StateEvent::HorizonStateSynchronized;
         }
         let sync_height = match shared.db.fetch_last_header().await {
             Ok(h) => h.height,

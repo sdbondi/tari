@@ -129,7 +129,7 @@ impl BlockAddResult {
             BlockAddResult::ChainReorg(a, r) => {
                 assert_eq!(num_added, a.len(), "Number of added reorged blocks was different");
                 assert_eq!(num_removed, r.len(), "Number of removed reorged blocks was different");
-            },
+            }
             BlockAddResult::Ok(_) => panic!("Expected reorg result, but was Ok()"),
             BlockAddResult::BlockExists => panic!("Expected reorg result, but was BlockExists"),
             BlockAddResult::OrphanBlock => panic!("Expected reorg result, but was OrphanBlock"),
@@ -218,7 +218,7 @@ pub struct BlockchainDatabase<B> {
 
 #[allow(clippy::ptr_arg)]
 impl<B> BlockchainDatabase<B>
-where B: BlockchainBackend
+    where B: BlockchainBackend
 {
     /// Creates a new `BlockchainDatabase` using the provided backend.
     pub fn new(
@@ -248,7 +248,7 @@ where B: BlockchainBackend
         }
         if cleanup_orphans_at_startup {
             match blockchain_db.cleanup_all_orphans() {
-                Ok(_) => info!(target: LOG_TARGET, "Orphan database cleaned out at startup.",),
+                Ok(_) => info!(target: LOG_TARGET, "Orphan database cleaned out at startup.", ),
                 Err(e) => warn!(
                     target: LOG_TARGET,
                     "Orphan database could not be cleaned out at startup: ({}).", e
@@ -474,7 +474,7 @@ where B: BlockchainBackend
 
     /// Find the first matching header in a list of block hashes, returning the index of the match and the BlockHeader.
     /// Or None if not found.
-    pub fn find_headers_after_hash<I: IntoIterator<Item = HashOutput>>(
+    pub fn find_headers_after_hash<I: IntoIterator<Item=HashOutput>>(
         &self,
         ordered_hashes: I,
         count: u64,
@@ -511,7 +511,7 @@ where B: BlockchainBackend
                             })?;
                     let headers = fetch_headers(&*db, header.height + 1, end_height)?;
                     return Ok(Some((i, headers)));
-                },
+                }
                 None => continue,
             };
         }
@@ -644,7 +644,7 @@ where B: BlockchainBackend
             Some(h) => h,
             None => {
                 return Ok(Vec::new());
-            },
+            }
         };
         let start = end_height.saturating_sub(n as u64 - 1);
         let headers = fetch_headers(&*db, start, end_height)?;
@@ -771,7 +771,6 @@ where B: BlockchainBackend
     }
 
 
-
     /// Tries to add a block to the longest chain.
     ///
     /// The block is added to the longest chain if and only if
@@ -829,19 +828,20 @@ where B: BlockchainBackend
         match block_add_result {
             BlockAddResult::OrphanBlock | BlockAddResult::ChainReorg(_, _) => {
                 cleanup_orphans(&mut *db, self.config.orphan_storage_capacity)?
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         // Cleanup of backend when in pruned mode.
         match block_add_result {
-            BlockAddResult::Ok(_) | BlockAddResult::ChainReorg(_, _) => prune_database(
-                &mut *db,
-                self.config.pruning_interval,
-                self.config.pruning_horizon,
-                new_height,
-            )?,
-            _ => {},
+            BlockAddResult::Ok(_) | BlockAddResult::ChainReorg(_, _) => {
+                prune_database_if_needed(
+                    &mut *db,
+                    self.config.pruning_interval,
+                    self.config.pruning_horizon,
+                )?
+            },
+            _ => {}
         }
 
         trace!(
@@ -1001,7 +1001,7 @@ where B: BlockchainBackend
                 );
                 debug!(target: LOG_TARGET, "Existing PendingHorizonSyncState = ({})", state);
                 Ok(state)
-            },
+            }
             None => {
                 let metadata = db.fetch_chain_metadata()?;
 
@@ -1034,7 +1034,7 @@ where B: BlockchainBackend
                 db.write(txn)?;
 
                 Ok(state)
-            },
+            }
         }
     }
 
@@ -1280,7 +1280,7 @@ pub fn fetch_headers<T: BlockchainBackend>(
         match db.fetch(&DbKey::BlockHeader(h))? {
             Some(DbValue::BlockHeader(header)) => {
                 headers.push(*header);
-            },
+            }
             Some(_) => unreachable!(),
             None => break,
         }
@@ -1354,12 +1354,12 @@ fn insert_block(txn: &mut DbTransaction, block: Arc<ChainBlock>) -> Result<(), C
         MetadataKey::ChainHeight,
         MetadataValue::ChainHeight(block.block.header.height),
     )
-    .set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(block_hash))
-    .set_metadata(
-        MetadataKey::AccumulatedWork,
-        MetadataValue::AccumulatedWork(accumulated_difficulty),
-    )
-    .insert_block(block);
+        .set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(block_hash))
+        .set_metadata(
+            MetadataKey::AccumulatedWork,
+            MetadataValue::AccumulatedWork(accumulated_difficulty),
+        )
+        .insert_block(block);
 
     Ok(())
 }
@@ -1428,10 +1428,10 @@ fn fetch_block<T: BlockchainBackend>(db: &T, height: u64) -> Result<HistoricalBl
         match output {
             PrunedOutput::Pruned { output_hash, range_proof_hash } => {
                 pruned.push((output_hash, range_proof_hash));
-            },
+            }
             PrunedOutput::NotPruned { output } => {
                 unpruned.push(output)
-            },
+            }
         }
     }
     let block = header
@@ -1745,7 +1745,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
                 fork_header.header.height,
                 fork_header.accumulated_data.hash.to_hex()
             );
-        },
+        }
         Ordering::Less | Ordering::Equal => {
             debug!(
                 target: LOG_TARGET,
@@ -1760,7 +1760,7 @@ fn handle_possible_reorg<T: BlockchainBackend>(
                 "Orphan block received: #{} ", new_block.header.height
             );
             return Ok(BlockAddResult::OrphanBlock);
-        },
+        }
     }
 
     // TODO: We already have the first link in this chain, can be optimized to exclude it
@@ -1954,7 +1954,7 @@ fn insert_orphan_and_find_new_tips<T: BlockchainBackend>(
             accumulated_data: accumulated_data.clone(),
             block: block.as_ref().clone(),
         }
-        .into(),
+            .into(),
     );
 
     for new_tip in find_orphan_descendant_tips_of(&*db, &block.header, &accumulated_data, validator, &mut txn)? {
@@ -1997,7 +1997,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                         block: child.clone(),
                         accumulated_data: accum_data.clone(),
                     }
-                    .into(),
+                        .into(),
                 );
                 res.extend(find_orphan_descendant_tips_of(
                     db,
@@ -2006,7 +2006,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                     validator,
                     txn,
                 )?);
-            },
+            }
             Err(e) => {
                 // Warn for now, idk might lower to debug later.
                 warn!(
@@ -2016,7 +2016,7 @@ fn find_orphan_descendant_tips_of<T: BlockchainBackend>(
                     e
                 );
                 txn.delete_orphan(child.hash());
-            },
+            }
         };
     }
     Ok(res)
@@ -2084,35 +2084,45 @@ fn cleanup_orphans<T: BlockchainBackend>(db: &mut T, orphan_storage_capacity: us
 
     db.delete_oldest_orphans(horizon_height, orphan_storage_capacity)
 }
-
-fn prune_database<T: BlockchainBackend>(
-    db: &mut T,
-    _pruning_height_interval: u64,
-    _pruning_horizon: u64,
-    _height: u64,
+fn prune_database_if_needed<T: BlockchainBackend>(
+db: &mut T,
+pruning_horizon: u64,
+    pruning_interval: u64
 ) -> Result<(), ChainStorageError>
 {
     let metadata = db.fetch_chain_metadata()?;
+    if metadata.is_pruned_node() && metadata.effective_pruned_height() < metadata.height_of_longest_chain() - (pruning_horizon + pruning_interval) {
+        prune_database(db, pruning_horizon, metadata)
+    } else {
+        Ok(())
+    }
+}
+
+fn prune_database<T: BlockchainBackend>(
+    db: &mut T,
+    pruning_horizon: u64,
+    metadata: ChainMetadata
+) -> Result<(), ChainStorageError>
+{
     if metadata.is_pruned_node() {
-        unimplemented!();
-        //     let db_height = metadata.height_of_longest_chain();
-        //     if db_height % pruning_height_interval == 0 {
-        //         info!(target: LOG_TARGET, "Pruning interval reached. Pruning the database.");
-        //         let abs_pruning_horizon = height.saturating_sub(pruning_horizon);
-        //
-        //         let mut txn = DbTransaction::new();
-        //         let max_cp_count = pruning_horizon + 1; // Include accumulated checkpoint
-        //         unimplemented!()
-        //        // txn.merge_checkpoints(max_cp_count as usize);
-        //
-        //         if abs_pruning_horizon > metadata.effective_pruned_height (){
-        //             txn.set_metadata(
-        //                 MetadataKey::EffectivePrunedHeight,
-        //                 MetadataValue::EffectivePrunedHeight(abs_pruning_horizon),
-        //             );
-        //         }
-        //         commit(db, txn)?;
-        //     }
+        let db_height = metadata.height_of_longest_chain();
+        let abs_pruning_horizon = db_height.saturating_sub(pruning_horizon);
+
+        let last_pruned = metadata.effective_pruned_height();
+        let mut last_block = db.fetch_block_accumulated_data_by_height(last_pruned).or_not_found("BlockAccumulatedData", "height", last_pruned.to_string())?;
+        let mut txn = DbTransaction::new();
+        for block_to_prune in (last_pruned + 1)..abs_pruning_horizon {
+            let curr_block = db.fetch_block_accumulated_data_by_height(block_to_prune).or_not_found("BlockAccumulatedData", "height", last_pruned.to_string())?;
+            let inputs_to_prune = curr_block.deleted.deleted.clone() - last_block.deleted.deleted;
+            last_block = curr_block;
+            txn.prune_outputs_by_mmr_position(inputs_to_prune.to_vec());
+        }
+
+        txn.set_metadata(
+            MetadataKey::EffectivePrunedHeight,
+            MetadataValue::EffectivePrunedHeight(abs_pruning_horizon),
+        );
+        db.write(txn)?;
     }
 
     Ok(())

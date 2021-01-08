@@ -184,6 +184,11 @@ impl DbTransaction {
         self
     }
 
+    pub fn prune_outputs_by_mmr_position(&mut self, positions: Vec<u32>) -> &mut Self {
+        self.operations.push(WriteOperation::PruneOutputsByMmrPosition(positions));
+        self
+    }
+
     pub fn update_deleted(&mut self, header_hash: HashOutput, deleted: Bitmap) -> &mut Self {
         self.operations
             .push(WriteOperation::UpdateDeletedBlockAccumulatedData { header_hash, deleted });
@@ -286,6 +291,7 @@ pub enum WriteOperation {
         header_hash: HashOutput,
         deleted: Bitmap,
     },
+    PruneOutputsByMmrPosition(Vec<u32>)
 }
 
 impl fmt::Display for WriteOperation {
@@ -374,6 +380,9 @@ impl fmt::Display for WriteOperation {
                 header_hash: _,
                 deleted: _,
             } => write!(f, "Update deleted data for block"),
+            PruneOutputsByMmrPosition(v) => {
+                write!(f, "Prune {} outputs", v.len())
+            }
         }
     }
 }
