@@ -36,7 +36,7 @@ use lmdb_zero::{
 };
 use log::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug};
 
 pub const LOG_TARGET: &str = "c::cs::lmdb_db::lmdb";
 

@@ -363,7 +363,7 @@ impl fmt::Display for WriteOperation {
             UpdatePrunedHashSet {
                 mmr_tree,
                 header_hash,
-                pruned_hash_set,
+                ..
             } => write!(
                 f,
                 "Update pruned hash set: {} header: {}",

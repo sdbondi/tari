@@ -47,6 +47,7 @@ use tari_core::{
 use tari_crypto::tari_utilities::Hashable;
 use tokio::{runtime, sync::mpsc};
 use tonic::{Request, Response, Status};
+use tari_core::proof_of_work::Difficulty;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -153,7 +154,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
                         let mut iter = data.iter().peekable();
                         let mut result = Vec::new();
                         while let Some(next) = iter.next() {
-                            let current_difficulty = next.pow.target_difficulty.as_u64();
+                            let current_difficulty: u64 = unimplemented!("Need to retrieve difficulty correctly");
                             let current_timestamp = next.timestamp.as_u64();
                             let current_height = next.height;
                             let estimated_hash_rate = if let Some(peek) = iter.peek() {
@@ -377,12 +378,12 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
         let block_hash = new_block.hash();
         let mining_hash = new_block.header.merged_mining_hash();
         let pow = new_block.header.pow_algo() as i32;
-        let target_difficulty = new_block.header.pow.target_difficulty;
+        let target_difficulty:u64  = unimplemented!();
         let reward = cm.calculate_coinbase_and_fees(&new_block);
         let block: Option<tari_rpc::Block> = Some(new_block.into());
         let miner_data = Some(tari_rpc::MinerData {
             algo: Some(tari_rpc::PowAlgo { pow_algo: pow }),
-            target_difficulty: target_difficulty.as_u64(),
+            target_difficulty: target_difficulty,
             reward: reward.0,
             merge_mining_hash: mining_hash,
         });

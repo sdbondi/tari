@@ -24,12 +24,10 @@ use super::error::HorizonSyncError;
 use crate::{
     base_node::{
         state_machine_service::{
-            states::{helpers, helpers::exclude_sync_peer},
             BaseNodeStateMachine,
         },
-        sync::{rpc, SyncPeer, SyncPeers},
+        sync::{rpc},
     },
-    blocks::BlockValidationError,
     chain_storage::{
         async_db::AsyncBlockchainDb,
         include_legacy_deleted_hash,
@@ -39,13 +37,11 @@ use crate::{
         MetadataValue,
         MmrTree,
     },
-    iterators::NonOverlappingIntegerPairIter,
     proto::generated::base_node::{SyncKernelsRequest, SyncUtxosRequest, SyncUtxosResponse},
     transactions::{
         transaction::{TransactionKernel, TransactionOutput},
         types::{HashDigest, HashOutput},
     },
-    validation::ValidationError,
 };
 use croaring::Bitmap;
 use futures::StreamExt;
@@ -63,7 +59,6 @@ const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sy
 pub struct HorizonStateSynchronization<'a, B: BlockchainBackend> {
     shared: &'a mut BaseNodeStateMachine<B>,
     sync_peer: PeerConnection,
-    local_metadata: &'a ChainMetadata,
     horizon_sync_height: u64,
     prover : &'a RangeProofService
 }
@@ -72,7 +67,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
     pub fn new(
         shared: &'a mut BaseNodeStateMachine<B>,
         sync_peer: PeerConnection,
-        local_metadata: &'a ChainMetadata,
         horizon_sync_height: u64,
         prover: &'a RangeProofService
     ) -> Self
@@ -80,7 +74,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         Self {
             shared,
             sync_peer,
-            local_metadata,
             horizon_sync_height,
             prover
         }
@@ -168,7 +161,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         let mut mmr_position = start;
         while let Some(kernel) = kernel_stream.next().await {
             let kernel: TransactionKernel = kernel?.try_into().map_err(HorizonSyncError::ConversionError)?;
-            debug!(target: LOG_TARGET, "Kernel received from sync peer: {}", kernel);
             kernel.verify_signature().map_err(HorizonSyncError::InvalidKernelSignature)?;
             kernels.push(kernel.clone());
             txn.insert_kernel_via_horizon_sync(kernel, current_header.hash().clone(), mmr_position as u32);
@@ -180,14 +172,12 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                     .fetch_block_accumulated_data(current_header.header.prev_hash.clone())
                     .await?;
                 let kernel_pruned_set = block_data.dissolve().0;
-                debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_pruned_set);
                 let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernel_pruned_set);
 
                 for kernel in kernels.drain(..) {
                     kernel_mmr.push(kernel.hash())?;
                 }
 
-                debug!(target: LOG_TARGET, "Kernel: {:?}", kernel_mmr.get_pruned_hash_set()?);
                 let mmr_root = include_legacy_deleted_hash(kernel_mmr.get_merkle_root()?);
                 if mmr_root != current_header.header.kernel_mr {
                     debug!(

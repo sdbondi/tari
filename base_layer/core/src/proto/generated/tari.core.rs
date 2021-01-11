@@ -5,14 +5,12 @@ pub struct ProofOfWork {
     /// 1 = Blake
     #[prost(uint64, tag = "1")]
     pub pow_algo: u64,
-    #[prost(uint64, tag = "2")]
-    pub accumulated_monero_difficulty: u64,
-    #[prost(uint64, tag = "3")]
-    pub accumulated_blake_difficulty: u64,
+    ///    uint64 accumulated_monero_difficulty = 2;
+    ///    uint64 accumulated_blake_difficulty = 3;
+    ///
+    ///    uint64 target_difficulty = 5;
     #[prost(bytes, tag = "4")]
     pub pow_data: std::vec::Vec<u8>,
-    #[prost(uint64, tag = "5")]
-    pub target_difficulty: u64,
 }
 /// The BlockHeader contains all the metadata for the block, including proof of work, a link to the previous block
 /// and the transaction kernels.

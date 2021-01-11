@@ -23,17 +23,12 @@
 use crate::{
     base_node::{
         comms_interface::CommsInterfaceError,
-        state_machine_service::BaseNodeStateMachine,
         sync::{SyncPeer, SyncPeers},
     },
-    chain_storage::{BlockchainBackend, ChainStorageError, MmrTree},
+    chain_storage::{ChainStorageError},
     proof_of_work::PowError,
-    transactions::{
-        transaction::{TransactionKernel, TransactionOutput},
-        types::HashOutput,
-    },
+
 };
-use croaring::Bitmap;
 use log::*;
 use rand::seq::SliceRandom;
 use std::time::Duration;

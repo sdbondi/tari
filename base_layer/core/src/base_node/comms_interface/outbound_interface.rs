@@ -23,7 +23,7 @@
 use crate::{
     base_node::comms_interface::{error::CommsInterfaceError, NodeCommsRequest, NodeCommsResponse},
     blocks::{block_header::BlockHeader, NewBlock},
-    chain_storage::{HistoricalBlock, MmrTree},
+    chain_storage::{HistoricalBlock},
     transactions::{
         transaction::{TransactionKernel, TransactionOutput},
         types::HashOutput,

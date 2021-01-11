@@ -24,7 +24,7 @@ use super::core as proto;
 use crate::{
     blocks::{Block, BlockHeader, NewBlock, NewBlockHeaderTemplate, NewBlockTemplate},
     chain_storage::{BlockHeaderAccumulatedData, HistoricalBlock},
-    proof_of_work::{Difficulty, PowAlgorithm, ProofOfWork},
+    proof_of_work::{PowAlgorithm, ProofOfWork},
     transactions::types::BlindingFactor,
 };
 use prost_types::Timestamp;
@@ -137,9 +137,6 @@ impl TryFrom<proto::ProofOfWork> for ProofOfWork {
     fn try_from(pow: proto::ProofOfWork) -> Result<Self, Self::Error> {
         Ok(Self {
             pow_algo: PowAlgorithm::try_from(pow.pow_algo)?,
-            accumulated_monero_difficulty: Difficulty::from(pow.accumulated_monero_difficulty),
-            accumulated_blake_difficulty: Difficulty::from(pow.accumulated_blake_difficulty),
-            target_difficulty: Difficulty::from(pow.target_difficulty),
             pow_data: pow.pow_data,
         })
     }
@@ -149,9 +146,6 @@ impl From<ProofOfWork> for proto::ProofOfWork {
     fn from(pow: ProofOfWork) -> Self {
         Self {
             pow_algo: pow.pow_algo as u64,
-            accumulated_monero_difficulty: pow.accumulated_monero_difficulty.as_u64(),
-            accumulated_blake_difficulty: pow.accumulated_blake_difficulty.as_u64(),
-            target_difficulty: pow.target_difficulty.as_u64(),
             pow_data: pow.pow_data,
         }
     }

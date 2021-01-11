@@ -36,7 +36,6 @@ use crate::{
     proof_of_work::{Difficulty, PowAlgorithm},
     transactions::transaction::TransactionKernel,
 };
-use croaring::Bitmap;
 use log::*;
 use std::{
     fmt::{Display, Error, Formatter},

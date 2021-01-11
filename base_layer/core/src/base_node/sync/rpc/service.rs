@@ -390,7 +390,7 @@ match block {
 
     async fn sync_utxos(&self, request: Request<SyncUtxosRequest>) -> Result<Streaming<SyncUtxosResponse>, RpcStatus> {
         let req = request.into_message();
-        const UTXOS_PER_BATCH: usize = 100;
+        const UTXOS_PER_BATCH: usize = 1000;
         const BATCH_SIZE: usize = 100;
         let (mut tx, rx) = mpsc::channel(BATCH_SIZE);
         let db = self.db();

@@ -39,13 +39,11 @@ use horizon_state_synchronization::HorizonStateSynchronization;
 
 use super::{BlockSyncInfo, StateEvent, StateInfo};
 use crate::{
-    base_node::{sync::SyncPeers, BaseNodeStateMachine},
+    base_node::{ BaseNodeStateMachine},
     chain_storage::BlockchainBackend,
 };
 use log::*;
-use tari_common_types::chain_metadata::ChainMetadata;
 use tari_comms::PeerConnection;
-use crate::base_node::state_machine_service::states::events_and_states::StateEvent::HorizonStateSynchronized;
 use crate::transactions::types::CryptoFactories;
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sync";
@@ -73,9 +71,13 @@ impl HorizonStateSync {
             return StateEvent::HorizonStateSynchronized;
         }
         let sync_height = match shared.db.fetch_last_header().await {
-            Ok(h) => h.height,
+            Ok(h) => h.height.checked_sub(local_metadata.pruning_horizon()).unwrap_or(0),
             Err(err) => return StateEvent::FatalError(err.to_string())
         };
+
+        if local_metadata.height_of_longest_chain() > sync_height {
+            return StateEvent::HorizonStateSynchronized;
+        }
         shared.set_state_info(StateInfo::HorizonSync(BlockSyncInfo::new(
             sync_height,
             local_metadata.height_of_longest_chain(),
@@ -84,7 +86,7 @@ impl HorizonStateSync {
 
         let prover = CryptoFactories::default().range_proof;
         let mut horizon_header_sync =
-            HorizonStateSynchronization::new(shared, self.sync_peer.clone(), &local_metadata, sync_height, prover.as_ref());
+            HorizonStateSynchronization::new(shared, self.sync_peer.clone(), sync_height, prover.as_ref());
         match horizon_header_sync.synchronize().await {
             Ok(()) => {
                 info!(target: LOG_TARGET, "Horizon state has synchronised.");

@@ -141,9 +141,6 @@ pub fn get_ridcully_genesis_block_raw() -> Block {
             .unwrap(),
             nonce: 0,
             pow: ProofOfWork {
-                accumulated_monero_difficulty: 1.into(),
-                accumulated_blake_difficulty: 1.into(),
-                target_difficulty: 1.into(),
                 pow_algo: PowAlgorithm::Sha3,
                 pow_data: vec![],
             },

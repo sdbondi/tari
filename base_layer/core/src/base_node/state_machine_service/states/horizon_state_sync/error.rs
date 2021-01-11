@@ -33,8 +33,6 @@ use tokio::task;
 
 #[derive(Debug, Error)]
 pub enum HorizonSyncError {
-    #[error("Peer sent an empty response")]
-    EmptyResponse,
     #[error("Peer sent an invalid response: {0}")]
     IncorrectResponse(String),
     #[error("Exceeded maximum sync attempts")]

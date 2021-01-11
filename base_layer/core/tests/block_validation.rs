@@ -39,7 +39,6 @@ use tari_core::{
         PowAlgorithm,
     },
     test_helpers::blockchain::{
-        create_store_with_consensus,
         create_store_with_consensus_and_validators,
         create_test_db,
     },

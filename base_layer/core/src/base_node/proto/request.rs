@@ -29,7 +29,6 @@ use crate::{
             base_node_service_request::Request as ProtoNodeCommsRequest,
             BlockHeights,
             FetchHeadersAfter as ProtoFetchHeadersAfter,
-            FetchMmrNodeCount as ProtoFetchMmrNodeCount,
             HashOutputs,
         },
     },

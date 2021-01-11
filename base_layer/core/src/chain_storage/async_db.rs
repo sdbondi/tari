@@ -53,7 +53,7 @@ use log::*;
 use rand::{rngs::OsRng, RngCore};
 use std::{mem, ops::RangeBounds, sync::Arc, time::Instant};
 use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
-use tari_mmr::{pruned_hashset::PrunedHashSet, Hash};
+use tari_mmr::{pruned_hashset::PrunedHashSet};
 
 const LOG_TARGET: &str = "c::bn::async_db";
 

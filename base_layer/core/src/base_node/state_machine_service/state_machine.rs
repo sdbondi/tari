@@ -62,7 +62,7 @@ pub struct BaseNodeStateMachineConfig {
 pub struct BaseNodeStateMachine<B: BlockchainBackend> {
     pub(super) db: AsyncBlockchainDb<B>,
     pub(super) local_node_interface: LocalNodeCommsInterface,
-    pub(super) outbound_nci: OutboundNodeCommsInterface,
+    pub(super) _outbound_nci: OutboundNodeCommsInterface,
     pub(super) connectivity: ConnectivityRequester,
     pub(super) peer_manager: Arc<PeerManager>,
     pub(super) metadata_event_stream: broadcast::Receiver<Arc<ChainMetadataEvent>>,
@@ -99,7 +99,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
         Self {
             db,
             local_node_interface,
-            outbound_nci,
+            _outbound_nci: outbound_nci,
             connectivity,
             peer_manager,
             metadata_event_stream,

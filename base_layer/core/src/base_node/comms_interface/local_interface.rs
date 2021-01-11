@@ -29,7 +29,7 @@ use crate::{
         NodeCommsResponse,
     },
     blocks::{Block, BlockHeader, NewBlockTemplate},
-    chain_storage::{HistoricalBlock, MmrTree},
+    chain_storage::{HistoricalBlock},
     proof_of_work::PowAlgorithm,
     transactions::{
         transaction::TransactionOutput,

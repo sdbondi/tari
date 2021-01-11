@@ -92,7 +92,7 @@ use tari_common_types::{
     types::{BlockHash, BLOCK_HASH_LENGTH},
 };
 use tari_crypto::tari_utilities::{hash::Hashable, hex::Hex, ByteArray};
-use tari_mmr::{pruned_hashset::PrunedHashSet, Hash, MerkleMountainRange, MutableMmr};
+use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use tari_storage::lmdb_store::{db, LMDBBuilder, LMDBConfig, LMDBStore};
 
 type DatabaseRef = Arc<Database<'static>>;
@@ -277,7 +277,7 @@ impl LMDBDatabase {
                     )?;
                     let mut block_accum_data = self
                         .fetch_block_accumulated_data(&write_txn, height)?
-                        .unwrap_or_else(|| BlockAccumulatedData::default());
+                        .unwrap_or_else( BlockAccumulatedData::default);
                     match mmr_tree {
                         MmrTree::Kernel => block_accum_data.kernels = *pruned_hash_set,
 
@@ -296,7 +296,7 @@ impl LMDBDatabase {
                     )?;
                     let mut block_accum_data = self
                         .fetch_block_accumulated_data(&write_txn, height)?
-                        .unwrap_or_else(|| BlockAccumulatedData::default());
+                        .unwrap_or_else( BlockAccumulatedData::default);
 
                     block_accum_data.deleted = DeletedBitmap { deleted };
                     self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
@@ -698,6 +698,7 @@ impl LMDBDatabase {
         lmdb_get(&txn, &self.block_accumulated_data_db, &height).map_err(Into::into)
     }
 
+    #[allow(clippy::ptr_arg)]
     fn fetch_height_from_hash(
         &self,
         txn: &ConstTransaction<'_>,
