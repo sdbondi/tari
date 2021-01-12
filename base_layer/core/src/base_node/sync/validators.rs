@@ -21,7 +21,7 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
-    chain_storage::{BlockchainBackend, BlockchainDatabase},
+    chain_storage::{BlockchainBackend},
     consensus::ConsensusManager,
     transactions::types::CryptoFactories,
     validation::{

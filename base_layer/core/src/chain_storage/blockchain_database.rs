@@ -1876,7 +1876,7 @@ pruning_horizon: u64,
 ) -> Result<(), ChainStorageError>
 {
     let metadata = db.fetch_chain_metadata()?;
-    if metadata.is_pruned_node() && metadata.pruned_height() < metadata.height_of_longest_chain() - (pruning_horizon + pruning_interval) {
+    if metadata.is_pruned_node() && metadata.pruned_height() < metadata.height_of_longest_chain().saturating_sub(pruning_horizon + pruning_interval) {
         prune_database(db, pruning_horizon, metadata)
     } else {
         Ok(())

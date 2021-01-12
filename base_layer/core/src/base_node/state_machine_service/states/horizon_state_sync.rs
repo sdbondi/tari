@@ -71,7 +71,7 @@ impl HorizonStateSync {
             return StateEvent::HorizonStateSynchronized;
         }
         let sync_height = match shared.db.fetch_last_header().await {
-            Ok(h) => h.height.checked_sub(local_metadata.pruning_horizon()).unwrap_or(0),
+            Ok(h) => h.height.saturating_sub(local_metadata.pruning_horizon()),
             Err(err) => return StateEvent::FatalError(err.to_string())
         };
 

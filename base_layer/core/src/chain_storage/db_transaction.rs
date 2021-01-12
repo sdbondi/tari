@@ -34,7 +34,6 @@ use crate::{
     },
 };
 use croaring::Bitmap;
-use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     fmt::{Display, Error, Formatter},
@@ -46,8 +45,7 @@ use tari_crypto::tari_utilities::{
     Hashable,
 };
 use tari_mmr::pruned_hashset::PrunedHashSet;
-use tari_crypto::commitment::HomomorphicCommitment;
-use crate::transactions::types::{PublicKey, Commitment};
+use crate::transactions::types::{Commitment};
 
 #[derive(Debug)]
 pub struct DbTransaction {
@@ -239,7 +237,7 @@ impl DbTransaction {
         self
     }
     pub fn set_pruning_horizon(&mut self, pruning_horizon: u64)-> &mut Self {
-        self.operations.push(WriteOperation::SetPruningHorizon(pruning_horizon));
+        self.operations.push(WriteOperation::SetPruningHorizonConfig(pruning_horizon));
         self
     }
 
@@ -325,7 +323,7 @@ pub enum WriteOperation {
     SetBestBlock {
         height: u64, hash: HashOutput, accumulated_difficulty: u128
     },
-    SetPruningHorizon(u64),
+    SetPruningHorizonConfig(u64),
     SetPrunedHeight {
         height: u64,
         kernel_sum: Commitment,
@@ -427,6 +425,11 @@ impl fmt::Display for WriteOperation {
             UpdateUtxoSum { header_hash, .. } => {
                 write!(f, "Update utxo sum for block: {}", header_hash.to_hex())
             }
+            SetBestBlock { height, hash, accumulated_difficulty} => {
+                write!(f, "Update best block to height:{} ({}) with difficulty: {}", height, hash.to_hex(), accumulated_difficulty)
+            }
+            SetPruningHorizonConfig(pruning_horizon) => write!(f, "Set config: pruning horizon to {}", pruning_horizon),
+            SetPrunedHeight { height, .. } => write!(f, "Set pruned height to {}", height)
         }
     }
 }

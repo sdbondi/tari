@@ -21,17 +21,16 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
-    blocks::BlockHeader,
-    chain_storage::{BlockchainBackend, BlockchainDatabase},
+    chain_storage::{BlockchainBackend},
     consensus::ConsensusManager,
     transactions::{
         tari_amount::MicroTari,
-        types::{Commitment, CryptoFactories, HashOutput, PrivateKey},
+        types::{Commitment, CryptoFactories, PrivateKey},
     },
     validation::{FinalHorizonStateValidation, ValidationError},
 };
 use log::*;
-use tari_crypto::{commitment::HomomorphicCommitmentFactory, tari_utilities::hash::Hashable};
+use tari_crypto::{commitment::HomomorphicCommitmentFactory};
 use std::marker::PhantomData;
 
 const LOG_TARGET: &str = "c::bn::states::horizon_state_sync::chain_balance";
@@ -50,13 +49,14 @@ impl<B: BlockchainBackend> ChainBalanceValidator<B> {
 }
 
 impl<B: BlockchainBackend> FinalHorizonStateValidation<B> for ChainBalanceValidator<B> {
+
     fn validate(&self, height: u64, total_utxo_sum: &Commitment, total_kernel_sum: &Commitment, backend: &B) -> Result<(), ValidationError> {
         let emission_h = self.get_emission_commitment_at(height);
         let total_offset = self.fetch_total_offset_commitment(height, backend)?;
 
-        let input = &(&emission_h + &total_kernel_sum) + &total_offset;
+        let input = &(&emission_h + total_kernel_sum) + &total_offset;
 
-        if total_utxo_sum != input {
+        if total_utxo_sum != &input {
             return Err(ValidationError::ChainBalanceValidationFailed(height));
         }
 
@@ -68,8 +68,7 @@ impl<B: BlockchainBackend> ChainBalanceValidator<B> {
     fn fetch_total_offset_commitment(&self, height: u64, backend: &B) -> Result<Commitment, ValidationError> {
         let offset =
            backend
-            .fetch_header_and_accumulated_data(height)?
-            .ok_or_else(|| ValidationError::CustomError("Could not find header accumulated data".to_string()))?
+            .fetch_header_and_accumulated_data(height)?.1
             .total_kernel_offset;
         Ok(self.factories.commitment.commit(&offset, &0u64.into()))
     }

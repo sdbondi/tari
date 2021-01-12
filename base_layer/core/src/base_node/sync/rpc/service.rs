@@ -404,7 +404,7 @@ match block {
             {
                 Ok(header) => header,
                 Err(err) => {
-                    tx.send(Err(err)).await;
+                    let _ =tx.send(Err(err)).await;
                     return;
                 },
             };

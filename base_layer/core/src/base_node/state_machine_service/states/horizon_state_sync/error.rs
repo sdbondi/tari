@@ -35,8 +35,8 @@ use tokio::task;
 pub enum HorizonSyncError {
     #[error("Peer sent an invalid response: {0}")]
     IncorrectResponse(String),
-    #[error("Exceeded maximum sync attempts")]
-    MaxSyncAttemptsReached,
+    // #[error("Exceeded maximum sync attempts")]
+    // MaxSyncAttemptsReached,
     #[error("Chain storage error: {0}")]
     ChainStorageError(#[from] ChainStorageError),
     #[error("Comms interface error: {0}")]

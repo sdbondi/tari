@@ -45,16 +45,13 @@ use croaring::Bitmap;
 use futures::StreamExt;
 use log::*;
 use std::convert::TryInto;
-use tari_common_types::chain_metadata::ChainMetadata;
 use tari_comms::PeerConnection;
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_mmr::{MerkleMountainRange, MutableMmr};
 use crate::blocks::BlockHeader;
-use crate::transactions::types::{RangeProofService, BlindingFactor};
-use tari_crypto::ristretto::RistrettoPublicKey;
-use tari_crypto::keys::PublicKey;
+use crate::transactions::types::{RangeProofService};
 use tari_crypto::commitment::HomomorphicCommitment;
-use crate::chain_storage::{OrNotFound, HorizonData};
+use crate::chain_storage::{ HorizonData};
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sync";
 
@@ -374,7 +371,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
 
         // TODO: validate total sum
         let header = self.shared.db.fetch_chain_header(self.horizon_sync_height).await?;
-        let horizon_data = self.db().fetch_horizon_data().await?.unwrap_or(HorizonData::zero());
+        let horizon_data = self.db().fetch_horizon_data().await?.unwrap_or_else(HorizonData::zero);
         let mut pruned_kernel_sum = horizon_data.kernel_sum().clone();
         let mut pruned_utxo_sum = horizon_data.utxo_sum().clone();
         let chain_metadata = self.db().get_chain_metadata().await?;

@@ -24,8 +24,6 @@ use crate::types::BlockHash;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 use tari_crypto::tari_utilities::hex::Hex;
-use tari_crypto::commitment::HomomorphicCommitment;
-use tari_crypto::ristretto::RistrettoPublicKey;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub struct ChainMetadata {

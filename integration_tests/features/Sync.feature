@@ -31,6 +31,7 @@ Feature: Block Sync
   Then NODE1 should have 11 peers
   Then NODE2 should have 11 peers
 
+    @critical
   Scenario: Pruned mode
     Given I have a base node NODE1 connected to all seed nodes
     When I mine 5 blocks on NODE1
