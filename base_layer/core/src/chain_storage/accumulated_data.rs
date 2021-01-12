@@ -51,8 +51,8 @@ pub struct BlockAccumulatedData {
     pub(super) outputs: PrunedHashSet,
     pub(super) deleted: DeletedBitmap,
     pub(super) range_proofs: PrunedHashSet,
-    pub(super) total_kernel_sum: Commitment,
-    pub(super) total_utxo_sum: Commitment,
+    pub(super) kernel_sum: Commitment,
+    pub(super) utxo_sum: Commitment,
 }
 
 impl BlockAccumulatedData {
@@ -70,8 +70,8 @@ impl BlockAccumulatedData {
             outputs,
             range_proofs,
             deleted: DeletedBitmap { deleted },
-            total_kernel_sum,
-            total_utxo_sum,
+            kernel_sum: total_kernel_sum,
+            utxo_sum: total_utxo_sum,
         }
     }
 
@@ -82,6 +82,14 @@ impl BlockAccumulatedData {
 
     pub fn dissolve(self) -> (PrunedHashSet, PrunedHashSet, PrunedHashSet, Bitmap) {
         (self.kernels, self.outputs, self.range_proofs, self.deleted.deleted)
+    }
+
+    pub fn kernel_sum(&self) -> &Commitment {
+       &self.kernel_sum
+    }
+
+    pub fn utxo_sum(&self) -> &Commitment {
+        &self.utxo_sum
     }
 }
 
@@ -94,8 +102,8 @@ impl Default for BlockAccumulatedData {
                 deleted: Bitmap::create(),
             },
             range_proofs: Default::default(),
-            total_kernel_sum: Default::default(),
-            total_utxo_sum: Default::default(),
+            kernel_sum: Default::default(),
+            utxo_sum: Default::default(),
         }
     }
 }

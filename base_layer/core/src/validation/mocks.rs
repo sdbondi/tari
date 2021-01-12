@@ -28,7 +28,7 @@ use crate::{
     validation::{
         error::ValidationError,
         CandidateBlockBodyValidation,
-        FinalHeaderStateValidation,
+        FinalHorizonStateValidation,
         HeaderValidation,
         MempoolTransactionValidation,
         OrphanValidation,
@@ -40,6 +40,7 @@ use std::sync::{
     Arc,
 };
 use tari_crypto::tari_utilities::Hashable;
+use crate::transactions::types::Commitment;
 
 #[derive(Clone)]
 pub struct MockValidator {
@@ -143,8 +144,8 @@ impl MempoolTransactionValidation for MockValidator {
     }
 }
 
-impl FinalHeaderStateValidation for MockValidator {
-    fn validate(&self, _header: &BlockHeader) -> Result<(), ValidationError> {
+impl<B:BlockchainBackend> FinalHorizonStateValidation<B> for MockValidator {
+    fn validate(&self, _height: u64, _total_utxo_sum: &Commitment, _total_kernel_sum: &Commitment, _backend: &B) -> Result<(), ValidationError> {
         if self.is_valid.load(Ordering::SeqCst) {
             Ok(())
         } else {

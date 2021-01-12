@@ -33,8 +33,6 @@ use crate::{
         include_legacy_deleted_hash,
         BlockchainBackend,
         ChainStorageError,
-        MetadataKey,
-        MetadataValue,
         MmrTree,
     },
     proto::generated::base_node::{SyncKernelsRequest, SyncUtxosRequest, SyncUtxosResponse},
@@ -52,7 +50,11 @@ use tari_comms::PeerConnection;
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_mmr::{MerkleMountainRange, MutableMmr};
 use crate::blocks::BlockHeader;
-use crate::transactions::types::RangeProofService;
+use crate::transactions::types::{RangeProofService, BlindingFactor};
+use tari_crypto::ristretto::RistrettoPublicKey;
+use tari_crypto::keys::PublicKey;
+use tari_crypto::commitment::HomomorphicCommitment;
+use crate::chain_storage::{OrNotFound, HorizonData};
 
 const LOG_TARGET: &str = "c::bn::state_machine_service::states::horizon_state_sync";
 
@@ -60,7 +62,7 @@ pub struct HorizonStateSynchronization<'a, B: BlockchainBackend> {
     shared: &'a mut BaseNodeStateMachine<B>,
     sync_peer: PeerConnection,
     horizon_sync_height: u64,
-    prover : &'a RangeProofService
+    prover: &'a RangeProofService,
 }
 
 impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
@@ -68,20 +70,19 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         shared: &'a mut BaseNodeStateMachine<B>,
         sync_peer: PeerConnection,
         horizon_sync_height: u64,
-        prover: &'a RangeProofService
+        prover: &'a RangeProofService,
     ) -> Self
     {
         Self {
             shared,
             sync_peer,
             horizon_sync_height,
-            prover
+            prover,
         }
     }
 
     pub async fn synchronize(&mut self) -> Result<(), HorizonSyncError> {
         debug!(target: LOG_TARGET, "Preparing database for horizon sync");
-        self.prepare_for_sync().await?;
         let header = self.db().fetch_header(self.horizon_sync_height).await?.ok_or_else(|| {
             ChainStorageError::ValueNotFound {
                 entity: "Header".to_string(),
@@ -90,19 +91,18 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
             }
         })?;
 
-
         match self.begin_sync(&header).await {
             Ok(_) => match self.finalize_horizon_sync().await {
                 Ok(_) => Ok(()),
                 Err(err) => {
                     warn!(target: LOG_TARGET, "Error during sync:{}", err);
                     Err(err)
-                },
+                }
             },
             Err(err) => {
                 warn!(target: LOG_TARGET, "Error during sync:{}", err);
                 Err(err)
-            },
+            }
         }
     }
 
@@ -174,7 +174,9 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                 let kernel_pruned_set = block_data.dissolve().0;
                 let mut kernel_mmr = MerkleMountainRange::<HashDigest, _>::new(kernel_pruned_set);
 
+                let mut kernel_sum = HomomorphicCommitment::default();
                 for kernel in kernels.drain(..) {
+                    kernel_sum = &kernel.excess + &kernel_sum;
                     kernel_mmr.push(kernel.hash())?;
                 }
 
@@ -194,6 +196,8 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                     current_header.hash().clone(),
                     kernel_mmr.get_pruned_hash_set()?,
                 );
+                txn.update_kernel_sum(current_header.hash().clone(), kernel_sum);
+
                 txn.commit().await?;
                 if mmr_position < end - 1 {
                     current_header = self.shared.db.fetch_chain_header(current_header.height() + 1).await?;
@@ -201,7 +205,6 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
             }
             mmr_position += 1;
         }
-        // TODO: Total kernel sum in horizon block
         Ok(())
     }
 
@@ -337,8 +340,10 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                     }
 
                     // Validate rangeproofs if the MMR matches
+                    let mut utxo_sum = HomomorphicCommitment::default();
                     for o in unpruned_outputs.drain(..) {
                         o.verify_range_proof(self.prover).map_err(|err| HorizonSyncError::InvalidRangeProof(o.hash().to_hex(), err.to_string()))?;
+                        utxo_sum = &o.commitment + &utxo_sum;
                     }
 
                     txn.update_pruned_hash_set(MmrTree::Utxo, current_header.hash().clone(), pruned_output_set);
@@ -348,6 +353,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                         proof_mmr.get_pruned_hash_set()?,
                     );
                     txn.update_deleted(current_header.hash().clone(), output_mmr.deleted().clone());
+                    txn.update_utxo_sum(current_header.hash().clone(), utxo_sum);
 
                     txn.commit().await?;
                     if mmr_position < end - 1 {
@@ -367,48 +373,36 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         debug!(target: LOG_TARGET, "Validating horizon state");
 
         // TODO: validate total sum
-        let header = self.db().fetch_chain_header(self.horizon_sync_height).await?;
+        let header = self.shared.db.fetch_chain_header(self.horizon_sync_height).await?;
+        let horizon_data = self.db().fetch_horizon_data().await?.unwrap_or(HorizonData::zero());
+        let mut pruned_kernel_sum = horizon_data.kernel_sum().clone();
+        let mut pruned_utxo_sum = horizon_data.utxo_sum().clone();
+        let chain_metadata = self.db().get_chain_metadata().await?;
 
-        self.shared
-            .db
+        for h in chain_metadata.pruned_height()..header.height() {
+            let accum_data = self.db().fetch_block_accumulated_data_by_height(h).await?;
+            pruned_kernel_sum = accum_data.kernel_sum() + &pruned_kernel_sum;
+            pruned_utxo_sum = accum_data.utxo_sum() + &pruned_utxo_sum;
+        }
+
+        self.shared.sync_validators.final_horizon_state.validate(header.height(), &pruned_utxo_sum, &pruned_kernel_sum, &*self.db().clone().into_inner().db_read_access()?).map_err(HorizonSyncError::FinalStateValidationFailed)?;
+
+        debug!(
+            target: LOG_TARGET,
+            "Horizon state validation succeeded! Committing horizon state."
+        );
+        self.db()
             .write_transaction()
-            .set_metadata(MetadataKey::BestBlock, MetadataValue::BestBlock(header.hash().clone()))
-            .set_metadata(MetadataKey::ChainHeight, MetadataValue::ChainHeight(header.height()))
-            .set_metadata(
-                MetadataKey::AccumulatedWork,
-                MetadataValue::AccumulatedWork(header.accumulated_data.total_accumulated_difficulty),
-            )
-            .set_metadata(
-                MetadataKey::EffectivePrunedHeight,
-                MetadataValue::EffectivePrunedHeight(header.height()),
+            .set_best_block(header.height(), header.hash().clone(), header.accumulated_data.total_accumulated_difficulty)
+            .set_pruned_height(
+                header.height(), pruned_kernel_sum, pruned_utxo_sum
             )
             .commit().await?;
 
-        Ok(())
-        // let validator = self.shared.sync_validators.final_state.clone();
-        // let horizon_sync_height = self.horizon_sync_height;
 
-        // match validation_result {
-        //     Ok(_) => {
-        //         debug!(
-        //             target: LOG_TARGET,
-        //             "Horizon state validation succeeded! Committing horizon state."
-        //         );
-        //         self.db.horizon_sync_commit().await?;
-        //         Ok(())
-        //     },
-        //     Err(err) => {
-        //         debug!(target: LOG_TARGET, "Horizon state validation failed!");
-        //         Err(err)
-        //     },
-        // }
-    }
-
-
-    async fn prepare_for_sync(&mut self) -> Result<(), HorizonSyncError> {
-        self.db().horizon_sync_begin().await?;
         Ok(())
     }
+
 
     #[inline]
     fn db(&self) -> &AsyncBlockchainDb<B> {

@@ -24,6 +24,8 @@ use crate::types::BlockHash;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 use tari_crypto::tari_utilities::hex::Hex;
+use tari_crypto::commitment::HomomorphicCommitment;
+use tari_crypto::ristretto::RistrettoPublicKey;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub struct ChainMetadata {
@@ -34,10 +36,10 @@ pub struct ChainMetadata {
     /// The number of blocks back from the tip that this database tracks. A value of 0 indicates that all blocks are
     /// tracked (i.e. the database is in full archival mode).
     pruning_horizon: u64,
-    /// The effective height of the pruning horizon. This indicates from what height a full block can be provided
-    /// (exclusive). If `effective_pruned_height` is equal to the `height_of_longest_chain` no blocks can be
-    /// provided. Archival nodes wil always have an `effective_pruned_height` of zero.
-    effective_pruned_height: u64,
+    /// The height of the pruning horizon. This indicates from what height a full block can be provided
+    /// (exclusive). If `pruned_height` is equal to the `height_of_longest_chain` no blocks can be
+    /// provided. Archival nodes wil always have an `pruned_height` of zero.
+    pruned_height: u64,
     /// The geometric mean of the proof of work of the longest chain, none if the chain is empty
     accumulated_difficulty: u128,
 }
@@ -55,7 +57,7 @@ impl ChainMetadata {
             height_of_longest_chain: height,
             best_block: hash,
             pruning_horizon,
-            effective_pruned_height,
+            pruned_height: effective_pruned_height,
             accumulated_difficulty,
         }
     }
@@ -65,7 +67,7 @@ impl ChainMetadata {
             height_of_longest_chain: 0,
             best_block: Vec::new(),
             pruning_horizon: 0,
-            effective_pruned_height: 0,
+            pruned_height: 0,
             accumulated_difficulty: 0,
         }
     }
@@ -112,8 +114,8 @@ impl ChainMetadata {
         self.height_of_longest_chain
     }
 
-    pub fn effective_pruned_height(&self) -> u64 {
-        self.effective_pruned_height
+    pub fn pruned_height(&self) -> u64 {
+        self.pruned_height
     }
 
     pub fn accumulated_difficulty(&self) -> u128 {
@@ -137,7 +139,7 @@ impl Display for ChainMetadata {
         ))?;
         fmt.write_str(&format!("Best block : {}\n", best_block))?;
         fmt.write_str(&format!("Pruning horizon : {}\n", self.pruning_horizon))?;
-        fmt.write_str(&format!("Effective pruned height : {}\n", self.effective_pruned_height))?;
+        fmt.write_str(&format!("Effective pruned height : {}\n", self.pruned_height))?;
         Ok(())
     }
 }

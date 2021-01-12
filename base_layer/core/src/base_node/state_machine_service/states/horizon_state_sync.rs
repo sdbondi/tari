@@ -67,7 +67,7 @@ impl HorizonStateSync {
             Ok(m) => m,
             Err(err) => return StateEvent::FatalError(err.to_string())
         };
-        if local_metadata.height_of_longest_chain() > local_metadata.effective_pruned_height() {
+        if local_metadata.height_of_longest_chain() > local_metadata.pruned_height() {
             return StateEvent::HorizonStateSynchronized;
         }
         let sync_height = match shared.db.fetch_last_header().await {

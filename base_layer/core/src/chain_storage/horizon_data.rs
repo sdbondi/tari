@@ -1,4 +1,6 @@
-// Copyright 2020. The Tari Project
+use crate::transactions::types::Commitment;
+
+// Copyright 2021. The Tari Project
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 // following conditions are met:
@@ -19,39 +21,34 @@
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Error, Formatter};
-use tari_common_types::chain_metadata::ChainMetadata;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InProgressHorizonSyncState {
-    pub metadata: ChainMetadata,
-    /* pub initial_kernel_checkpoint_count: u64,
-     * pub initial_utxo_checkpoint_count: u64,
-     * pub initial_rangeproof_checkpoint_count: u64, */
+pub struct HorizonData{
+    kernel_sum: Commitment,
+    utxo_sum: Commitment
 }
 
-impl InProgressHorizonSyncState {
-    pub fn new_with_metadata(metadata: ChainMetadata) -> Self {
-        Self {
-            metadata,
-            /* initial_kernel_checkpoint_count: 0,
-             * initial_utxo_checkpoint_count: 0,
-             * initial_rangeproof_checkpoint_count: 0, */
+
+impl HorizonData
+{
+
+    pub fn new(kernel_sum: Commitment, utxo_sum: Commitment) -> Self{
+        HorizonData{
+            kernel_sum,
+            utxo_sum
         }
     }
-}
 
-impl Display for InProgressHorizonSyncState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(
-            f,
-            "metadata = {}",
-            self.metadata,
-            /* self.initial_kernel_checkpoint_count,
-             * self.initial_utxo_checkpoint_count,
-             * self.initial_rangeproof_checkpoint_count, */
-        )
+    pub fn zero() -> Self {
+        HorizonData{
+            kernel_sum: Default::default(),
+            utxo_sum: Default::default()
+        }
+    }
+
+    pub fn kernel_sum(&self) -> &Commitment {
+       &self.kernel_sum
+    }
+
+    pub fn utxo_sum(&self) -> &Commitment {
+        &self.utxo_sum
     }
 }

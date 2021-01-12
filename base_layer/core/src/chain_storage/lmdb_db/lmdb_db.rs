@@ -23,7 +23,7 @@ use crate::{
     blocks::{block_header::BlockHeader, Block},
     chain_storage::{
         accumulated_data::{BlockAccumulatedData, BlockHeaderAccumulatedData, DeletedBitmap},
-        db_transaction::{DbKey, DbTransaction, DbValue, MetadataValue, WriteOperation},
+        db_transaction::{DbKey, DbTransaction, DbValue, WriteOperation},
         error::{ChainStorageError, OrNotFound},
         lmdb_db::{
             lmdb::{
@@ -66,7 +66,6 @@ use crate::{
         },
         BlockchainBackend,
         ChainHeader,
-        MetadataKey,
         MmrTree,
         PrunedOutput,
     },
@@ -80,13 +79,7 @@ use croaring::Bitmap;
 use fs2::FileExt;
 use lmdb_zero::{ConstTransaction, Database, Environment, ReadTransaction, WriteTransaction};
 use log::*;
-use std::{
-    fs,
-    fs::File,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Instant,
-};
+use std::{fs, fs::File, path::{Path, PathBuf}, sync::Arc, time::Instant, fmt};
 use tari_common_types::{
     chain_metadata::ChainMetadata,
     types::{BlockHash, BLOCK_HASH_LENGTH},
@@ -94,6 +87,9 @@ use tari_common_types::{
 use tari_crypto::tari_utilities::{hash::Hashable, hex::Hex, ByteArray};
 use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use tari_storage::lmdb_store::{db, LMDBBuilder, LMDBConfig, LMDBStore};
+use crate::transactions::types::Commitment;
+use crate::chain_storage::HorizonData;
+use serde::{Serialize, Deserialize};
 
 type DatabaseRef = Arc<Database<'static>>;
 
@@ -168,7 +164,6 @@ impl LMDBDatabase {
         for op in txn.into_operations() {
             trace!(target: LOG_TARGET, "[apply_db_transaction] WriteOperation: {}", op);
             match op {
-                SetMetadata(key, value) => self.set_metadata(&write_txn, key, value)?,
                 InsertOrphanBlock(block) => self.insert_orphan_block(&write_txn, &block)?,
                 Delete(delete) => self.op_delete(&write_txn, delete)?,
                 InsertHeader { header } => {
@@ -301,8 +296,9 @@ impl LMDBDatabase {
                     block_accum_data.deleted = DeletedBitmap { deleted };
                     self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
                 },
-                PruneOutputsByMmrPosition(positions) => {
-                    for pos in positions {
+                PruneOutputsAndUpdateHorizon{ output_positions, horizon } => {
+                    let kernel_sum = self.fetch_chain_metadata()?;
+                    for pos in output_positions {
                         let (_height, hash) =
                             lmdb_first_after::<_, (u64, Vec<u8>)>(&write_txn, &self.output_mmr_size_index, &pos.to_be_bytes()).or_not_found("BlockHeader","mmr_position", pos.to_string())?;
                         let key = format!(
@@ -311,8 +307,38 @@ impl LMDBDatabase {
                             pos,
                         );
                         info!(target: LOG_TARGET, "Pruning output: {}", key);
-                        self.prune_output(&write_txn, key.as_str())?;
+                        if let Some(previous) = self.prune_output(&write_txn, key.as_str())?{
+
+                        }
                     }
+                }
+                UpdateKernelSum { header_hash, kernel_sum } => {
+                    let height = self.fetch_height_from_hash(&write_txn, &header_hash).or_not_found(
+                        "BlockHash",
+                        "hash",
+                        header_hash.to_hex(),
+                    )?;
+                    let mut block_accum_data = self
+                        .fetch_block_accumulated_data(&write_txn, height)?
+                        .unwrap_or_else( BlockAccumulatedData::default);
+
+                    block_accum_data.kernel_sum = kernel_sum;
+                    self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
+
+                }
+                UpdateUtxoSum { header_hash, utxo_sum } => {
+                    let height = self.fetch_height_from_hash(&write_txn, &header_hash).or_not_found(
+                        "BlockHash",
+                        "hash",
+                        header_hash.to_hex(),
+                    )?;
+                    let mut block_accum_data = self
+                        .fetch_block_accumulated_data(&write_txn, height)?
+                        .unwrap_or_else( BlockAccumulatedData::default);
+
+                    block_accum_data.utxo_sum = utxo_sum;
+                    self.update_block_accumulated_data(&write_txn, height, &block_accum_data)?;
+
                 }
             }
         }
@@ -333,10 +359,12 @@ impl LMDBDatabase {
         Ok(())
     }
 
-    fn prune_output(&mut self, txn: &WriteTransaction<'_>, key: &str) -> Result<(), ChainStorageError> {
+    fn prune_output(&mut self, txn: &WriteTransaction<'_>, key: &str) -> Result<Option<TransactionOutput>, ChainStorageError> {
         let mut output:TransactionOutputRowData = lmdb_get(txn, &self.utxos_db, key).or_not_found("TransactionOutput", "key", key.to_string())?;
+        let result = output.output.clone();
         output.output = None;
-        lmdb_replace(txn, &self.utxos_db, key, &output)
+        lmdb_replace(txn, &self.utxos_db, key, &output)?;
+        Ok(result)
     }
 
     fn insert_output(
@@ -520,7 +548,6 @@ impl LMDBDatabase {
 
     fn op_delete(&mut self, txn: &WriteTransaction<'_>, key: DbKey) -> Result<(), ChainStorageError> {
         match key {
-            DbKey::Metadata(_key) => unimplemented!("Deleting of metadata keys not supported"),
             DbKey::BlockHeader(k) => {
                 let val: Option<BlockHeader> = lmdb_get(txn, &self.headers_db, &k)?;
                 if let Some(v) = val {
@@ -591,8 +618,8 @@ impl LMDBDatabase {
             outputs: pruned_output_set,
             deleted,
             range_proofs: pruned_proof_set,
-            mut total_kernel_sum,
-            mut total_utxo_sum,
+            kernel_sum: mut total_kernel_sum,
+            utxo_sum: mut total_utxo_sum,
         } = data;
 
         debug!(target: LOG_TARGET, "Kernel mmr before adding:{:?}", pruned_kernel_set);
@@ -815,11 +842,7 @@ impl BlockchainBackend for LMDBDatabase {
 
         let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
         let res = match key {
-            DbKey::Metadata(k) => {
-                let val: Option<MetadataValue> = lmdb_get(&txn, &self.metadata_db, &(*k as u32))?;
-                val.map(DbValue::Metadata)
-            },
-            DbKey::BlockHeader(k) => {
+              DbKey::BlockHeader(k) => {
                 let val: Option<BlockHeader> = lmdb_get(&txn, &self.headers_db, k)?;
                 val.map(|val| DbValue::BlockHeader(Box::new(val)))
             },
@@ -865,7 +888,6 @@ impl BlockchainBackend for LMDBDatabase {
     fn contains(&self, key: &DbKey) -> Result<bool, ChainStorageError> {
         let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
         Ok(match key {
-            DbKey::Metadata(k) => lmdb_exists(&txn, &self.metadata_db, &(*k as u32))?,
             DbKey::BlockHeader(k) => lmdb_exists(&txn, &self.headers_db, k)?,
             DbKey::BlockHash(h) => lmdb_exists(&txn, &self.block_hashes_db, h)?,
             DbKey::OrphanBlock(k) => lmdb_exists(&txn, &self.orphans_db, k)?,
@@ -1475,16 +1497,24 @@ impl BlockchainBackend for LMDBDatabase {
         let txn = ReadTransaction::new(&*self.env).map_err(|e| ChainStorageError::AccessError(e.to_string()))?;
         Ok(lmdb_get(&txn, &self.monero_seed_height_db, seed)?.unwrap_or(0))
     }
+
+    fn fetch_horizon_data(&self) -> Result<Option<HorizonData>, ChainStorageError> {
+        let txn = ReadTransaction::new(&*self.env)?;
+        Ok()
+    }
 }
 
 // Fetch the chain metadata
 fn fetch_metadata(txn: &ConstTransaction<'_>, db: &Database) -> Result<ChainMetadata, ChainStorageError> {
+    let (pruned_height, kernel_sum, utxo_sum) = fetch_pruned_height(&txn, &db)?;
     Ok(ChainMetadata::new(
         fetch_chain_height(&txn, &db)?,
         fetch_best_block(&txn, &db)?,
         fetch_pruning_horizon(&txn, &db)?,
-        fetch_effective_pruned_height(&txn, &db)?,
+        pruned_height,
         fetch_accumulated_work(&txn, &db)?,
+        kernel_sum,
+        utxo_sum
     ))
 }
 
@@ -1503,12 +1533,12 @@ fn fetch_chain_height(txn: &ConstTransaction<'_>, db: &Database) -> Result<u64, 
 }
 
 // // Fetches the effective pruned height from the provided metadata db.
-fn fetch_effective_pruned_height(txn: &ConstTransaction<'_>, db: &Database) -> Result<u64, ChainStorageError> {
-    let k = MetadataKey::EffectivePrunedHeight;
+fn fetch_pruned_height(txn: &ConstTransaction<'_>, db: &Database) -> Result<(u64, Commitment, Commitment), ChainStorageError> {
+    let k = MetadataKey::PrunedHeight;
     let val: Option<MetadataValue> = lmdb_get(&txn, &db, &(k as u32))?;
     match val {
-        Some(MetadataValue::EffectivePrunedHeight(height)) => Ok(height),
-        _ => Ok(0),
+        Some(MetadataValue::PrunedHeight{height, pruned_kernel_sum, pruned_utxo_sum }) => Ok((height, pruned_kernel_sum, pruned_utxo_sum)),
+        _ => Ok((0, Default::default(), Default::default())),
     }
 }
 
@@ -1555,4 +1585,48 @@ fn get_database(store: &LMDBStore, name: &str) -> Result<DatabaseRef, ChainStora
         .get_handle(name)
         .ok_or_else(|| ChainStorageError::CriticalError(format!("Could not get `{}` database", name)))?;
     Ok(handle.db())
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+enum MetadataKey {
+    ChainHeight,
+    BestBlock,
+    AccumulatedWork,
+    PruningHorizon,
+    PrunedHeight,
+    HorizonData
+}
+
+impl fmt::Display for MetadataKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetadataKey::ChainHeight => f.write_str("Current chain height"),
+            MetadataKey::AccumulatedWork => f.write_str("Total accumulated work"),
+            MetadataKey::PruningHorizon => f.write_str("Pruning horizon"),
+            MetadataKey::PrunedHeight => f.write_str("Effective pruned height"),
+            MetadataKey::BestBlock => f.write_str("Chain tip block hash"),
+            MetadataKey::HorizonData => f.write_str("Database info"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+enum MetadataValue {
+    ChainHeight(u64),
+    BestBlock(BlockHash),
+    AccumulatedWork(u128),
+    PruningHorizon(u64),
+    PrunedHeight{height:u64,pruned_kernel_sum: Commitment, pruned_utxo_sum: Commitment},
+}
+
+impl fmt::Display for MetadataValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetadataValue::ChainHeight(h) => write!(f, "Chain height is {}", h),
+            MetadataValue::AccumulatedWork(d) => write!(f, "Total accumulated work is {}", d),
+            MetadataValue::PruningHorizon(h) => write!(f, "Pruning horizon is {}", h),
+            MetadataValue::PrunedHeight{height, ..} => write!(f, "Effective pruned height is {}", height),
+            MetadataValue::BestBlock(hash) => write!(f, "Chain tip block hash is {}", hash.to_hex()),
+        }
+    }
 }

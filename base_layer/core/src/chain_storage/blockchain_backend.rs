@@ -19,6 +19,7 @@ use crate::{
 use croaring::Bitmap;
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_mmr::Hash;
+use crate::chain_storage::HorizonData;
 
 /// Identify behaviour for Blockchain database back ends. Implementations must support `Send` and `Sync` so that
 /// `BlockchainDatabase` can be thread-safe. The backend *must* also execute transactions atomically; i.e., every
@@ -149,4 +150,6 @@ pub trait BlockchainBackend: Send + Sync {
 
     /// This gets the monero seed_height. This will return 0, if the seed is unkown
     fn fetch_monero_seed_first_seen_height(&self, seed: &str) -> Result<u64, ChainStorageError>;
+
+    fn fetch_horizon_data(&self) -> Result<Option<HorizonData>, ChainStorageError>;
 }

@@ -26,6 +26,7 @@ use crate::{
     transactions::transaction::Transaction,
     validation::error::ValidationError,
 };
+use crate::transactions::types::Commitment;
 
 /// A validator that determines if a block body is valid, assuming that the header has already been
 /// validated
@@ -55,6 +56,6 @@ pub trait HeaderValidation<B: BlockchainBackend>: Send + Sync {
     ) -> Result<BlockHeaderAccumulatedDataBuilder, ValidationError>;
 }
 
-pub trait FinalHeaderStateValidation: Send + Sync {
-    fn validate(&self, header: &BlockHeader) -> Result<(), ValidationError>;
+pub trait FinalHorizonStateValidation<B>: Send + Sync {
+    fn validate(&self, height: u64, total_utxo_sum: &Commitment, total_kernel_sum: &Commitment, backend: &B) -> Result<(), ValidationError>;
 }

@@ -88,7 +88,7 @@ fn write_and_fetch_metadata() {
     let metadata = store.get_chain_metadata().unwrap();
     assert_eq!(metadata.height_of_longest_chain(), height);
     assert_eq!(metadata.accumulated_difficulty(), accumulated_difficulty);
-    assert_eq!(metadata.effective_pruned_height(), 0);
+    assert_eq!(metadata.pruned_height(), 0);
 
     let state = InProgressHorizonSyncState {
         metadata: metadata.clone(),
@@ -281,7 +281,7 @@ fn rewind_past_horizon_height() {
 
     let metadata = store.get_chain_metadata().unwrap();
     assert_eq!(metadata.height_of_longest_chain(), 4);
-    let horizon_height = metadata.effective_pruned_height();
+    let horizon_height = metadata.pruned_height();
     assert_eq!(horizon_height, 2);
     assert!(store.rewind_to_height(horizon_height - 1).is_err());
     assert!(store.rewind_to_height(horizon_height).is_ok());

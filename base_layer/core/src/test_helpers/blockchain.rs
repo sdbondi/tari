@@ -64,6 +64,7 @@ use std::{
 use tari_common_types::chain_metadata::ChainMetadata;
 use tari_storage::lmdb_store::LMDBConfig;
 use tari_test_utils::paths::create_temporary_data_path;
+use crate::chain_storage::HorizonData;
 
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
@@ -311,5 +312,9 @@ impl BlockchainBackend for TempDatabase {
 
     fn fetch_monero_seed_first_seen_height(&self, seed: &str) -> Result<u64, ChainStorageError> {
         self.db.fetch_monero_seed_first_seen_height(seed)
+    }
+
+    fn fetch_horizon_data(&self) -> Result<Option<HorizonData>, ChainStorageError> {
+        self.db.fetch_horizon_data()
     }
 }

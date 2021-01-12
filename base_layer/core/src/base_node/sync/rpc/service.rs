@@ -83,11 +83,11 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
             .map_err(RpcStatus::log_internal_error(LOG_TARGET))?;
 
         let start = start_header.height + 1;
-        if start < metadata.effective_pruned_height() {
+        if start < metadata.pruned_height() {
             return Err(RpcStatus::bad_request(format!(
                 "Requested full block body at height {}, however this node has an effective pruned height of {}",
                 start,
-                metadata.effective_pruned_height()
+                metadata.pruned_height()
             )));
         }
 
