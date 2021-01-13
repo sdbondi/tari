@@ -37,3 +37,5 @@ Feature: Block Sync
     When I mine 5 blocks on NODE1
     Given I have a pruned node PNODE2 connected to node NODE1
     Then all nodes are at height 5
+    When I mine 5 blocks on PNODE2
+    Then all nodes are at height 10
