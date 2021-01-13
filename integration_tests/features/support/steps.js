@@ -46,7 +46,7 @@ Given(/I have a base node (.*) connected to node (.*)/, {timeout: 20*1000}, asyn
 });
 
 Given(/I have a pruned node (.*) connected to node (.*)/, {timeout: 20*1000}, async function (name, node) {
-    const miner =  new BaseNodeProcess(name, { pruningHorizon: 1});
+    const miner =  new BaseNodeProcess(name, { pruningHorizon: 5});
     miner.setPeerSeeds([this.nodes[node].peerAddress()]);
     await miner.startNew();
     this.addNode(name, miner);
@@ -104,10 +104,19 @@ When(/I create a transaction (.*) spending (.*) to (.*)/, function (txnName, inp
 });
 
 When(/I submit transaction (.*) to (.*)/, async  function (txn,  node) {
-    let res = await this.getClient(node).submitTransaction(this.transactions[txn]);
-    this.lastResult = res;
+    this.lastResult = await this.getClient(node).submitTransaction(this.transactions[txn]);
     expect(this.lastResult.result).to.equal('ACCEPTED');
 });
+
+When(/I spend outputs (.*) via (.*)/, async function (inputs, node) {
+    let txInputs = inputs.split(",").map(input  => this.outputs[input]);
+    let txn = new TransactionBuilder();
+    txInputs.forEach(txIn => txn.addInput(txIn));
+    txn.addOutput(txn.getSpendableAmount());
+    this.lastResult = await this.getClient(node).submitTransaction(txn.build());
+    expect(this.lastResult.result).to.equal('ACCEPTED');
+});
+
 
 Then(/(.*) is in the mempool/, function (txn) {
     expect(this.lastResult.result).to.equal('ACCEPTED');

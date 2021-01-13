@@ -34,8 +34,17 @@ Feature: Block Sync
     @critical
   Scenario: Pruned mode
     Given I have a base node NODE1 connected to all seed nodes
-    When I mine 5 blocks on NODE1
+      When I mine a block on NODE1 with coinbase CB1
+      When I mine a block on NODE1 with coinbase CB2
+      When I mine a block on NODE1 with coinbase CB3
+      When I mine a block on NODE1 with coinbase CB4
+      When I mine a block on NODE1 with coinbase CB5
+      Then all nodes are at height 5
+      When I spend outputs CB1,CB2,CB3 via NODE1
+      And I mine 3 blocks on NODE1
     Given I have a pruned node PNODE2 connected to node NODE1
-    Then all nodes are at height 5
+    Then all nodes are at height 8
+      # Spend txns so that they are pruned when tip moves
+      When I spend outputs CB4,CB5 via PNODE2
     When I mine 5 blocks on PNODE2
-    Then all nodes are at height 10
+    Then all nodes are at height 13
