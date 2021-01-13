@@ -185,6 +185,13 @@ impl StateInfo {
             Self::Listening(_) => "Listening".to_string(),
         }
     }
+
+    pub fn get_block_sync_info(&self) -> Option<BlockSyncInfo> {
+        match self {
+            Self::BlockSync(info) => Some(info.clone()),
+            _ => None,
+        }
+    }
 }
 
 impl Display for StateInfo {

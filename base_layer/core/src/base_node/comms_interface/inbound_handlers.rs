@@ -394,6 +394,7 @@ where T: BlockchainBackend + 'static
                 let block_template = NewBlockTemplate::from_block(
                     header.into_builder().with_transactions(transactions).build(),
                     self.get_target_difficulty(pow_algo, height).await?,
+                    self.consensus_manager.get_block_reward_at(height),
                 );
                 debug!(
                     target: LOG_TARGET,
@@ -521,6 +522,8 @@ where T: BlockchainBackend + 'static
                     BlockAddResult::OrphanBlock => false,
                     BlockAddResult::ChainReorg(_, _) => true,
                 };
+
+                self.blockchain_db.cleanup_orphans().await?;
 
                 self.publish_block_event(BlockEvent::ValidBlockAdded(block, block_add_result, broadcast));
 

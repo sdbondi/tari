@@ -738,7 +738,7 @@ impl<B> BlockchainDatabase<B>
     }
 
     pub fn prepare_block_merkle_roots(&self, template: NewBlockTemplate) -> Result<Block, ChainStorageError> {
-        let NewBlockTemplate { header, mut body } = template;
+        let NewBlockTemplate { header, mut body, .. } = template;
         body.sort();
         let header = BlockHeader::from(header);
         let mut block = Block { header, body };
@@ -824,14 +824,6 @@ impl<B> BlockchainDatabase<B>
             block,
         )?;
 
-        // Cleanup orphan block pool
-        match block_add_result {
-            BlockAddResult::OrphanBlock | BlockAddResult::ChainReorg(_, _) => {
-                cleanup_orphans(&mut *db, self.config.orphan_storage_capacity)?
-            }
-            _ => {}
-        }
-
         // Cleanup of backend when in pruned mode.
         match block_add_result {
             BlockAddResult::Ok(_) | BlockAddResult::ChainReorg(_, _) => {
@@ -850,6 +842,13 @@ impl<B> BlockchainDatabase<B>
             &new_height
         );
         Ok(block_add_result)
+    }
+
+    /// Clean out the entire orphan pool
+    pub fn cleanup_orphans(&self) -> Result<(), ChainStorageError> {
+        let mut db = self.db_write_access()?;
+        let _ = cleanup_orphans(&mut *db, self.config.orphan_storage_capacity)?;
+        Ok(())
     }
 
     /// Clean out the entire orphan pool

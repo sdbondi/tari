@@ -82,13 +82,20 @@ impl TryFrom<grpc::NewBlockTemplate> for NewBlockTemplate {
             prev_hash: header.prev_hash,
             total_kernel_offset,
             pow,
-            target_difficulty: 1.into()
         };
         let body = block
             .body
             .map(TryInto::try_into)
             .ok_or_else(|| "Block body not provided".to_string())??;
 
-        Ok(Self { header, body })
+        // Note,  the target_difficulty fields won't be used when converting back, but this
+        // should probably be addressed at some point
+        Ok(Self {
+            header,
+            body,
+            target_difficulty: Default::default(),
+            reward: Default::default(),
+            total_fees: Default::default(),
+        })
     }
 }

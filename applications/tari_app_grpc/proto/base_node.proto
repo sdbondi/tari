@@ -56,6 +56,8 @@ service BaseNode {
     rpc SubmitBlock(Block) returns (Empty);
     // Submit a transaction for propagation
     rpc SubmitTransaction(SubmitTransactionRequest) returns (SubmitTransactionResponse);
+    // Get the base node sync information
+    rpc GetSyncInfo(Empty) returns (SyncInfoResponse);
     // Get the base node tip information
     rpc GetTipInfo(Empty) returns (TipInfoResponse);
     // Search for blocks containing the specified kernels
@@ -75,8 +77,8 @@ message TipInfoResponse{
 /// return type of GetNewBlockTemplate
 message NewBlockTemplateResponse{
     NewBlockTemplate new_block_template = 1;
-    uint64 block_reward = 2;
     bool initial_sync_achieved = 3;
+    MinerData miner_data = 4;
 }
 
 /// An Empty placeholder for endpoints without request parameters
@@ -197,15 +199,19 @@ message MetaData {
     bytes accumulated_difficulty = 5;
 }
 
+message SyncInfoResponse {
+        uint64 tip_height = 1;
+        uint64 local_height = 2;
+        repeated bytes peer_node_id = 3;
+}
+
 // This is the message that is returned for a miner after it asks for a new block.
 message GetNewBlockResult{
     // This is the header hash of the completed block
     bytes block_hash = 1;
     // This is the completed block
     Block block = 2;
-    // This is the merge_mining hash of the completed block.
-//    MinerData miner_data = 3;
-    bytes merge_mining_hash =4;
+    bytes merge_mining_hash =3;
 }
 
 // This is mining data for the miner asking for a new block
@@ -214,6 +220,7 @@ message MinerData{
     uint64 target_difficulty = 2;
     uint64 reward = 3;
 //    bytes merge_mining_hash =4;
+    uint64 total_fees = 5;
 }
 
 // This is the request type for the Search Kernels rpc

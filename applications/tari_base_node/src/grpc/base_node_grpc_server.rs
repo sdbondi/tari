@@ -24,6 +24,7 @@ use crate::grpc::{
     helpers::{mean, median},
 };
 use tari_comms::PeerManager;
+use tari_core::base_node::state_machine_service::states::BlockSyncInfo;
 
 use log::*;
 use std::{cmp, convert::TryInto, sync::Arc};
@@ -340,14 +341,17 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
             Status::internal(e.to_string())
         })?;
 
-        let height = new_template.header.height;
-
-        let cm = ConsensusManagerBuilder::new(self.node_config.network.into()).build();
-
         let status_watch = self.state_machine_handle.get_status_info_watch();
+        let pow = algo as i32;
         let response = tari_rpc::NewBlockTemplateResponse {
+            miner_data: Some(tari_rpc::MinerData {
+                reward: new_template.reward.0,
+                target_difficulty: new_template.target_difficulty.as_u64(),
+                total_fees: new_template.total_fees.0,
+                algo: Some(tari_rpc::PowAlgo { pow_algo: pow }),
+            }),
             new_block_template: Some(new_template.into()),
-            block_reward: cm.emission_schedule().block_reward(height).0,
+
             initial_sync_achieved: (*status_watch.borrow()).bootstrapped,
         };
 
@@ -376,6 +380,7 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
         let block_hash = new_block.hash();
         let mining_hash = new_block.header.merged_mining_hash();
         let block: Option<tari_rpc::Block> = Some(new_block.into());
+
         let response = tari_rpc::GetNewBlockResult {
             block_hash,
             block,
@@ -796,6 +801,43 @@ impl tari_rpc::base_node_server::BaseNode for BaseNodeGrpcServer {
 
         debug!(target: LOG_TARGET, "Sending GetTokensInCirculation response to client");
         Ok(Response::new(rx))
+    }
+
+    async fn get_sync_info(
+        &self,
+        _request: Request<tari_rpc::Empty>,
+    ) -> Result<Response<tari_rpc::SyncInfoResponse>, Status>
+    {
+        debug!(target: LOG_TARGET, "Incoming GRPC request for BN sync data");
+
+        let mut channel = self.state_machine_handle.get_status_info_watch();
+
+        let mut sync_info: Option<BlockSyncInfo> = None;
+
+        if let Some(info) = channel.recv().await {
+            sync_info = info.state_info.get_block_sync_info();
+        }
+
+        let mut response = tari_rpc::SyncInfoResponse {
+            tip_height: 0,
+            local_height: 0,
+            peer_node_id: vec![],
+        };
+
+        if let Some(info) = sync_info {
+            let mut node_ids = Vec::new();
+            info.sync_peers
+                .iter()
+                .for_each(|x| node_ids.push(x.to_string().as_bytes().to_vec()));
+            response = tari_rpc::SyncInfoResponse {
+                tip_height: info.tip_height,
+                local_height: info.local_height,
+                peer_node_id: node_ids,
+            };
+        }
+
+        debug!(target: LOG_TARGET, "Sending SyncData response to client");
+        Ok(Response::new(response))
     }
 }
 

@@ -111,10 +111,14 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
                     debug!(target: LOG_TARGET, "Block header validation failed: {}", err);
                     self.ban_peer_temporarily(node_id, err.into()).await?;
                 },
-                Err(err) => debug!(
-                    target: LOG_TARGET,
-                    "Failed to synchronize headers from peer `{}`: {}", node_id, err
-                ),
+                Err(err) => {
+                    debug!(
+                        target: LOG_TARGET,
+                        "Failed to synchronize headers from peer `{}`: {}", node_id, err
+                    );
+                    self.ban_peer_temporarily(node_id, BanReason::GeneralHeaderSyncFailure)
+                        .await?;
+                },
             }
         }
 
@@ -342,7 +346,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             }
 
             debug!(target: LOG_TARGET, "Already in sync with peer `{}`.", peer);
-            return Ok(false);
+            return Ok(true);
         }
 
         // We can trust that the header associated with this hash exists because block_hashes is data this node
@@ -426,16 +430,13 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         client: &mut rpc::BaseNodeSyncRpcClient,
     ) -> Result<(), BlockHeaderSyncError>
     {
-        let tip_header = self.db.fetch_tip_header().await?;
+        let tip_header = self.db.fetch_last_header().await?;
         debug!(
             target: LOG_TARGET,
-            "Requesting header stream starting from tip header #{} ({}) from peer `{}`",
-            tip_header.header.height,
-            tip_header.accumulated_data.hash.to_hex(),
-            peer
+            "Requesting header stream starting from tip header #{} from peer `{}`", tip_header.height, peer
         );
         let request = SyncHeadersRequest {
-            start_hash: tip_header.accumulated_data.hash,
+            start_hash: tip_header.hash(),
             // To the tip!
             count: 0,
         };
@@ -494,4 +495,6 @@ enum BanReason {
     ValidationFailed(#[from] ValidationError),
     #[error("Peer could not find the location of a chain split")]
     ChainSplitNotFound,
+    #[error("Failed to synchronize headers from peer")]
+    GeneralHeaderSyncFailure,
 }

@@ -1,6 +1,6 @@
 const {spawnSync, spawn, execSync} = require('child_process');
 const {expect} = require('chai');
-var fs = require('fs');
+const fs = require('fs');
 const BaseNodeClient = require("./baseNodeClient");
 const {getFreePort} = require("./util");
 const dateFormat = require('dateformat');
@@ -55,6 +55,10 @@ class BaseNodeProcess {
 
     setPeerSeeds(addresses) {
         this.peerSeeds = addresses.join(",");
+    }
+
+    getGrpcAddress() {
+        return "127.0.0.1:" + this.grpcPort;
     }
 
     createEnvs() {

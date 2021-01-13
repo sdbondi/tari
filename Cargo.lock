@@ -422,25 +422,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bulletproofs"
-version = "2.0.0"
-source = "git+https://github.com/tari-project/bulletproofs?branch=develop#7d6f48f432902c06a5efe5150f40feae32f21bf6"
-dependencies = [
- "byteorder",
- "clear_on_drop",
- "curve25519-dalek 3.0.0",
- "digest 0.9.0",
- "merlin",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "serde 1.0.116",
- "serde_derive",
- "sha3 0.9.1",
- "subtle 2.3.0",
- "thiserror",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -514,6 +495,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b9434b9a5aa1450faa3f9cb14ea0e8c53bb5d2b3c1bfd1ab4fc03e9f33fbfb0"
 dependencies = [
  "rustc_version",
+]
+
+[[package]]
+name = "cbindgen"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9344318b9c787667b95cd2c5124f5eaf2bde35e959dd01ea04fc5b234c542c11"
+dependencies = [
+ "clap",
+ "heck",
+ "indexmap",
+ "log 0.4.11",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "serde 1.0.116",
+ "serde_json",
+ "syn 1.0.42",
+ "tempfile",
+ "toml 0.5.6",
 ]
 
 [[package]]
@@ -663,6 +663,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_fn"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -754,6 +760,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd01a6eb3daaafa260f6fc94c3a6c36390abc2080e38e3e34ced87393fb77d80"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-channel 0.5.0",
+ "crossbeam-deque 0.8.0",
+ "crossbeam-epoch 0.9.1",
+ "crossbeam-queue",
+ "crossbeam-utils 0.8.1",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -773,14 +793,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dca26ee1f8d361640700bde38b2c37d8c22b3ce2d360e1fc1c74ea4b0aa7d775"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils 0.8.1",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f02af974daeee82218205558e51ec8768b48cf524bd01d550abe5573a608285"
 dependencies = [
- "crossbeam-epoch",
+ "crossbeam-epoch 0.8.2",
  "crossbeam-utils 0.7.2",
  "maybe-uninit",
+]
+
+[[package]]
+name = "crossbeam-deque"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94af6efb46fef72616855b036a624cf27ba656ffc9be1b9a3c931cfc7749a9a9"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-epoch 0.9.1",
+ "crossbeam-utils 0.8.1",
 ]
 
 [[package]]
@@ -794,8 +835,32 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "lazy_static 1.4.0",
  "maybe-uninit",
- "memoffset",
+ "memoffset 0.5.6",
  "scopeguard",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1aaa739f95311c2c7887a76863f500026092fb1dce0161dab577e559ef3569d"
+dependencies = [
+ "cfg-if 1.0.0",
+ "const_fn",
+ "crossbeam-utils 0.8.1",
+ "lazy_static 1.4.0",
+ "memoffset 0.6.1",
+ "scopeguard",
+]
+
+[[package]]
+name = "crossbeam-queue"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f6cb3c7f5b8e51bc3ebb73a2327ad4abdbd119dc13223f14f961d2f38486756"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils 0.8.1",
 ]
 
 [[package]]
@@ -816,6 +881,17 @@ checksum = "c3c7c73a2d1e9fc0886a08b93e98eb643461230d5f1925e4036204d5f2e261a8"
 dependencies = [
  "autocfg",
  "cfg-if 0.1.10",
+ "lazy_static 1.4.0",
+]
+
+[[package]]
+name = "crossbeam-utils"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d96d1e189ef58269ebe5b97953da3274d83a93af647c2ddd6f9dab28cedb8d"
+dependencies = [
+ "autocfg",
+ "cfg-if 1.0.0",
  "lazy_static 1.4.0",
 ]
 
@@ -930,20 +1006,6 @@ checksum = "5d85653f070353a16313d0046f173f70d1aadd5b42600a14de626f0dfb3473a5"
 dependencies = [
  "byteorder",
  "digest 0.8.1",
- "rand_core 0.5.1",
- "serde 1.0.116",
- "subtle 2.3.0",
- "zeroize",
-]
-
-[[package]]
-name = "curve25519-dalek"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8492de420e9e60bc9a1d66e2dbb91825390b738a388606600663fc529b4b307"
-dependencies = [
- "byteorder",
- "digest 0.9.0",
  "packed_simd",
  "rand_core 0.5.1",
  "serde 1.0.116",
@@ -2105,6 +2167,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoffset"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "157b4208e3059a8f9e78d559edc658e13df41410cb3ae03979c83130067fdd87"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "merlin"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2245,7 +2316,7 @@ checksum = "d53d4207d0bd4d1eb3323e33a64f9ea99e5e3d257d5cd7a659fad5be48c8b9af"
 dependencies = [
  "base58-monero",
  "byteorder",
- "curve25519-dalek 2.1.0",
+ "curve25519-dalek",
  "fixed-hash 0.3.2",
  "hex",
  "keccak-hash 0.3.0",
@@ -3009,7 +3080,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf6960dc9a5b4ee8d3e4c5787b4a112a8818e0290a42ff664ad60692fdf2032"
 dependencies = [
  "autocfg",
- "crossbeam-deque",
+ "crossbeam-deque 0.7.3",
  "either",
  "rayon-core",
 ]
@@ -3021,7 +3092,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8c4fec834fb6e6d2dd5eece3c7b432a52f0ba887cf40e595190c4107edc08bf"
 dependencies = [
  "crossbeam-channel 0.4.4",
- "crossbeam-deque",
+ "crossbeam-deque 0.7.3",
  "crossbeam-utils 0.7.2",
  "lazy_static 1.4.0",
  "num_cpus",
@@ -3729,7 +3800,7 @@ dependencies = [
 
 [[package]]
 name = "tari_app_grpc"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "prost",
  "prost-types",
@@ -3743,14 +3814,16 @@ dependencies = [
 
 [[package]]
 name = "tari_app_utilities"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
+ "config",
  "dirs-next",
  "futures 0.3.6",
  "log 0.4.11",
  "qrcode",
  "rand 0.7.3",
  "serde_json",
+ "structopt",
  "strum",
  "strum_macros 0.19.4",
  "tari_common",
@@ -3761,11 +3834,12 @@ dependencies = [
  "tari_wallet",
  "thiserror",
  "tokio",
+ "tonic",
 ]
 
 [[package]]
 name = "tari_base_node"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3810,8 +3884,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "tari_bulletproofs"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4b6531abd01ccba175a24e7a72061156524f8f435e1532fe6295254f4c4e5b9"
+dependencies = [
+ "byteorder",
+ "clear_on_drop",
+ "curve25519-dalek",
+ "digest 0.8.1",
+ "merlin",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "serde 1.0.116",
+ "serde_derive",
+ "sha3 0.8.2",
+ "subtle 2.3.0",
+ "thiserror",
+]
+
+[[package]]
 name = "tari_common"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "anyhow",
  "config",
@@ -3834,7 +3928,7 @@ dependencies = [
 
 [[package]]
 name = "tari_common_types"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "futures 0.3.6",
  "rand 0.7.3",
@@ -3845,7 +3939,7 @@ dependencies = [
 
 [[package]]
 name = "tari_comms"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3888,7 +3982,7 @@ dependencies = [
 
 [[package]]
 name = "tari_comms_dht"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "anyhow",
  "bitflags 1.2.1",
@@ -3936,6 +4030,7 @@ name = "tari_comms_rpc_macros"
 version = "0.1.1"
 dependencies = [
  "futures 0.3.6",
+ "proc-macro2 1.0.24",
  "prost",
  "quote 1.0.7",
  "syn 1.0.42",
@@ -3948,7 +4043,7 @@ dependencies = [
 
 [[package]]
 name = "tari_console_wallet"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "chrono-english",
@@ -3984,7 +4079,7 @@ dependencies = [
 
 [[package]]
 name = "tari_core"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "bincode",
  "bitflags 1.2.1",
@@ -4038,15 +4133,16 @@ dependencies = [
 
 [[package]]
 name = "tari_crypto"
-version = "0.8.0"
-source = "git+https://github.com/tari-project/tari-crypto?branch=main#b9ffb9bc64f837b66a008ef656a9d7ec5de7035f"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c598350f18cfb2ef25afa18ba128fb69f5cb4733a4881812ab5566ddf5f9330"
 dependencies = [
  "base64 0.10.1",
  "blake2",
  "blake3",
- "bulletproofs",
+ "cbindgen",
  "clear_on_drop",
- "curve25519-dalek 3.0.0",
+ "curve25519-dalek",
  "digest 0.8.1",
  "k12",
  "lazy_static 1.4.0",
@@ -4057,6 +4153,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3 0.9.1",
+ "tari_bulletproofs",
  "tari_utilities",
  "thiserror",
 ]
@@ -4073,7 +4170,7 @@ dependencies = [
 
 [[package]]
 name = "tari_key_manager"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "digest 0.8.1",
  "rand 0.7.3",
@@ -4087,7 +4184,7 @@ dependencies = [
 
 [[package]]
 name = "tari_merge_mining_proxy"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "bytes 0.5.6",
@@ -4123,8 +4220,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "tari_mining_node"
+version = "0.7.0"
+dependencies = [
+ "chrono",
+ "crossbeam",
+ "futures 0.3.6",
+ "log 0.4.11",
+ "num_cpus",
+ "prost-types",
+ "rand 0.7.3",
+ "serde 1.0.116",
+ "sha3 0.9.1",
+ "tari_app_grpc",
+ "tari_app_utilities",
+ "tari_common",
+ "tari_core",
+ "tari_crypto",
+ "thiserror",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "tari_mmr"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "bincode",
  "blake2",
@@ -4143,7 +4263,7 @@ dependencies = [
 
 [[package]]
 name = "tari_p2p"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -4183,7 +4303,7 @@ dependencies = [
 
 [[package]]
 name = "tari_service_framework"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "anyhow",
  "futures 0.3.6",
@@ -4257,7 +4377,7 @@ dependencies = [
 
 [[package]]
 name = "tari_wallet"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "aes-gcm",
  "blake2",
@@ -4298,7 +4418,7 @@ dependencies = [
 
 [[package]]
 name = "tari_wallet_ffi"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "chrono",
  "env_logger 0.7.1",
@@ -4347,7 +4467,7 @@ dependencies = [
 
 [[package]]
 name = "test_faucet"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "rand 0.7.3",
  "serde 1.0.116",
@@ -5315,7 +5435,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "637ff90c9540fa3073bb577e65033069e4bae7c79d49d74aa3ffdf5342a53217"
 dependencies = [
- "curve25519-dalek 2.1.0",
+ "curve25519-dalek",
  "rand_core 0.5.1",
  "zeroize",
 ]
