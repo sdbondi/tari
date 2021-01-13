@@ -49,9 +49,12 @@ async fn main() -> Result<(), MmProxyError> {
     let config = initialize()?;
 
     let addr = config.proxy_host_address;
-    println!("\nListening on {}...\n", addr);
-
     let config = MergeMiningProxyConfig::from(config);
+    println!(
+        "\nListening on {} (monerod = {}, tari base node = {}, wallet = {}) ...\n",
+        addr, config.monerod_url, config.grpc_base_node_address, config.grpc_console_wallet_address
+    );
+
     let xmrig_service = MergeMiningProxyService::new(config, BlockTemplateRepository::new());
     let service = make_service_fn(|_conn| future::ready(Result::<_, Infallible>::Ok(xmrig_service.clone())));
 
