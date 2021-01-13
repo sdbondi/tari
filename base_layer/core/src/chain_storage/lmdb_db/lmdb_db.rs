@@ -89,6 +89,7 @@ use tari_mmr::{Hash, MerkleMountainRange, MutableMmr};
 use tari_storage::lmdb_store::{db, LMDBBuilder, LMDBConfig, LMDBStore};
 use crate::chain_storage::HorizonData;
 use serde::{Serialize, Deserialize};
+use crate::transactions::types::Commitment;
 
 type DatabaseRef = Arc<Database<'static>>;
 
@@ -631,13 +632,14 @@ impl LMDBDatabase {
                 })?
         };
 
+        let mut total_kernel_sum = Commitment::from_bytes(&[0u8;32]).expect("Could not create commitment");
+        let mut total_utxo_sum = Commitment::from_bytes(&[0u8;32]).expect("Could not create commitment");
         let BlockAccumulatedData {
             kernels: pruned_kernel_set,
             outputs: pruned_output_set,
             deleted,
             range_proofs: pruned_proof_set,
-            kernel_sum: mut total_kernel_sum,
-            utxo_sum: mut total_utxo_sum,
+           ..
         } = data;
 
         debug!(target: LOG_TARGET, "Kernel mmr before adding:{:?}", pruned_kernel_set);

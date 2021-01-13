@@ -22,6 +22,7 @@ use crate::transactions::types::Commitment;
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use serde::{Serialize, Deserialize};
+use tari_crypto::tari_utilities::ByteArray;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HorizonData{
@@ -42,8 +43,8 @@ impl HorizonData
 
     pub fn zero() -> Self {
         HorizonData{
-            kernel_sum: Default::default(),
-            utxo_sum: Default::default()
+            kernel_sum:Commitment::from_bytes(&[0u8;32]).expect("Could not create commitment"),
+            utxo_sum: Commitment::from_bytes(&[0u8;32]).expect("Could not create commitment")
         }
     }
 

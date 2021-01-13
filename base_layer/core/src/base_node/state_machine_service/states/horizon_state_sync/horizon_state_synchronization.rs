@@ -376,10 +376,14 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
         let mut pruned_utxo_sum = horizon_data.utxo_sum().clone();
         let chain_metadata = self.db().get_chain_metadata().await?;
 
-        for h in chain_metadata.pruned_height()..header.height() {
+        for h in chain_metadata.pruned_height()..=header.height() {
             let accum_data = self.db().fetch_block_accumulated_data_by_height(h).await?;
             pruned_kernel_sum = accum_data.kernel_sum() + &pruned_kernel_sum;
             pruned_utxo_sum = accum_data.utxo_sum() + &pruned_utxo_sum;
+            debug!(
+                target: LOG_TARGET,
+                "Height: {} Kernel sum:{:?} Pruned UTXO sum: {:?}", h, pruned_kernel_sum, pruned_utxo_sum
+            );
         }
 
         self.shared.sync_validators.final_horizon_state.validate(header.height(), &pruned_utxo_sum, &pruned_kernel_sum, &*self.db().clone().into_inner().db_read_access()?).map_err(HorizonSyncError::FinalStateValidationFailed)?;

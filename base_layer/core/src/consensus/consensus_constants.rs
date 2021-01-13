@@ -205,12 +205,12 @@ impl ConsensusConstants {
             difficulty_block_window,
             max_block_transaction_weight: 19500,
             median_timestamp_count: 11,
-            emission_initial: 10_000_000.into(),
+            emission_initial: 5_538_846_115 * uT,
             emission_decay: &EMISSION_DECAY,
             emission_tail: 100.into(),
             max_randomx_seed_height: std::u64::MAX,
             proof_of_work: algos,
-            faucet_value: MicroTari::from(0),
+            faucet_value:(5000 * 4000) * T,
         }]
     }
 
