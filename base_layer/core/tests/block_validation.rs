@@ -38,11 +38,7 @@ use tari_core::{
         randomx_factory::{RandomXConfig, RandomXFactory},
         PowAlgorithm,
     },
-    test_helpers::blockchain::{
-        create_store_with_consensus,
-        create_store_with_consensus_and_validators,
-        create_test_db,
-    },
+    test_helpers::blockchain::{create_store_with_consensus_and_validators, create_test_db},
     transactions::types::CryptoFactories,
     validation::{
         block_validators::{BodyOnlyValidator, OrphanBlockValidator},

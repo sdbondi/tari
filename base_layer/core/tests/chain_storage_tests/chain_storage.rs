@@ -60,7 +60,7 @@ use tari_core::{
         create_test_db,
     },
     transactions::{
-        helpers::{create_test_kernel, spend_utxos},
+        helpers::spend_utxos,
         tari_amount::{uT, MicroTari, T},
         types::CryptoFactories,
     },

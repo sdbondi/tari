@@ -33,7 +33,7 @@ use tari_core::{
         MetadataKey,
         MetadataValue,
     },
-    consensus::{ConsensusManager, ConsensusManagerBuilder, Network},
+    consensus::{ConsensusManagerBuilder, Network},
     test_helpers::blockchain::create_test_db,
     tx,
 };

@@ -50,7 +50,6 @@ use tari_core::{
     mining::Miner,
     transactions::{tari_amount::MicroTari, transaction::Transaction, types::CryptoFactories},
 };
-use tari_mmr::MmrCacheConfig;
 use tari_p2p::{
     initialization::CommsConfig,
     services::liveness::LivenessConfig,

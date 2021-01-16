@@ -290,23 +290,23 @@ pub fn create_network_with_2_base_nodes_with_config<P: AsRef<Path>>(
 }
 
 // Creates a network with three Base Nodes where each node in the network knows the other nodes in the network.
-pub fn create_network_with_3_base_nodes(
-    runtime: &mut Runtime,
-    data_path: &str,
-) -> (NodeInterfaces, NodeInterfaces, NodeInterfaces, ConsensusManager)
-{
-    let network = Network::LocalNet;
-    let consensus_manager = ConsensusManagerBuilder::new(network).build();
-    create_network_with_3_base_nodes_with_config(
-        runtime,
-        BlockchainDatabaseConfig::default(),
-        BaseNodeServiceConfig::default(),
-        MempoolServiceConfig::default(),
-        LivenessConfig::default(),
-        consensus_manager,
-        data_path,
-    )
-}
+// pub fn create_network_with_3_base_nodes(
+//     runtime: &mut Runtime,
+//     data_path: &str,
+// ) -> (NodeInterfaces, NodeInterfaces, NodeInterfaces, ConsensusManager)
+// {
+//     let network = Network::LocalNet;
+//     let consensus_manager = ConsensusManagerBuilder::new(network).build();
+//     create_network_with_3_base_nodes_with_config(
+//         runtime,
+//         BlockchainDatabaseConfig::default(),
+//         BaseNodeServiceConfig::default(),
+//         MempoolServiceConfig::default(),
+//         LivenessConfig::default(),
+//         consensus_manager,
+//         data_path,
+//     )
+// }
 
 // Creates a network with three Base Nodes where each node in the network knows the other nodes in the network.
 pub fn create_network_with_3_base_nodes_with_config<P: AsRef<Path>>(
