@@ -41,6 +41,8 @@ pub enum TransactionStatus {
     Completed,
     /// This transaction has been broadcast to the base layer network and is currently in one or more base node
     /// mempools.
+    /// DEPRECATED: This status will no longer be used but is left in for backward compatibility
+    /// TODO: After the next testnet reset we will be able to remove this.
     Broadcast,
     /// This transaction has been mined and included in a block.
     Mined,
