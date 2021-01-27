@@ -24,9 +24,9 @@ but this will work in any futures-based runtime:
 
 Then when you want to trigger the shutdown signal, call `trigger`. All signals will resolve.
 
-    shutdown.trigger().unwrap();   // "Finished" is printed
+    shutdown.trigger();   // "Finished" is printed
     // Shutdown::trigger is idempotent
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     assert_eq!(shutdown.is_triggered(), true);
 
 _Note_: If the ShutdownSignal instance is dropped, it will trigger the signal, so the `Shutdown` instance should be held

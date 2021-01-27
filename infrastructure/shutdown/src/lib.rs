@@ -26,6 +26,7 @@
 #![deny(unused_must_use)]
 #![deny(unreachable_patterns)]
 #![deny(unknown_lints)]
+
 use futures::{
     channel::{oneshot, oneshot::Canceled},
     future::{Fuse, FusedFuture, Shared},
@@ -73,18 +74,14 @@ impl Shutdown {
     }
 
     /// Trigger any listening signals
-    pub fn trigger(&mut self) -> Result<(), ()> {
-        match self.trigger.take() {
-            Some(trigger) => {
-                trigger.send(())?;
+    pub fn trigger(&mut self) {
+        if let Some(trigger) = self.trigger.take() {
+            // If no one is listening, no problem
+            let _ = trigger.send(());
 
-                if let Some(on_triggered) = self.on_triggered.take() {
-                    on_triggered();
-                }
-
-                Ok(())
-            },
-            None => Ok(()),
+            if let Some(on_triggered) = self.on_triggered.take() {
+                on_triggered();
+            }
         }
     }
 
@@ -183,9 +180,9 @@ mod test {
         rt.spawn(async move {
             signal.await.unwrap();
         });
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
         // Shutdown::trigger is idempotent
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
         assert_eq!(shutdown.is_triggered(), true);
     }
 
@@ -199,7 +196,7 @@ mod test {
             signal_clone.await.unwrap();
             signal.await.unwrap();
         });
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
     }
 
     #[test]
@@ -228,7 +225,7 @@ mod test {
         rt.spawn(async move {
             signal.await.unwrap();
         });
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
         assert_eq!(spy.load(Ordering::SeqCst), true);
     }
 }

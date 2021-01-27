@@ -153,7 +153,7 @@ mod state_machine {
     async fn it_shuts_down() {
         let (discovery, _, _, _, _, mut shutdown) = setup(Default::default(), make_node_identity(), vec![]).await;
 
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
         tokio::time::timeout(Duration::from_secs(5), discovery.run())
             .await
             .unwrap();

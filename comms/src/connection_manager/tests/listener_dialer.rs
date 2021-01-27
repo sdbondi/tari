@@ -77,7 +77,7 @@ async fn listen() -> Result<(), Box<dyn Error>> {
     unpack_enum!(Protocol::Memory(port) = address.pop().unwrap());
     assert!(port > 0);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 
     timeout(Duration::from_secs(5), listener_fut).await.unwrap().unwrap();
 
@@ -177,7 +177,7 @@ async fn smoke() {
 
     conn1.disconnect().await.unwrap();
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 
     let peer2 = peer_manager1.find_by_node_id(node_identity2.node_id()).await.unwrap();
     let peer1 = peer_manager2.find_by_node_id(node_identity1.node_id()).await.unwrap();
@@ -262,7 +262,7 @@ async fn banned() {
     unpack_enum!(ConnectionManagerEvent::PeerInboundConnectFailed(err) = event_rx.next().await.unwrap());
     unpack_enum!(ConnectionManagerError::PeerBanned = err);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 
     timeout(Duration::from_secs(5), listener_fut).await.unwrap().unwrap();
     timeout(Duration::from_secs(5), dialer_fut).await.unwrap().unwrap();

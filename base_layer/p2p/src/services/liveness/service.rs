@@ -526,7 +526,7 @@ mod test {
             _ => panic!("Unexpected event"),
         }
 
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
 
         // No further events (malicious_msg was ignored)
         let mut subscriber = publisher.subscribe().fuse();

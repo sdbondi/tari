@@ -83,7 +83,7 @@ async fn connect_to_nonexistent_peer() {
     unpack_enum!(ConnectionManagerError::PeerManagerError(err) = err);
     unpack_enum!(PeerManagerError::PeerNotFoundError = err);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 }
 
 #[runtime::test_basic]
@@ -272,7 +272,7 @@ async fn simultaneous_dial_events() {
     let event = subscription2.next().await.unwrap().unwrap();
     assert!(count_string_occurrences(&[event], &["PeerConnected", "PeerInboundConnectFailed"]) >= 1);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     drop(conn_man1);
     drop(conn_man2);
 
@@ -337,7 +337,7 @@ async fn dial_cancelled() {
     let err = dial_result.await.unwrap().unwrap_err();
     unpack_enum!(ConnectionManagerError::DialCancelled = err);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     drop(conn_man1);
 
     let events1 = collect_stream!(subscription1, timeout = Duration::from_secs(5))

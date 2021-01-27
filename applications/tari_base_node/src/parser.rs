@@ -298,7 +298,7 @@ impl Parser {
                     target: LOG_TARGET,
                     "Termination signal received from user. Shutting node down."
                 );
-                let _ = shutdown.trigger();
+                shutdown.trigger();
             },
         }
     }

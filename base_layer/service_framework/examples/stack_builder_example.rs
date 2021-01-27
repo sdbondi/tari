@@ -50,7 +50,7 @@ async fn main() {
     println!("Response from Service A: {}", response_a);
     println!("----------------------------------------------------");
 
-    let _ = shutdown.trigger();
+    shutdown.trigger();
 
     delay_for(Duration::from_secs(5)).await;
 }

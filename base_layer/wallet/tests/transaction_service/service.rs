@@ -840,7 +840,7 @@ fn manage_multiple_transactions() {
     assert_eq!(carol_pending_inbound.len(), 0);
     assert_eq!(carol_completed_tx.len(), 1);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     runtime.block_on(async move {
         alice_comms.wait_until_shutdown().await;
         bob_comms.wait_until_shutdown().await;
@@ -1354,7 +1354,7 @@ fn discovery_async_return_test() {
         }
     });
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     runtime.block_on(async move {
         alice_comms.wait_until_shutdown().await;
         carol_comms.wait_until_shutdown().await;

@@ -297,7 +297,7 @@ async fn test_wallet() {
     }
 
     drop(alice_event_stream);
-    shutdown_a.trigger().unwrap();
+    shutdown_a.trigger();
     alice_wallet.wait_until_shutdown().await;
 
     let connection =
@@ -350,7 +350,7 @@ async fn test_wallet() {
 
     alice_wallet.remove_encryption().await.unwrap();
 
-    shutdown_a.trigger().unwrap();
+    shutdown_a.trigger();
     alice_wallet.wait_until_shutdown().await;
 
     let connection =
@@ -385,7 +385,7 @@ async fn test_wallet() {
         .await
         .unwrap();
 
-    shutdown_a.trigger().unwrap();
+    shutdown_a.trigger();
     alice_wallet.wait_until_shutdown().await;
 
     partial_wallet_backup(current_wallet_path.clone(), backup_wallet_path.clone())
@@ -406,7 +406,7 @@ async fn test_wallet() {
     let comms_private_key = backup_wallet_db.get_comms_secret_key().await.unwrap();
     assert!(comms_private_key.is_none());
 
-    shutdown_b.trigger().unwrap();
+    shutdown_b.trigger();
 
     bob_wallet.wait_until_shutdown().await;
 }
@@ -545,9 +545,9 @@ fn test_store_and_forward_send_tx() {
         assert!(tx_recv, "Must have received a tx from alice");
         assert!(tx_cancelled, "Must have received a cancel tx from alice");
     });
-    shutdown_a.trigger().unwrap();
-    shutdown_b.trigger().unwrap();
-    shutdown_c.trigger().unwrap();
+    shutdown_a.trigger();
+    shutdown_b.trigger();
+    shutdown_c.trigger();
     alice_runtime.block_on(alice_wallet.wait_until_shutdown());
     bob_runtime.block_on(bob_wallet.wait_until_shutdown());
     carol_runtime.block_on(carol_wallet.wait_until_shutdown());
@@ -705,7 +705,7 @@ async fn test_data_generation() {
     let completed_tx = wallet.transaction_service.get_completed_transactions().await.unwrap();
     assert!(completed_tx.len() > 0);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     wallet.wait_until_shutdown().await;
 }
 

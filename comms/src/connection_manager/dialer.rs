@@ -176,12 +176,7 @@ where
             self.cancel_signals.len()
         );
         self.cancel_signals.drain().for_each(|(_, mut signal)| {
-            log_if_error_fmt!(
-                level: warn,
-                target: LOG_TARGET,
-                signal.trigger(),
-                "Shutdown trigger failed",
-            );
+            signal.trigger();
         })
     }
 

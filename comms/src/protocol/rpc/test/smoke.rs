@@ -186,7 +186,7 @@ async fn request_reponse_errors_and_streaming() // a.k.a  smoke test
 
     unpack_enum!(RpcError::ClientClosed = err);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     server_hnd.await.unwrap().unwrap();
 }
 
@@ -195,7 +195,7 @@ async fn server_shutdown_after_connect() {
     let (socket, _, _, mut shutdown) = setup(GreetingService::new(&[])).await;
     let framed = framing::canonical(socket, 1024);
     let mut client = GreetingClient::connect(framed).await.unwrap();
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 
     let err = client.say_hello(Default::default()).await.unwrap_err();
     unpack_enum!(RpcError::RequestCancelled = err);
@@ -205,7 +205,7 @@ async fn server_shutdown_after_connect() {
 async fn server_shutdown_before_connect() {
     let (socket, _, _, mut shutdown) = setup(GreetingService::new(&[])).await;
     let framed = framing::canonical(socket, 1024);
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
 
     let err = GreetingClient::connect(framed).await.unwrap_err();
     unpack_enum!(RpcError::Io(_err) = err);

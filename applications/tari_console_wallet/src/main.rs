@@ -110,11 +110,8 @@ fn main_inner() -> Result<(), ExitCodes> {
     };
 
     print!("Shutting down wallet... ");
-    if shutdown.trigger().is_ok() {
-        runtime.block_on(wallet.wait_until_shutdown());
-    } else {
-        error!(target: LOG_TARGET, "No listeners for the shutdown signal!");
-    }
+    shutdown.trigger();
+    runtime.block_on(wallet.wait_until_shutdown());
     println!("Done.");
 
     result

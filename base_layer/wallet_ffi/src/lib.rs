@@ -5210,10 +5210,8 @@ pub unsafe extern "C" fn emoji_set_destroy(emoji_set: *mut EmojiSet) {
 pub unsafe extern "C" fn wallet_destroy(wallet: *mut TariWallet) {
     if !wallet.is_null() {
         let mut w = Box::from_raw(wallet);
-        match w.shutdown.trigger() {
-            Err(_) => error!(target: LOG_TARGET, "No listeners for the shutdown signal!"),
-            Ok(()) => w.runtime.block_on(w.wallet.wait_until_shutdown()),
-        }
+        w.shutdown.trigger();
+        w.runtime.block_on(w.wallet.wait_until_shutdown());
     }
 }
 

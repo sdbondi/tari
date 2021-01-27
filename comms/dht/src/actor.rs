@@ -866,6 +866,6 @@ mod test {
             .unwrap();
         assert_eq!(got_ts, ts);
 
-        shutdown.trigger().unwrap();
+        shutdown.trigger();
     }
 }

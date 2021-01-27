@@ -703,8 +703,8 @@ pub async fn generate_wallet_test_data<
 
     delay_for(Duration::from_secs(1)).await;
 
-    shutdown_a.trigger().unwrap();
-    shutdown_b.trigger().unwrap();
+    shutdown_a.trigger();
+    shutdown_b.trigger();
     wallet_alice.wait_until_shutdown().await;
     wallet_bob.wait_until_shutdown().await;
 

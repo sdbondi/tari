@@ -194,7 +194,7 @@ async fn peer_to_peer_custom_protocols() {
     substream.read_exact(&mut buf).await.unwrap();
     assert_eq!(buf, ANOTHER_TEST_MSG);
 
-    shutdown.trigger().unwrap();
+    shutdown.trigger();
     comms_node1.wait_until_shutdown().await;
     comms_node2.wait_until_shutdown().await;
 }

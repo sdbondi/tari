@@ -443,7 +443,7 @@ impl PeerConnectionActor {
         self.shutdown = true;
         // Shut down the incoming substream task
         if let Some(shutdown) = self.substream_shutdown.as_mut() {
-            let _ = shutdown.trigger();
+            shutdown.trigger();
         }
 
         if !silent {

@@ -86,7 +86,7 @@ pub struct NodeInterfaces {
 }
 impl NodeInterfaces {
     pub async fn shutdown(mut self) {
-        self.shutdown.trigger().unwrap();
+        self.shutdown.trigger();
         self.comms.wait_until_shutdown().await;
     }
 }
