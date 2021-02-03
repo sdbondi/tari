@@ -255,31 +255,20 @@ impl PartialEq for BlockHeader {
 impl Eq for BlockHeader {}
 
 impl Display for BlockHeader {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
-        let datetime: DateTime<Utc> = self.timestamp.into();
-        let msg = format!(
-            "Version: {}\nBlock height: {}\nPrevious block hash: {}\nTimestamp: {}\n",
-            self.version,
-            self.height,
-            self.prev_hash.to_hex(),
-            datetime.to_rfc2822()
-        );
-        fmt.write_str(&msg)?;
-        let msg = format!(
-            "Merkle roots:\nOutputs: {} ({})\nRange proofs: {}\nKernels: {} ({})\n",
-            self.output_mr.to_hex(),
-            self.output_mmr_size,
-            self.range_proof_mr.to_hex(),
-            self.kernel_mr.to_hex(),
-            self.kernel_mmr_size
-        );
-        fmt.write_str(&msg)?;
-        fmt.write_str(&format!(
-            "Total offset: {}\nNonce: {}\nProof of work:\n{}",
-            self.total_kernel_offset.to_hex(),
-            self.nonce,
-            self.pow
-        ))
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        writeln!(f, "Version: {}", self.version)?;
+        writeln!(f, "Block height: {}", self.height)?;
+        writeln!(f, "Prev. block hash: {}", self.prev_hash.to_hex())?;
+        writeln!(f, "Timestamp: {}", DateTime::<Utc>::from(self.timestamp).to_rfc2822())?;
+        writeln!(f, "Merkle roots:")?;
+        writeln!(f, "Outputs: {} ({})", self.output_mr.to_hex(), self.output_mmr_size)?;
+        writeln!(f, "Range proofs: {}", self.range_proof_mr.to_hex())?;
+        writeln!(f, "Kernels: {} ({})", self.kernel_mr.to_hex(), self.kernel_mmr_size)?;
+        writeln!(f, "Total offset: {}", self.total_kernel_offset.to_hex())?;
+        writeln!(f, "Nonce: {}", self.nonce)?;
+        writeln!(f, "Proof of work: {}", self.pow)?;
+
+        Ok(())
     }
 }
 

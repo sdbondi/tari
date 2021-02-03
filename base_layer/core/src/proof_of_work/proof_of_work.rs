@@ -19,7 +19,17 @@
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-use crate::proof_of_work::{monero_rx::MoneroData, PowAlgorithm};
+use crate::{
+    blocks::BlockHeader,
+    proof_of_work::{
+        monero_difficulty,
+        monero_rx::{MergeMineError, MoneroData},
+        randomx_factory::RandomXFactory,
+        sha3_difficulty,
+        Difficulty,
+        PowAlgorithm,
+    },
+};
 use bytes::BufMut;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
@@ -65,6 +75,18 @@ impl ProofOfWork {
         buf.put_u8(self.pow_algo as u8);
         buf.put_slice(&self.pow_data);
         buf
+    }
+
+    pub fn calculate_achieved_difficulty(
+        header: &BlockHeader,
+        randomx_factory: &RandomXFactory,
+    ) -> Result<Difficulty, MergeMineError>
+    {
+        match header.pow_algo() {
+            PowAlgorithm::Monero => monero_difficulty(header, randomx_factory),
+            PowAlgorithm::Blake => unimplemented!(),
+            PowAlgorithm::Sha3 => Ok(sha3_difficulty(header)),
+        }
     }
 }
 

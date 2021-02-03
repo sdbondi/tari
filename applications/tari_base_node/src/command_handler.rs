@@ -61,6 +61,10 @@ use tari_core::{
     chain_storage::{async_db::AsyncBlockchainDb, LMDBDatabase},
     mempool::service::LocalMempoolService,
     mining::MinerInstruction,
+    proof_of_work::{
+        randomx_factory::{RandomXConfig, RandomXFactory},
+        ProofOfWork,
+    },
     tari_utilities::{hex::Hex, message_format::MessageFormat, Hashable},
     transactions::{
         tari_amount::{uT, MicroTari},
@@ -450,7 +454,13 @@ impl CommandHandler {
                     return;
                 },
                 Ok(mut data) => match (data.pop(), format) {
-                    (Some(block), Format::Text) => println!("{}", block),
+                    (Some(block), Format::Text) => {
+                        println!("{}", block);
+                        let rx = RandomXFactory::new(RandomXConfig::default(), 1);
+                        let d =
+                            ProofOfWork::calculate_achieved_difficulty(&block.block().header, &rx).unwrap_or_default();
+                        println!("Achieved difficulty: {}", d);
+                    },
                     (Some(block), Format::Json) => println!(
                         "{}",
                         block.to_json().unwrap_or_else(|_| "Error deserializing block".into())

@@ -29,13 +29,12 @@ use crate::{
     chain_storage::BlockchainBackend,
     consensus::{ConsensusConstants, ConsensusManager},
     proof_of_work::{
-        monero_difficulty,
         monero_rx::MoneroData,
         randomx_factory::RandomXFactory,
-        sha3_difficulty,
         Difficulty,
         PowAlgorithm,
         PowError,
+        ProofOfWork,
     },
     transactions::types::CryptoFactories,
     validation::ValidationError,
@@ -159,11 +158,8 @@ pub fn check_target_difficulty(
     randomx_factory: &RandomXFactory,
 ) -> Result<Difficulty, ValidationError>
 {
-    let achieved = match block_header.pow_algo() {
-        PowAlgorithm::Monero => monero_difficulty(block_header, randomx_factory)?,
-        PowAlgorithm::Blake => unimplemented!(),
-        PowAlgorithm::Sha3 => sha3_difficulty(block_header),
-    };
+    let achieved = ProofOfWork::calculate_achieved_difficulty(block_header, randomx_factory)?;
+
     if achieved < target {
         warn!(
             target: LOG_TARGET,
