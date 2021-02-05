@@ -40,6 +40,7 @@ use hyper::{
     Uri,
     Version,
 };
+use json::json;
 use jsonrpc::error::StandardError;
 use reqwest::{ResponseBuilderExt, Url};
 use serde_json as json;
@@ -55,6 +56,7 @@ use std::{
         Arc,
     },
     task::{Context, Poll},
+    time::Instant,
 };
 use tari_app_grpc::{tari_rpc as grpc, tari_rpc::GetCoinbaseRequest};
 use tari_common::{GlobalConfig, Network};
@@ -62,7 +64,6 @@ use tari_core::{
     blocks::{Block, NewBlockTemplate},
     proof_of_work::monero_rx,
 };
-use tokio::runtime::Handle;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 pub const LOG_TARGET: &str = "tari_mm_proxy::proxy";
@@ -285,7 +286,7 @@ impl InnerService {
             "Monero height = #{}, Tari base node height = #{}", json["height"], height
         );
 
-        json["height"] = json::json!(cmp::max(json["height"].as_i64().unwrap_or_default(), height as i64));
+        json["height"] = json!(cmp::max(json["height"].as_i64().unwrap_or_default(), height as i64));
 
         Ok(into_body(parts, json))
     }
@@ -296,6 +297,8 @@ impl InnerService {
         monerod_resp: Response<json::Value>,
     ) -> Result<Response<Body>, MmProxyError>
     {
+        let (parts, mut json_resp) = monerod_resp.into_parts();
+
         debug!(
             target: LOG_TARGET,
             "handle_submit_block: submit request #{}",
@@ -317,75 +320,78 @@ impl InnerService {
                                 .into(),
                         ),
                     ))
-                    .unwrap())
+                    .unwrap());
             },
         };
 
-        let handle = Handle::current();
-        for param in params.iter().map(|p| p.as_str()).filter_map(|p| p) {
+        for param in params.iter().filter_map(|p| p.as_str()) {
             let monero_block = helpers::deserialize_monero_block_from_hex(param)?;
             debug!(target: LOG_TARGET, "Monero block: {}", monero_block);
-            let hash = match helpers::extract_tari_hash(&monero_block) {
-                Some(h) => *h,
+            let hash = helpers::extract_tari_hash(&monero_block)
+                .copied()
+                .ok_or_else(|| MmProxyError::MissingDataError("Could not find Tari header in coinbase".to_string()))?;
+
+            debug!(
+                target: LOG_TARGET,
+                "Tari Hash found in Monero block: {}",
+                hex::encode(&hash)
+            );
+
+            let mut block_data = match self.block_templates.get(&hash).await {
+                Some(d) => d,
                 None => {
-                    return Err(MmProxyError::MissingDataError(
-                        "Could not find Tari header in coinbase".to_string(),
-                    ))
+                    info!(
+                        target: LOG_TARGET,
+                        "Block `{}` submitted but no matching block template was found, possible duplicate submission",
+                        hex::encode(&hash)
+                    );
+                    continue;
                 },
             };
 
-            debug!(target: LOG_TARGET, "Located Tari Hash: {:?}", hash);
+            let monero_data = helpers::construct_monero_data(monero_block, block_data.monero_seed.clone())?;
 
-            if let Some(mut block_data) = self.block_templates.get(&hash).await {
-                let monero_data = helpers::construct_monero_data(monero_block, block_data.clone().monero_seed)?;
+            let header_mut = block_data.tari_block.header.as_mut().unwrap();
+            let height = header_mut.height;
+            header_mut.pow.as_mut().unwrap().pow_data = bincode::serialize(&monero_data)?;
 
-                let pow_data = bincode::serialize(&monero_data)?;
-                let h = block_data.tari_block.header.as_mut().unwrap();
-                let height = h.height;
-                let p = h.pow.as_mut().unwrap();
-                p.pow_data = pow_data;
+            let mut base_node_client = self.connect_grpc_client().await?;
+            let start = Instant::now();
+            match base_node_client.submit_block(block_data.tari_block).await {
+                Ok(_) => {
+                    json_resp = json_rpc_success_response(
+                        json_resp["id"].as_i64().unwrap_or_default(),
+                        json!({
+                            "status": json_resp["result"]["status"],
+                            "tari_status": "OK",
+                        }),
+                    );
 
-                let mut base_node_client = self.connect_grpc_client().await?;
-                let mut block_templates_clone = self.block_templates.clone();
-                let block_data_clone = block_data.clone();
-                handle.spawn(async move {
-                    let start = std::time::Instant::now();
-                    match base_node_client
-                        .submit_block(block_data_clone.tari_block)
-                        .await
-                        .map_err(|status| MmProxyError::GrpcRequestError {
-                            status,
-                            details: "failed to submit block".to_string(),
-                        }) {
-                        Ok(..) => {
-                            debug!(
-                                target: LOG_TARGET,
-                                "Submitted block #{} to Tari node in {:.0?} (SubmitBlock)",
-                                height,
-                                start.elapsed()
-                            );
-                            block_templates_clone.remove(&hash).await;
-                        },
-                        _ => debug!(
-                            target: LOG_TARGET,
-                            "Problem submitting block #{} to Tari node, responded in  {:.0?} (SubmitBlock)",
-                            height,
-                            start.elapsed()
-                        ),
-                    }
-
-                    block_templates_clone.remove_outdated().await;
-                });
-            } else {
-                info!(
-                    target: LOG_TARGET,
-                    "Block submitted but no matching block template was found, possible duplicate submission"
-                );
+                    debug!(
+                        target: LOG_TARGET,
+                        "Submitted block #{} to Tari node in {:.0?} (SubmitBlock)",
+                        height,
+                        start.elapsed()
+                    );
+                    self.block_templates.remove(&hash).await;
+                },
+                Err(err) => {
+                    debug!(
+                        target: LOG_TARGET,
+                        "Problem submitting block #{} to Tari node, responded in  {:.0?} (SubmitBlock): {}",
+                        height,
+                        start.elapsed(),
+                        err
+                    );
+                },
             }
+
+            self.block_templates.clear_outdated().await;
         }
+
+        debug!(target: LOG_TARGET, "Sending submit_block response {}", json_resp);
         // Return the Monero response as is
-        let (parts, json) = monerod_resp.into_parts();
-        Ok(into_body(parts, json))
+        Ok(into_body(parts, json_resp))
     }
 
     async fn handle_get_block_template(
@@ -477,7 +483,7 @@ impl InnerService {
             new_block_template.header.as_ref().map(|h| h.height).unwrap_or_default(),
         );
 
-        let template_block = NewBlockTemplate::try_from(new_block_template.clone())
+        let template_block = NewBlockTemplate::try_from(new_block_template)
             .map_err(|e| MmProxyError::MissingDataError(format!("GRPC Conversion Error: {}", e)))?;
 
         debug!(target: LOG_TARGET, "Trying to connect to wallet");
@@ -567,6 +573,8 @@ impl InnerService {
             "Difficulties: Tari ({}), Monero({}), Selected({})", tari_difficulty, monero_difficulty, mining_difficulty
         );
         monerod_resp["result"]["difficulty"] = mining_difficulty.into();
+        monerod_resp["result"]["tari_difficulty"] = tari_difficulty.into();
+        monerod_resp["result"]["monero_difficulty"] = monero_difficulty.into();
 
         debug!(target: LOG_TARGET, "Returning template result: {}", monerod_resp);
         Ok(into_body(parts, monerod_resp))
@@ -636,13 +644,7 @@ impl InnerService {
         if submit_block && !self.config.proxy_submit_to_origin {
             // Assume it would be accepted
             let req_id = json["id"].as_i64().unwrap_or_else(|| -1);
-            let accept_response = json::json!({
-               "id": req_id,
-               "jsonrpc": "2.0",
-               "result": "{}",
-               "status": "OK",
-               "untrusted": false
-            });
+            let accept_response = json_rpc_success_response(req_id, json!({}));
             json_response =
                 convert_json_to_hyper_json_response(accept_response, StatusCode::OK, monerod_uri.clone()).await?;
         } else {
@@ -790,4 +792,14 @@ pub(super) async fn read_body_until_end(body: &mut Body) -> Result<BytesMut, MmP
         bytes.extend(data);
     }
     Ok(bytes)
+}
+
+fn json_rpc_success_response(req_id: i64, result: json::Value) -> json::Value {
+    json!({
+       "id": req_id,
+       "jsonrpc": "2.0",
+       "result": result,
+       "status": "OK",
+       "untrusted": false
+    })
 }
