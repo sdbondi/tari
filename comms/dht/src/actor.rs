@@ -498,22 +498,18 @@ impl DhtActor {
                                     .await?;
 
                                 // Exclude candidates that are further away from the destination than this node
-                                // unless this node has not selected a big enough sample i.e. this node is not well
-                                // connected
-                                if connections.len() >= config.propagation_factor {
-                                    let dist_from_dest = node_identity.node_id().distance(&node_id);
-                                    let before_len = connections.len();
-                                    connections = connections
-                                        .into_iter()
-                                        .filter(|conn| conn.peer_node_id().distance(&node_id) <= dist_from_dest)
-                                        .collect::<Vec<_>>();
+                                let dist_from_dest = node_identity.node_id().distance(&node_id);
+                                let before_len = connections.len();
+                                connections = connections
+                                    .into_iter()
+                                    .filter(|conn| conn.peer_node_id().distance(&node_id) < dist_from_dest)
+                                    .collect::<Vec<_>>();
 
-                                    debug!(
-                                        target: LOG_TARGET,
-                                        "Filtered out {} node(s) that are further away than this node.",
-                                        before_len - connections.len()
-                                    );
-                                }
+                                debug!(
+                                    target: LOG_TARGET,
+                                    "Filtered out {} node(s) that are further away than this node.",
+                                    before_len - connections.len()
+                                );
 
                                 connections.truncate(config.propagation_factor);
                                 connections
