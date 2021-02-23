@@ -30,7 +30,7 @@ use futures::TryFutureExt;
 use hyper::{service::Service, Body, Method, Request, Response, StatusCode, Uri};
 use json::json;
 use jsonrpc::error::StandardError;
-use reqwest::{ResponseBuilderExt, Url};
+use reqwest::{header, ResponseBuilderExt, Url};
 use serde_json as json;
 use std::{
     cmp,
@@ -219,7 +219,11 @@ impl Service<Request<Body>> for MergeMiningProxyService {
 
                     Ok(proxy::json_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        &json_rpc::standard_error_response(None, StandardError::InternalError, None),
+                        &json_rpc::standard_error_response(
+                            None,
+                            StandardError::InternalError,
+                            Some(json!({"details": err.to_string()})),
+                        ),
                     )
                     .expect("unexpected failure"))
                 },
@@ -349,9 +353,14 @@ impl InnerService {
             let mut base_node_client = self.connect_grpc_client().await?;
             let start = Instant::now();
             match base_node_client.submit_block(block_data.tari_block).await {
-                Ok(_) => {
+                Ok(resp) => {
+                    let resp = resp.into_inner();
                     json_resp = json_rpc::success_response(request["id"].as_i64(), json!({ "status": "OK" }));
 
+                    json_resp = append_aux_chain_data(
+                        json_resp,
+                        json!({"id": TARI_CHAIN_ID, "block_hash": resp.block_hash.to_hex()}),
+                    );
                     debug!(
                         target: LOG_TARGET,
                         "Submitted block #{} to Tari node in {:.0?} (SubmitBlock)",
@@ -401,6 +410,11 @@ impl InnerService {
             target: LOG_TARGET,
             "handle_get_block_template: monero block #{}", monerod_resp["result"]["height"]
         );
+
+        // If monderod returned an error, there is nothing further for us to do
+        if !monerod_resp["error"].is_null() {
+            return Ok(proxy::into_response(parts, &monerod_resp));
+        }
 
         if monerod_resp["result"]["difficulty"].is_null() {
             return Err(MmProxyError::InvalidMonerodResponse(
@@ -486,6 +500,7 @@ impl InnerService {
 
         let template_block = NewBlockTemplate::try_from(new_block_template)
             .map_err(|e| MmProxyError::MissingDataError(format!("GRPC Conversion Error: {}", e)))?;
+        let tari_height = template_block.header.height;
 
         debug!(target: LOG_TARGET, "Trying to connect to wallet");
         let mut grpc_wallet_client = self.connect_grpc_wallet_client().await?;
@@ -493,7 +508,7 @@ impl InnerService {
             .get_coinbase(GetCoinbaseRequest {
                 reward: block_reward,
                 fee: total_fees,
-                height: template_block.header.height,
+                height: tari_height,
             })
             .await
             .map_err(|status| MmProxyError::GrpcRequestError {
@@ -578,6 +593,7 @@ impl InnerService {
             json!({
                 "id": TARI_CHAIN_ID,
                 "difficulty": tari_difficulty,
+                "height": tari_height,
                 // The merge mining hash, before the final block hash can be calculated
                 "mining_hash": mining_hash.to_hex(),
                 "miner_reward": block_reward + total_fees,
@@ -597,6 +613,10 @@ impl InnerService {
     ) -> Result<Response<Body>, MmProxyError>
     {
         let (parts, monero_resp) = monero_resp.into_parts();
+        // If monero succeeded, we're done here
+        if !monero_resp["result"].is_null() {
+            return Ok(proxy::into_response(parts, &monero_resp));
+        }
 
         let request = request.into_body();
         let hash = request["params"]["hash"]
@@ -612,6 +632,7 @@ impl InnerService {
                 )
             },
         };
+
         // If monero succeeded in finding the header, we're done here
         if !monero_resp["result"].is_null() ||
             monero_resp["result"]["block_header"]["hash"]
@@ -624,54 +645,71 @@ impl InnerService {
             return Ok(proxy::into_response(parts, &monero_resp));
         }
 
+        let hash_hex = hash.to_hex();
         debug!(
             target: LOG_TARGET,
-            "monerod could not find the block `{}`. Querying tari base node",
-            hash.to_hex()
+            "monerod could not find the block `{}`. Querying tari base node", hash_hex
         );
 
         let mut client = self.connect_grpc_client().await?;
-        let grpc::BlockHeaderResponse {
-            header,
-            reward,
-            confirmations,
-            difficulty,
-            num_transactions,
-        } = client
-            .get_header_by_hash(grpc::GetHeaderByHashRequest { hash })
-            .await
-            .map_err(|status| MmProxyError::GrpcRequestError {
-                status,
+        let resp = client.get_header_by_hash(grpc::GetHeaderByHashRequest { hash }).await;
+        match resp {
+            Ok(resp) => {
+                let grpc::BlockHeaderResponse {
+                    header,
+                    reward,
+                    confirmations,
+                    difficulty,
+                    num_transactions,
+                } = resp.into_inner();
+                let header = header.ok_or_else(|| {
+                    MmProxyError::UnexpectedTariBaseNodeResponse(
+                        "Base node GRPC returned an empty header field when calling get_header_by_hash".into(),
+                    )
+                })?;
+
+                debug!(
+                    target: LOG_TARGET,
+                    "[get_header_by_hash] Found tari block header with hash `{}`", hash_hex
+                );
+                let json_resp = json_rpc::success_response(
+                    request["id"].as_i64(),
+                    json!({
+                        "block_header": {
+                           "block_size": 0, // TODO
+                           "depth": confirmations,
+                           "difficulty": difficulty,
+                           "hash": header.hash.to_hex(),
+                           "height": header.height,
+                           "major_version": header.version,
+                           "minor_version": 0,
+                           "nonce": header.nonce,
+                           "num_txes": num_transactions,
+                           // Cannot be an orphan
+                           "orphan_status": false,
+                           "prev_hash": header.prev_hash.to_hex(),
+                           "reward": reward,
+                           "timestamp": header.timestamp.map(|ts| ts.seconds.into()).unwrap_or_else(|| json!(null)),
+                       }
+                    }),
+                );
+
+                let json_resp = append_aux_chain_data(json_resp, json!({ "id": TARI_CHAIN_ID }));
+
+                Ok(proxy::into_response(parts, &json_resp))
+            },
+            Err(err) if err.code() == tonic::Code::NotFound => {
+                debug!(
+                    target: LOG_TARGET,
+                    "[get_header_by_hash] No tari block header found with hash `{}`", hash_hex
+                );
+                Ok(proxy::into_response(parts, &monero_resp))
+            },
+            Err(err) => Err(MmProxyError::GrpcRequestError {
+                status: err,
                 details: "failed to get header by hash".to_string(),
-            })?
-            .into_inner();
-        let header = header.expect("Base node GRPC returned an empty header field when calling get_header_by_hash");
-
-        let json_resp = json_rpc::success_response(
-            request["id"].as_i64(),
-            json!({
-                "block_header": {
-                   "block_size": 0, // TODO: block weight?
-                   "depth": confirmations,
-                   "difficulty": difficulty,
-                   "hash": header.hash.to_hex(),
-                   "height": header.height,
-                   "major_version": header.version,
-                   "minor_version": 0,
-                   "nonce": header.nonce,
-                   "num_txes": num_transactions,
-                   // Cannot be an orphan
-                   "orphan_status": false,
-                   "prev_hash": header.prev_hash.to_hex(),
-                   "reward": reward,
-                   "timestamp": header.timestamp.map(|ts| ts.seconds.into()).unwrap_or_else(|| json!(null)),
-               }
             }),
-        );
-
-        let json_resp = append_aux_chain_data(json_resp, json!({ "id": TARI_CHAIN_ID }));
-
-        Ok(proxy::into_response(parts, &json_resp))
+        }
     }
 
     async fn connect_grpc_client(
@@ -710,6 +748,15 @@ impl InnerService {
             .request(request.method().clone(), monerod_uri.clone())
             .headers(request.headers().clone());
 
+        // Some public monerod setups (e.g. those that are reverse proxied by nginx) require the Host header.
+        // The mmproxy is the direct client of monerod and so is responsible for setting this header.
+        if let Some(mut host) = monerod_uri.host_str().map(ToString::to_string) {
+            if let Some(port) = monerod_uri.port_or_known_default() {
+                host.push_str(&format!(":{}", port));
+            }
+            builder = builder.header(header::HOST, host);
+        }
+
         if self.config.monerod_use_auth {
             // Use HTTP basic auth. This is the only reason we are using `reqwest` over the standard hyper client.
             builder = builder.basic_auth(&self.config.monerod_username, Some(&self.config.monerod_password));
@@ -721,6 +768,7 @@ impl InnerService {
             request.method(),
             monerod_uri,
         );
+
         let json_response = if self.config.proxy_submit_to_origin {
             let resp = builder
                 // This is a cheap clone of the request body
@@ -810,11 +858,21 @@ impl InnerService {
     }
 
     async fn handle(mut self, mut request: Request<Body>) -> Result<Response<Body>, MmProxyError> {
-        debug!(target: LOG_TARGET, "Got request: {}", request.uri());
-        debug!(target: LOG_TARGET, "Request headers: {:?}", request.headers());
-
         let bytes = proxy::read_body_until_end(request.body_mut()).await?;
         let request = request.map(|_| bytes.freeze());
+
+        debug!(
+            target: LOG_TARGET,
+            "request: {} ({})",
+            String::from_utf8_lossy(&request.body()[..]),
+            request
+                .headers()
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, String::from_utf8_lossy(v.as_ref())))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+
         let (request, monerod_resp) = self.proxy_request_to_monerod(request).await?;
         // Any failed (!= 200 OK) responses from Monero are immediately returned to the requester
         if !monerod_resp.status().is_success() {
