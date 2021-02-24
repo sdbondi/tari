@@ -20,9 +20,36 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod base_node_grpc_client;
+use crate::{
+    common::json_rpc,
+    handlers::helpers::{add_aux_data, MMPROXY_AUX_KEY_NAME},
+};
+use serde_json::json;
 
-pub mod json_rpc;
-pub mod merge_mining;
-pub mod monero_rpc;
-pub mod proxy;
+mod add_aux_data {
+    use super::*;
+
+    #[test]
+    fn it_adds_aux_data() {
+        let v = json_rpc::success_response(None, json!({ "hello": "world"}));
+        let v = add_aux_data(v, json!({"test": "works"}));
+        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test"].as_str().unwrap(), "works");
+    }
+
+    #[test]
+    fn it_merges_to_existing_aux_data() {
+        let v = json_rpc::success_response(None, json!({ "hello": "world"}));
+        let v = add_aux_data(v, json!({"test1": 1}));
+        let v = add_aux_data(v, json!({"test2": 2, "test3": 3}));
+        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test1"].as_u64().unwrap(), 1);
+        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test2"].as_u64().unwrap(), 2);
+        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test3"].as_u64().unwrap(), 3);
+    }
+
+    #[test]
+    fn it_does_not_add_data_to_errors() {
+        let v = json_rpc::error_response(None, 1, "it's on 🔥", None);
+        let v = add_aux_data(v, json!({"it": "is broken"}));
+        assert!(v["result"][MMPROXY_AUX_KEY_NAME]["it"].as_str().is_none());
+    }
+}

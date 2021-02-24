@@ -4239,6 +4239,7 @@ dependencies = [
 name = "tari_merge_mining_proxy"
 version = "0.8.4"
 dependencies = [
+ "async-trait",
  "bincode",
  "bytes 0.5.6",
  "chrono",

@@ -71,35 +71,3 @@ mod merge_mining_proxy_service {
         assert_eq!(json["error"]["message"], "Internal error");
     }
 }
-
-mod add_aux_data {
-    use crate::{
-        common::json_rpc,
-        proxy::{add_aux_data, MMPROXY_AUX_KEY_NAME},
-    };
-    use serde_json::json;
-
-    #[test]
-    fn it_adds_aux_data() {
-        let v = json_rpc::success_response(None, json!({ "hello": "world"}));
-        let v = add_aux_data(v, json!({"test": "works"}));
-        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test"].as_str().unwrap(), "works");
-    }
-
-    #[test]
-    fn it_merges_to_existing_aux_data() {
-        let v = json_rpc::success_response(None, json!({ "hello": "world"}));
-        let v = add_aux_data(v, json!({"test1": 1}));
-        let v = add_aux_data(v, json!({"test2": 2, "test3": 3}));
-        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test1"].as_u64().unwrap(), 1);
-        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test2"].as_u64().unwrap(), 2);
-        assert_eq!(v["result"][MMPROXY_AUX_KEY_NAME]["test3"].as_u64().unwrap(), 3);
-    }
-
-    #[test]
-    fn it_does_not_add_data_to_errors() {
-        let v = json_rpc::error_response(None, 1, "it's on 🔥", None);
-        let v = add_aux_data(v, json!({"it": "is broken"}));
-        assert!(v["result"][MMPROXY_AUX_KEY_NAME]["it"].as_str().is_none());
-    }
-}

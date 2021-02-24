@@ -31,10 +31,11 @@
 mod block_template_data;
 mod common;
 mod error;
+mod handlers;
 mod proxy;
 
 #[cfg(test)]
-mod test;
+mod tests;
 
 use crate::{block_template_data::BlockTemplateRepository, error::MmProxyError};
 use futures::future;

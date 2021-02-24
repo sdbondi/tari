@@ -46,7 +46,10 @@ use std::{
     task::{Context, Poll},
     time::Instant,
 };
-use tari_app_grpc::{tari_rpc as grpc, tari_rpc::GetCoinbaseRequest};
+use tari_app_grpc::{
+    tari_rpc as grpc,
+    tari_rpc::{base_node_client::BaseNodeClient, wallet_client::WalletClient, GetCoinbaseRequest},
+};
 use tari_common::{GlobalConfig, Network};
 use tari_core::{
     blocks::{Block, NewBlockTemplate},
@@ -56,10 +59,6 @@ use tari_utilities::hex::Hex;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 const LOG_TARGET: &str = "tari_mm_proxy::proxy";
-/// The JSON object key name used for merge mining proxy response extensions
-pub(crate) const MMPROXY_AUX_KEY_NAME: &str = "_aux";
-/// The identifier used to identify the tari aux chain data
-const TARI_CHAIN_ID: &str = "xtr";
 
 #[derive(Debug, Clone)]
 pub struct MergeMiningProxyConfig {
@@ -105,6 +104,7 @@ impl MergeMiningProxyService {
                 block_templates,
                 http_client: reqwest::Client::new(),
                 initial_sync_achieved: Arc::new(AtomicBool::new(false)),
+                base_node_client: None,
             },
         }
     }
@@ -238,6 +238,7 @@ struct InnerService {
     block_templates: BlockTemplateRepository,
     http_client: reqwest::Client,
     initial_sync_achieved: Arc<AtomicBool>,
+    base_node_client: Option<BaseNodeClient>,
 }
 
 impl InnerService {
@@ -712,21 +713,13 @@ impl InnerService {
         }
     }
 
-    async fn connect_grpc_client(
-        &self,
-    ) -> Result<grpc::base_node_client::BaseNodeClient<tonic::transport::Channel>, MmProxyError> {
-        let client =
-            grpc::base_node_client::BaseNodeClient::connect(format!("http://{}", self.config.grpc_base_node_address))
-                .await?;
+    async fn connect_grpc_client(&self) -> Result<BaseNodeClient<tonic::transport::Channel>, MmProxyError> {
+        let client = BaseNodeClient::connect(format!("http://{}", self.config.grpc_base_node_address)).await?;
         Ok(client)
     }
 
-    async fn connect_grpc_wallet_client(
-        &self,
-    ) -> Result<grpc::wallet_client::WalletClient<tonic::transport::Channel>, MmProxyError> {
-        let client =
-            grpc::wallet_client::WalletClient::connect(format!("http://{}", self.config.grpc_console_wallet_address))
-                .await?;
+    async fn connect_grpc_wallet_client(&self) -> Result<WalletClient<tonic::transport::Channel>, MmProxyError> {
+        let client = WalletClient::connect(format!("http://{}", self.config.grpc_console_wallet_address)).await?;
         Ok(client)
     }
 
@@ -910,41 +903,4 @@ async fn convert_reqwest_response_to_hyper_json_response(
     let body = resp.json().await.map_err(MmProxyError::MonerodRequestFailed)?;
     let resp = builder.body(body)?;
     Ok(resp)
-}
-
-/// Add mmproxy extensions object to JSON RPC success response
-pub fn add_aux_data(mut response: json::Value, mut ext: json::Value) -> json::Value {
-    if response["result"].is_null() {
-        return response;
-    }
-    match response["result"][MMPROXY_AUX_KEY_NAME].as_object_mut() {
-        Some(obj_mut) => {
-            let ext_mut = ext
-                .as_object_mut()
-                .expect("invalid parameter: expected `ext: json::Value` to be an object but it was not");
-            obj_mut.append(ext_mut);
-        },
-        None => {
-            response["result"][MMPROXY_AUX_KEY_NAME] = ext;
-        },
-    }
-    response
-}
-
-pub fn append_aux_chain_data(mut response: json::Value, chain_data: json::Value) -> json::Value {
-    if response["result"].is_null() {
-        return response;
-    }
-    let chains = match response["result"][MMPROXY_AUX_KEY_NAME]["chains"].as_array_mut() {
-        Some(arr_mut) => arr_mut,
-        None => {
-            response["result"][MMPROXY_AUX_KEY_NAME]["chains"] = json!([]);
-            response["result"][MMPROXY_AUX_KEY_NAME]["chains"]
-                .as_array_mut()
-                .unwrap()
-        },
-    };
-
-    chains.push(chain_data);
-    response
 }

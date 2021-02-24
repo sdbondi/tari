@@ -20,9 +20,42 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod base_node_grpc_client;
+#[cfg(test)]
+mod tests;
 
-pub mod json_rpc;
-pub mod merge_mining;
-pub mod monero_rpc;
-pub mod proxy;
+mod get_block_template;
+mod helpers;
+
+use async_trait::async_trait;
+use hyper::{Body, Request, Response};
+use jsonrpc::serde_json::Value;
+use serde_json as json;
+use std::error;
+
+pub trait ProxyHandlerPredicate {
+    fn is_handler_for(&self, request: Request<json::Value>) -> bool;
+}
+
+pub trait ProxyHandlerJsonRpcPredicate: ProxyHandlerPredicate {
+    const SUPPORTED_METHODS: &'static [&'static str];
+}
+
+impl<T: ProxyHandlerJsonRpcPredicate> ProxyHandlerPredicate for T {
+    fn is_handler_for(&self, request: Request<Value>) -> bool {
+        match request.body()["method"].as_str() {
+            Some(method) => Self::SUPPORTED_METHODS.contains(&method),
+            None => false,
+        }
+    }
+}
+
+#[async_trait]
+pub trait ProxyHandler {
+    type Error: error::Error;
+
+    async fn handle(
+        &self,
+        request: Request<json::Value>,
+        monero_resp: Response<json::Value>,
+    ) -> Result<Response<Body>, Self::Error>;
+}

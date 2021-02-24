@@ -20,9 +20,24 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod base_node_grpc_client;
+use crate::error::MmProxyError;
+use tari_app_grpc::tari_rpc::base_node_client::BaseNodeClient;
 
-pub mod json_rpc;
-pub mod merge_mining;
-pub mod monero_rpc;
-pub mod proxy;
+pub struct BaseNodeGrpcClient {
+    address: &'static str,
+    client: Option<BaseNodeClient>,
+}
+
+impl BaseNodeGrpcClient {
+    pub async fn connect<A>(addr: A) -> Result<Self, MmProxyError> {
+        let client = BaseNodeClient::connect(format!("http://{}", self.grpc_base_node_address)).await?;
+    }
+
+    async fn connect_grpc_client(
+        &self,
+    ) -> Result<grpc::base_node_client::BaseNodeClient<tonic::transport::Channel>, MmProxyError> {
+        let client =
+            grpc::base_node_client::BaseNodeClient::connect(format!("http://{}", self.grpc_base_node_address)).await?;
+        Ok(client)
+    }
+}
