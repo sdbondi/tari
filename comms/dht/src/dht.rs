@@ -355,6 +355,7 @@ impl Dht {
                 self.dht_requester(),
                 self.discovery_service_requester(),
                 self.config.network,
+                self.config.saf_msg_validity,
             ))
             .layer(MessageLoggingLayer::new(format!(
                 "Outbound [{}]",

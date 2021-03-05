@@ -24,6 +24,7 @@ use bitflags::bitflags;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp,
     convert::{TryFrom, TryInto},
     fmt,
     fmt::Display,
@@ -34,6 +35,8 @@ use thiserror::Error;
 
 // Re-export applicable protos
 pub use crate::proto::envelope::{dht_header::Destination, DhtEnvelope, DhtHeader, DhtMessageType, Network};
+use chrono::{DateTime, NaiveDateTime, Utc};
+use prost_types::Timestamp;
 
 #[derive(Debug, Error)]
 pub enum DhtMessageError {
@@ -68,6 +71,28 @@ bitflags! {
         const NONE = 0x00;
         /// Set if the message is encrypted
         const ENCRYPTED = 0x01;
+    }
+}
+
+/// Utility function that converts a `Option<chrono::DateTime<Utc>>` to a `Option<prost::Timestamp>`
+pub(crate) fn datetime_to_timestamp(datetime: Option<DateTime<Utc>>) -> Option<Timestamp> {
+    match datetime {
+        Some(datetime) => Some(Timestamp {
+            seconds: datetime.timestamp(),
+            nanos: datetime.timestamp_subsec_nanos().try_into().unwrap_or(std::i32::MAX),
+        }),
+        None => None,
+    }
+}
+
+/// Utility function that converts a `Option<prost::Timestamp>` to a `Option<chrono::DateTime<Utc>>`
+pub(crate) fn timestamp_to_datetime(timestamp: Option<Timestamp>) -> Option<DateTime<Utc>> {
+    match timestamp {
+        Some(timestamp) => {
+            let naive = NaiveDateTime::from_timestamp(timestamp.seconds, cmp::max(0, timestamp.nanos) as u32);
+            Some(DateTime::from_utc(naive, Utc))
+        },
+        None => None,
     }
 }
 
@@ -110,6 +135,7 @@ pub struct DhtMessageHeader {
     pub network: Network,
     pub flags: DhtMessageFlags,
     pub message_tag: MessageTag,
+    pub expires: Option<DateTime<Utc>>,
 }
 
 impl DhtMessageHeader {
@@ -162,6 +188,7 @@ impl TryFrom<DhtHeader> for DhtMessageHeader {
             network: Network::from_i32(header.network).ok_or_else(|| DhtMessageError::InvalidNetwork)?,
             flags: DhtMessageFlags::from_bits(header.flags).ok_or_else(|| DhtMessageError::InvalidMessageFlags)?,
             message_tag: MessageTag::from(header.message_tag),
+            expires: timestamp_to_datetime(header.expires),
         })
     }
 }
@@ -192,6 +219,7 @@ impl From<DhtMessageHeader> for DhtHeader {
             network: header.network as i32,
             flags: header.flags.bits(),
             message_tag: header.message_tag.as_value(),
+            expires: datetime_to_timestamp(header.expires),
         }
     }
 }

@@ -31,6 +31,7 @@ use crate::{
     },
     DhtConfig,
 };
+use chrono::Utc;
 use futures::{task::Context, Future};
 use log::*;
 use std::{sync::Arc, task::Poll};
@@ -419,6 +420,12 @@ where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError>
             message.body_len(),
             message.dht_header.message_tag,
         );
+
+        if let Some(expires) = message.dht_header.expires {
+            if expires < Utc::now() {
+                return SafResult::Err(StoreAndForwardError::InvalidStoreMessage);
+            }
+        }
 
         let stored_message = NewStoredMessage::try_construct(message, priority)
             .ok_or_else(|| StoreAndForwardError::InvalidStoreMessage)?;
