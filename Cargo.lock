@@ -4172,6 +4172,7 @@ dependencies = [
  "chrono",
  "config",
  "croaring",
+ "csv",
  "digest 0.8.1",
  "env_logger 0.7.1",
  "fs2",

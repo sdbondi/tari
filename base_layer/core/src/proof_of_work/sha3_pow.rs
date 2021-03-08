@@ -33,7 +33,7 @@ use tari_crypto::tari_utilities::ByteArray;
 /// The proof of work difficulty is given by `H256(header )` where Hnnn is the sha3 digest of length
 /// `nnn` bits.
 pub fn sha3_difficulty(header: &BlockHeader) -> Difficulty {
-    sha3_difficulty_with_hash(header).0
+    sha3_difficulty_with_hash(header)
 }
 
 pub fn sha3_hash(header: &BlockHeader) -> Vec<u8> {
@@ -52,11 +52,10 @@ pub fn sha3_hash(header: &BlockHeader) -> Vec<u8> {
         .to_vec()
 }
 
-fn sha3_difficulty_with_hash(header: &BlockHeader) -> (Difficulty, Vec<u8>) {
+fn sha3_difficulty_with_hash(header: &BlockHeader) -> Difficulty {
     let hash = sha3_hash(header);
     let hash = Sha3_256::digest(&hash);
-    let difficulty = big_endian_difficulty(&hash);
-    (difficulty, hash.to_vec())
+    big_endian_difficulty(&hash)
 }
 
 #[cfg(test)]

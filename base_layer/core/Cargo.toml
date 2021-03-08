@@ -62,6 +62,7 @@ tokio = { version="^0.2", features = ["blocking", "time", "sync"] }
 ttl_cache = "0.5.1"
 uint = { version = "0.8", default-features = false }
 num-format = "0.4.0"
+csv = "1.1.5"
 
 [dev-dependencies]
 tari_p2p = { version = "^0.8", path = "../../base_layer/p2p", features=["test-mocks"]}

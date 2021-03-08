@@ -727,6 +727,7 @@ where B: BlockchainBackend
         targets.add_front(&start_header, accum_data.target_difficulty);
 
         for h in (0..start_height).rev() {
+            assert_ne!(h, start_height);
             // TODO: this can be optimized by retrieving the accumulated data and header at the same time, or even
             // better by retrieving only the epoch and target difficulty in the same lmdb transaction
             let header = fetch_header(&*db, h)?;

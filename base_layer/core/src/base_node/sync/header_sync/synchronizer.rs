@@ -294,8 +294,15 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             let resp = match client.find_chain_split(request).await {
                 Ok(r) => r,
                 Err(RpcError::RequestFailed(err)) if err.status_code().is_not_found() => {
-                    // Chain split not found, let's go further back
                     offset = NUM_CHAIN_SPLIT_HEADERS * iter_count;
+                    debug!(
+                        target: LOG_TARGET,
+                        "Chain fork not found between {} and {} (back from the tip) for peer `{}`, checking further \
+                         back...",
+                        offset,
+                        offset - NUM_CHAIN_SPLIT_HEADERS,
+                        peer
+                    );
                     continue;
                 },
                 Err(err) => {
@@ -303,7 +310,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
                 },
             };
 
-            let steps_back = resp.fork_hash_index as u64 + offset as u64;
+            let steps_back = resp.fork_hash_index as u64 + offset as u64 + 1;
             return Ok((resp, block_hashes, steps_back));
         }
     }
@@ -368,7 +375,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         }
 
         // We can trust that the header associated with this hash exists because block_hashes is data this node
-        // supplied. usize conversion overflow has already been checked above
+        // supplied.
         let chain_split_hash = block_hashes[fork_hash_index as usize].clone();
 
         let headers = headers
@@ -379,7 +386,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         let num_new_headers = headers.len();
 
         self.header_validator.initialize_state(chain_split_hash).await?;
-        let mut chain_headers = Vec::with_capacity(headers.len());
+        let mut chain_headers = Vec::with_capacity(num_new_headers);
         for header in headers {
             debug!(
                 target: LOG_TARGET,
@@ -389,7 +396,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             );
             let height = header.height;
             chain_headers.push(self.header_validator.validate_and_calculate_metadata(header)?);
-            debug!(target: LOG_TARGET, "Header #{} is VALID", height,)
+            debug!(target: LOG_TARGET, "Header #{} is VALID", height);
         }
 
         if fork_hash_index > 0 {
@@ -463,7 +470,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         debug!(target: LOG_TARGET, "Reading headers from peer `{}`", peer);
 
         // Reset the header validator state to be sure we're using the correct data
-        self.header_validator.initialize_state(tip_header.hash()).await?;
+        // self.header_validator.initialize_state(tip_header.hash()).await?;
         while let Some(header) = header_stream.next().await {
             let header = BlockHeader::try_from(header?).map_err(BlockHeaderSyncError::ReceivedInvalidHeader)?;
             debug!(

@@ -25,9 +25,11 @@ use crate::{
     blocks::BlockHeader,
     chain_storage::{
         async_db::AsyncBlockchainDb,
+        fetch_header,
         BlockHeaderAccumulatedData,
         BlockHeaderAccumulatedDataBuilder,
         BlockchainBackend,
+        BlockchainDatabase,
         ChainHeader,
         ChainStorageError,
         Optional,
@@ -35,7 +37,7 @@ use crate::{
     },
     common::rolling_vec::RollingVec,
     consensus::ConsensusManager,
-    proof_of_work::{randomx_factory::RandomXFactory, PowAlgorithm},
+    proof_of_work::{randomx_factory::RandomXFactory, PowAlgorithm, TargetDifficultyWindow},
     tari_utilities::{epoch_time::EpochTime, hash::Hashable, hex::Hex},
     transactions::types::HashOutput,
     validation::helpers::{
@@ -46,16 +48,16 @@ use crate::{
     },
 };
 use log::*;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, fs::File};
 
 const LOG_TARGET: &str = "c::bn::header_sync";
 
-#[derive(Clone)]
 pub struct BlockHeaderSyncValidator<B> {
     db: AsyncBlockchainDb<B>,
     state: Option<State>,
     consensus_rules: ConsensusManager,
     randomx_factory: RandomXFactory,
+    csv: csv::Writer<File>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +75,7 @@ impl<B: BlockchainBackend + 'static> BlockHeaderSyncValidator<B> {
             state: None,
             consensus_rules,
             randomx_factory,
+            csv: csv::Writer::from_path("/tmp/sync.csv").unwrap(),
         }
     }
 
@@ -95,7 +98,10 @@ impl<B: BlockchainBackend + 'static> BlockHeaderSyncValidator<B> {
             })?;
         debug!(
             target: LOG_TARGET,
-            "Setting header validator state ({} timestamp(s), target difficulties: {} SHA3, {} Monero)",
+            "Setting header validator state (height = {}, hash = {}, {} timestamp(s), target difficulties: {} SHA3, \
+             {} Monero)",
+            start_header.height,
+            start_hash.to_hex(),
             timestamps.len(),
             target_difficulties.get(PowAlgorithm::Sha3).len(),
             target_difficulties.get(PowAlgorithm::Monero).len(),
@@ -125,11 +131,85 @@ impl<B: BlockchainBackend + 'static> BlockHeaderSyncValidator<B> {
         check_header_timestamp_greater_than_median(&header, &state.timestamps)?;
 
         let constants = self.consensus_rules.consensus_constants(header.height);
-        let target_difficulty = state.target_difficulties.get(header.pow_algo()).calculate(
-            constants.min_pow_difficulty(header.pow_algo()),
-            constants.max_pow_difficulty(header.pow_algo()),
+        let min = constants.min_pow_difficulty(header.pow_algo());
+        let max = constants.max_pow_difficulty(header.pow_algo());
+        let target_difficulty_window = state.target_difficulties.get(header.pow_algo());
+        debug!(
+            target: LOG_TARGET,
+            "Calculating target difficulty with window size = {}, min = {}, max = {}",
+            target_difficulty_window.len(),
+            min,
+            max
         );
+        let target_difficulty = target_difficulty_window.calculate(min, max);
+
+        // start ============================
+
+        pub fn fetch_target_difficulty<T: BlockchainBackend>(
+            db: BlockchainDatabase<T>,
+            consensus_manager: &ConsensusManager,
+            pow_algo: PowAlgorithm,
+            height: u64,
+        ) -> Result<TargetDifficultyWindow, ChainStorageError>
+        {
+            let a = db.db_read_access()?;
+            let mut target_difficulties = consensus_manager.new_target_difficulty(pow_algo, height);
+            for height in (0..height).rev() {
+                let header = fetch_header(&*a, height)?;
+
+                if header.pow.pow_algo == pow_algo {
+                    let accum_data = db.fetch_header_accumulated_data(header.hash())?.ok_or_else(|| {
+                        ChainStorageError::ValueNotFound {
+                            entity: "BlockHeaderAccumulatedData".to_string(),
+                            field: "hash".to_string(),
+                            value: header.hash().to_hex(),
+                        }
+                    })?;
+
+                    target_difficulties.add_front(header.timestamp(), accum_data.target_difficulty);
+                    if target_difficulties.is_full() {
+                        break;
+                    }
+                }
+            }
+
+            Ok(target_difficulties)
+        }
+
+        {
+            if let Ok(td) = fetch_target_difficulty(
+                self.db.clone().into_inner(),
+                &self.consensus_rules,
+                header.pow_algo(),
+                header.height,
+            ) {
+                let td = td.calculate(min, max);
+
+                assert_eq!(td, target_difficulty);
+                error!(
+                    target: LOG_TARGET,
+                    "TARGET DIFFS MATCH {}: ({}) {}",
+                    td,
+                    header.hash().to_hex(),
+                    header
+                );
+            } else {
+                error!(target: LOG_TARGET, "no header for {}", header);
+            }
+        }
+
+        // end ============================
+
         let achieved = check_target_difficulty(&header, target_difficulty, &self.randomx_factory)?;
+        drop(state);
+        self.csv
+            .write_record(&[
+                header.height.to_string(),
+                achieved.as_u64().to_string(),
+                target_difficulty.as_u64().to_string(),
+            ])
+            .unwrap();
+        let state = self.state();
         let metadata = BlockHeaderAccumulatedDataBuilder::default()
             .hash(header.hash())
             .target_difficulty(target_difficulty)
