@@ -26,7 +26,7 @@ use crate::{
     transactions::tari_amount::{uT, MicroTari, T},
 };
 use chrono::{DateTime, Duration, Utc};
-use std::{collections::HashMap, ops::Add};
+use std::ops::Add;
 use tari_crypto::tari_utilities::epoch_time::EpochTime;
 
 /// This is the inner struct used to control all consensus values.
@@ -58,7 +58,7 @@ pub struct ConsensusConstants {
     max_randomx_seed_height: u64,
     /// This keeps track of the block split targets and which algo is accepted
     /// Ideally this should count up to 100. If this does not you will reduce your target time.
-    proof_of_work: HashMap<PowAlgorithm, PowAlgorithmConstants>,
+    proof_of_work: PowAlgos,
     /// This is to keep track of the value inside of the genesis block
     faucet_value: MicroTari,
 }
@@ -74,6 +74,13 @@ pub struct PowAlgorithmConstants {
     /// example 120/0.5 = 240 for a 50% of the blocks, chain target time of 120.
     pub target_time: u64,
 }
+
+#[derive(Debug, Clone)]
+pub struct PowAlgos {
+    pub monero: PowAlgorithmConstants,
+    pub sha3: PowAlgorithmConstants,
+}
+const NUM_POW_ALGOS: usize = 2;
 
 // The target time used by the difficulty adjustment algorithms, their target time is the target block interval * PoW
 // algorithm count
@@ -130,26 +137,29 @@ impl ConsensusConstants {
     }
 
     /// The amount of PoW algorithms used by the Tari chain.
-    pub fn get_pow_algo_count(&self) -> u64 {
-        self.proof_of_work.len() as u64
+    pub const fn get_pow_algo_count(&self) -> usize {
+        NUM_POW_ALGOS
     }
 
     /// The target time used by the difficulty adjustment algorithms, their target time is the target block interval /
     /// algo block percentage
-    pub fn get_diff_target_block_interval(&self, pow_algo: PowAlgorithm) -> u64 {
-        match self.proof_of_work.get(&pow_algo) {
-            Some(v) => v.target_time,
-            _ => 0,
+    pub const fn get_diff_target_block_interval(&self, pow_algo: PowAlgorithm) -> u64 {
+        self.get_pow_algorithm_constants(pow_algo).target_time
+    }
+
+    pub fn get_pow_algorithm_constants(&self, pow_algo: PowAlgorithm) -> &PowAlgorithmConstants {
+        use PowAlgorithm::*;
+        match pow_algo {
+            Monero => &self.proof_of_work.monero,
+            Blake => panic!("PowAlgorithm::Blake is to be removed"),
+            Sha3 => &self.proof_of_work.sha3,
         }
     }
 
     /// The maximum time a block is considered to take. Used by the difficulty adjustment algorithms
     /// Multiplied by the PoW algorithm block percentage.
     pub fn get_difficulty_max_block_interval(&self, pow_algo: PowAlgorithm) -> u64 {
-        match self.proof_of_work.get(&pow_algo) {
-            Some(v) => v.max_target_time,
-            _ => 0,
-        }
+        self.get_pow_algorithm_constants(pow_algo).max_target_time
     }
 
     /// This is how many blocks we use to count towards the median timestamp to ensure the block chain moves forward.
@@ -159,10 +169,7 @@ impl ConsensusConstants {
 
     /// This is the min initial difficulty that can be requested for the pow
     pub fn min_pow_difficulty(&self, pow_algo: PowAlgorithm) -> Difficulty {
-        match self.proof_of_work.get(&pow_algo) {
-            Some(v) => v.min_difficulty,
-            _ => 0.into(),
-        }
+        self.get_pow_algorithm_constants(pow_algo).min_difficulty
     }
 
     /// This will return the value of the genesis block faucets
@@ -171,10 +178,7 @@ impl ConsensusConstants {
     }
 
     pub fn max_pow_difficulty(&self, pow_algo: PowAlgorithm) -> Difficulty {
-        match self.proof_of_work.get(&pow_algo) {
-            Some(v) => v.max_difficulty,
-            _ => 0.into(),
-        }
+        self.get_pow_algorithm_constants(pow_algo).max_difficulty
     }
 
     // This is the maximum age a monero merge mined seed can be reused
@@ -182,22 +186,9 @@ impl ConsensusConstants {
         self.max_randomx_seed_height
     }
 
-    pub fn localnet() -> Vec<Self> {
+    pub const fn localnet() -> &'static [Self] {
         let difficulty_block_window = 90;
-        let mut algos = HashMap::new();
-        algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-            max_target_time: 1800,
-            min_difficulty: 1.into(),
-            max_difficulty: 1.into(),
-            target_time: 300,
-        });
-        algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-            max_target_time: 1200,
-            min_difficulty: 1.into(),
-            max_difficulty: 1.into(),
-            target_time: 200,
-        });
-        vec![ConsensusConstants {
+        &[ConsensusConstants {
             effective_from_height: 0,
             coinbase_lock_height: 2,
             blockchain_version: 1,
@@ -209,87 +200,27 @@ impl ConsensusConstants {
             emission_decay: &EMISSION_DECAY,
             emission_tail: 100.into(),
             max_randomx_seed_height: std::u64::MAX,
-            proof_of_work: algos,
+            proof_of_work: PowAlgos {
+                monero: PowAlgorithmConstants {
+                    max_target_time: 1200,
+                    min_difficulty: 1.into(),
+                    max_difficulty: 1.into(),
+                    target_time: 200,
+                },
+                sha3: PowAlgorithmConstants {
+                    max_target_time: 1800,
+                    min_difficulty: 1.into(),
+                    max_difficulty: 1.into(),
+                    target_time: 300,
+                },
+            },
             faucet_value: (5000 * 4000) * T,
         }]
     }
 
-    pub fn ridcully() -> Vec<Self> {
-        let difficulty_block_window = 90;
-        let mut algos = HashMap::new();
+    pub const fn stibbons() -> &'static [Self] {
         // seting sha3/monero to 40/60 split
-        algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-            max_target_time: 1800,
-            min_difficulty: 60_000_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 300,
-        });
-        algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-            max_target_time: 1200,
-            min_difficulty: 60_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 200,
-        });
-        vec![ConsensusConstants {
-            effective_from_height: 0,
-            coinbase_lock_height: 1,
-            blockchain_version: 1,
-            future_time_limit: 540,
-            difficulty_block_window,
-            max_block_transaction_weight: 19500,
-            median_timestamp_count: 11,
-            emission_initial: 5_538_846_115 * uT,
-            emission_decay: &EMISSION_DECAY,
-            emission_tail: 100.into(),
-            max_randomx_seed_height: std::u64::MAX,
-            proof_of_work: algos,
-            faucet_value: (5000 * 4000) * T,
-        }]
-    }
-
-    pub fn stibbons() -> Vec<Self> {
-        let mut algos = HashMap::new();
-        // Previously these were incorrectly set to `target_time` of 20 and 30, so
-        // most blocks before 1400 hit the minimum difficulty of 60M and 60k
-        // algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-        //     max_target_time: 1800,
-        //     min_difficulty: 60_000_000.into(),
-        //     max_difficulty: u64::MAX.into(),
-        //     target_time: 30,
-        // });
-        // algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-        //     max_target_time: 1200,
-        //     min_difficulty: 60_000.into(),
-        //     max_difficulty: u64::MAX.into(),
-        //     target_time: 20,
-        // });
-        algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-            max_target_time: 1800,
-            min_difficulty: 60_000_000.into(),
-            max_difficulty: 60_000_000.into(),
-            target_time: 300,
-        });
-        algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-            max_target_time: 1200,
-            min_difficulty: 60_000.into(),
-            max_difficulty: 60_000.into(),
-            target_time: 200,
-        });
-        let mut algos2 = HashMap::new();
-        // seting sha3/monero to 40/60 split
-        algos2.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-            max_target_time: 1800,
-            min_difficulty: 60_000_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 300,
-        });
-        algos2.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-            max_target_time: 1200,
-            min_difficulty: 60_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 200,
-        });
-        vec![
+        &[
             ConsensusConstants {
                 effective_from_height: 0,
                 coinbase_lock_height: 60,
@@ -302,9 +233,24 @@ impl ConsensusConstants {
                 emission_decay: &EMISSION_DECAY,
                 emission_tail: 100.into(),
                 max_randomx_seed_height: std::u64::MAX,
-                proof_of_work: algos,
+                proof_of_work: PowAlgos {
+                    monero: PowAlgorithmConstants {
+                        max_target_time: 1200,
+                        min_difficulty: 60_000.into(),
+                        max_difficulty: 60_000.into(),
+                        target_time: 200,
+                    },
+                    sha3: PowAlgorithmConstants {
+                        max_target_time: 1800,
+                        min_difficulty: 60_000_000.into(),
+                        max_difficulty: 60_000_000.into(),
+                        target_time: 300,
+                    },
+                },
                 faucet_value: (5000 * 4000) * T,
             },
+            // Previously these were incorrectly set to `target_time` of 20 and 30, so
+            // most blocks before 1400 hit the minimum difficulty of 60M and 60k
             ConsensusConstants {
                 effective_from_height: 1400,
                 coinbase_lock_height: 60,
@@ -317,41 +263,53 @@ impl ConsensusConstants {
                 emission_decay: &EMISSION_DECAY,
                 emission_tail: 100.into(),
                 max_randomx_seed_height: std::u64::MAX,
-                proof_of_work: algos2,
+                proof_of_work: PowAlgos {
+                    monero: PowAlgorithmConstants {
+                        max_target_time: 1200,
+                        min_difficulty: 60_000.into(),
+                        max_difficulty: u64::MAX.into(),
+                        target_time: 200,
+                    },
+                    sha3: PowAlgorithmConstants {
+                        max_target_time: 1800,
+                        min_difficulty: 60_000_000.into(),
+                        max_difficulty: u64::MAX.into(),
+                        target_time: 300,
+                    },
+                },
                 faucet_value: (5000 * 4000) * T,
             },
         ]
     }
 
-    pub fn mainnet() -> Vec<Self> {
+    pub const fn mainnet() -> &'static [Self] {
         // Note these values are all placeholders for final values
-        let difficulty_block_window = 90;
-        let mut algos = HashMap::new();
-        algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-            max_target_time: 1800,
-            min_difficulty: 60_000_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 300,
-        });
-        algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-            max_target_time: 800,
-            min_difficulty: 60_000_000.into(),
-            max_difficulty: u64::MAX.into(),
-            target_time: 200,
-        });
-        vec![ConsensusConstants {
+        &[ConsensusConstants {
             effective_from_height: 0,
             coinbase_lock_height: 1,
             blockchain_version: 1,
             future_time_limit: 540,
-            difficulty_block_window,
+            difficulty_block_window: 90,
             max_block_transaction_weight: 19500,
             median_timestamp_count: 11,
             emission_initial: 10_000_000.into(),
             emission_decay: &EMISSION_DECAY,
             emission_tail: 100.into(),
             max_randomx_seed_height: std::u64::MAX,
-            proof_of_work: algos,
+            proof_of_work: PowAlgos {
+                monero: PowAlgorithmConstants {
+                    max_target_time: 800,
+                    min_difficulty: 60_000_000.into(),
+                    max_difficulty: u64::MAX.into(),
+                    target_time: 200,
+                },
+                sha3: PowAlgorithmConstants {
+                    max_target_time: 1800,
+                    min_difficulty: 60_000_000.into(),
+                    max_difficulty: u64::MAX.into(),
+                    target_time: 300,
+                },
+            },
             faucet_value: MicroTari::from(0),
         }]
     }
@@ -367,12 +325,21 @@ pub struct ConsensusConstantsBuilder {
 impl ConsensusConstantsBuilder {
     pub fn new(network: Network) -> Self {
         Self {
-            // TODO: Resolve this unwrap
-            consensus: network.create_consensus_constants().pop().unwrap(),
+            consensus: network
+                .create_consensus_constants()
+                .last()
+                .cloned()
+                .ok_or_else(|| {
+                    format!(
+                        "create_consensus_constants returned no ConsensusConstants for network {:?}",
+                        network
+                    )
+                })
+                .unwrap(),
         }
     }
 
-    pub fn with_proof_of_work(mut self, proof_of_work: HashMap<PowAlgorithm, PowAlgorithmConstants>) -> Self {
+    pub fn with_proof_of_work(mut self, proof_of_work: PowAlgos) -> Self {
         self.consensus.proof_of_work = proof_of_work;
         self
     }

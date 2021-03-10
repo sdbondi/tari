@@ -69,7 +69,7 @@ use tari_test_utils::paths::create_temporary_data_path;
 /// Create a new blockchain database containing no blocks.
 pub fn create_new_blockchain() -> BlockchainDatabase<TempDatabase> {
     let network = Network::Stibbons;
-    let consensus_constants = ConsensusConstantsBuilder::new(network).build();
+    let consensus_constants = network.create_consensus_constants();
     let genesis = get_ridcully_genesis_block();
     let consensus_manager = ConsensusManagerBuilder::new(network)
         .with_consensus_constants(consensus_constants)

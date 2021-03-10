@@ -165,7 +165,7 @@ struct ConsensusManagerInner {
 
 /// Constructor for the consensus manager struct
 pub struct ConsensusManagerBuilder {
-    consensus_constants: Vec<ConsensusConstants>,
+    consensus_constants: &'static [ConsensusConstants],
     network: Network,
     gen_block: Option<ChainBlock>,
     chain_strength_comparer: Option<Box<dyn ChainStrengthComparer + Send + Sync>>,
@@ -175,7 +175,7 @@ impl ConsensusManagerBuilder {
     /// Creates a new ConsensusManagerBuilder with the specified network
     pub fn new(network: Network) -> Self {
         ConsensusManagerBuilder {
-            consensus_constants: vec![],
+            consensus_constants: network.create_consensus_constants(),
             network,
             gen_block: None,
             chain_strength_comparer: None,
@@ -183,8 +183,8 @@ impl ConsensusManagerBuilder {
     }
 
     /// Adds in a custom consensus constants to be used
-    pub fn with_consensus_constants(mut self, consensus_constants: ConsensusConstants) -> Self {
-        self.consensus_constants.push(consensus_constants);
+    pub fn with_consensus_constants(mut self, consensus_constants: &'static [ConsensusConstants]) -> Self {
+        self.consensus_constants = consensus_constants;
         self
     }
 

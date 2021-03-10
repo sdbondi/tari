@@ -101,7 +101,7 @@ fn setup() -> (
     let (block0, utxo0) =
         create_genesis_block_with_coinbase_value(&factories, 100_000_000.into(), &consensus_constants[0]);
     let consensus_manager = ConsensusManagerBuilder::new(network)
-        .with_consensus_constants(consensus_constants[0].clone())
+        .with_consensus_constants(consensus_constants)
         .with_block(block0.clone())
         .build();
 

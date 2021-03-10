@@ -39,10 +39,10 @@ pub enum Network {
 }
 
 impl Network {
-    pub fn create_consensus_constants(&self) -> Vec<ConsensusConstants> {
+    pub const fn create_consensus_constants(&self) -> &'static [ConsensusConstants] {
         match self {
             Network::MainNet => ConsensusConstants::mainnet(),
-            Network::Ridcully => ConsensusConstants::ridcully(),
+            Network::Ridcully => panic!("ridcully is no longer supported"),
             Network::Stibbons => ConsensusConstants::stibbons(),
             Network::LocalNet => ConsensusConstants::localnet(),
         }

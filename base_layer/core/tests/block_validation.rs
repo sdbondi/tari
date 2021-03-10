@@ -27,7 +27,7 @@ use tari_core::{
     blocks::{Block, BlockHeaderValidationError},
     chain_storage::{BlockchainDatabase, BlockchainDatabaseConfig, ChainStorageError, Validators},
     consensus::{
-        consensus_constants::PowAlgorithmConstants,
+        consensus_constants::{PowAlgorithmConstants, PowAlgos},
         ConsensusConstantsBuilder,
         ConsensusManagerBuilder,
         Network,
@@ -81,19 +81,20 @@ fn test_monero_blocks() {
 
     let factories = CryptoFactories::default();
     let network = Network::Stibbons;
-    let mut algos = HashMap::new();
-    algos.insert(PowAlgorithm::Sha3, PowAlgorithmConstants {
-        max_target_time: 1800,
-        min_difficulty: 1.into(),
-        max_difficulty: 1.into(),
-        target_time: 300,
-    });
-    algos.insert(PowAlgorithm::Monero, PowAlgorithmConstants {
-        max_target_time: 1200,
-        min_difficulty: 1.into(),
-        max_difficulty: 1.into(),
-        target_time: 200,
-    });
+    let algos = PowAlgos {
+        sha3: PowAlgorithmConstants {
+            max_target_time: 1800,
+            min_difficulty: 1.into(),
+            max_difficulty: 1.into(),
+            target_time: 300,
+        },
+        monero: PowAlgorithmConstants {
+            max_target_time: 1200,
+            min_difficulty: 1.into(),
+            max_difficulty: 1.into(),
+            target_time: 200,
+        },
+    };
     let cc = ConsensusConstantsBuilder::new(network)
         .with_max_randomx_seed_height(1)
         .with_proof_of_work(algos)
