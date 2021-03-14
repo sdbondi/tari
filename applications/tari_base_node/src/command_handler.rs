@@ -700,9 +700,13 @@ impl CommandHandler {
         match end {
             Some(end) => blockchain_db.fetch_headers(start..=end).await.map_err(Into::into),
             None => {
+                let from_tip = start;
+                if from_tip == 0 {
+                    return Ok(Vec::new());
+                }
                 let tip = blockchain_db.fetch_tip_header().await?.height();
                 blockchain_db
-                    .fetch_headers((tip.saturating_sub(start) + 1)..)
+                    .fetch_headers(tip.saturating_sub(from_tip - 1)..)
                     .await
                     .map_err(Into::into)
             },
@@ -719,9 +723,13 @@ impl CommandHandler {
         match end {
             Some(end) => blockchain_db.fetch_chain_headers(start..=end).await.map_err(Into::into),
             None => {
+                let from_tip = start;
+                if from_tip == 0 {
+                    return Ok(Vec::new());
+                }
                 let tip = blockchain_db.fetch_tip_header().await?.height();
                 blockchain_db
-                    .fetch_chain_headers((tip.saturating_sub(start) + 1)..)
+                    .fetch_chain_headers(tip.saturating_sub(from_tip - 1)..)
                     .await
                     .map_err(Into::into)
             },
