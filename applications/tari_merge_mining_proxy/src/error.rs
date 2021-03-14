@@ -38,7 +38,7 @@ pub enum MmProxyError {
         #[from]
         source: MergeMineError,
     },
-    #[error("Missing data:{0}")]
+    #[error("Missing data: {0}")]
     MissingDataError(String),
     #[error("An IO error occurred: {0}")]
     IoError(#[from] io::Error),

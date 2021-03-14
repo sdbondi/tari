@@ -333,7 +333,7 @@ impl InnerService {
                 None => {
                     info!(
                         target: LOG_TARGET,
-                        "Block `{}` submitted but no matching block template was found, possible duplicate submission",
+                        "Block {} submitted but no matching block template was found, possible duplicate submission",
                         hex::encode(&hash)
                     );
                     continue;
@@ -366,7 +366,8 @@ impl InnerService {
                         height,
                         start.elapsed()
                     );
-                    self.block_templates.remove(&hash).await;
+                    // self.block_templates.remove(&hash).await;
+                    // self.block_templates.remove_many_less_than_height(height).await;
                 },
                 Err(err) => {
                     debug!(
@@ -389,8 +390,6 @@ impl InnerService {
                     }
                 },
             }
-
-            self.block_templates.remove_outdated().await;
         }
 
         debug!(target: LOG_TARGET, "Sending submit_block response {}", json_resp);
@@ -502,7 +501,13 @@ impl InnerService {
             .map_err(|e| MmProxyError::MissingDataError(format!("GRPC Conversion Error: {}", e)))?;
         let tari_height = template_block.header.height;
 
-        debug!(target: LOG_TARGET, "Trying to connect to wallet");
+        debug!(
+            target: LOG_TARGET,
+            "Attempting to retrieve new coinbase with height = {}, reward = {}, fees = {}",
+            tari_height,
+            block_reward,
+            total_fees
+        );
         let mut grpc_wallet_client = self.connect_grpc_wallet_client().await?;
         let coinbase_response = grpc_wallet_client
             .get_coinbase(GetCoinbaseRequest {
@@ -511,42 +516,39 @@ impl InnerService {
                 height: tari_height,
             })
             .await
+            .map(|resp| resp.into_inner())
             .map_err(|status| MmProxyError::GrpcRequestError {
                 status,
                 details: "failed to get new block template".to_string(),
             })?;
-        let coinbase_transaction = coinbase_response.into_inner().transaction;
+
+        let coinbase_transaction = coinbase_response
+            .transaction
+            .ok_or_else(|| MmProxyError::MissingDataError("Coinbase Invalid".to_string()))?;
 
         let coinbased_block = merge_mining::add_coinbase(coinbase_transaction, template_block)?;
         debug!(target: LOG_TARGET, "Added coinbase to new block template");
         let block = grpc_client
             .get_new_block(coinbased_block)
             .await
+            .map(|resp| resp.into_inner())
             .map_err(|status| MmProxyError::GrpcRequestError {
                 status,
                 details: "failed to get new block".to_string(),
-            })?
-            .into_inner();
+            })?;
 
         let mining_hash = block.merge_mining_hash;
 
-        let tari_block = Block::try_from(
-            block
-                .block
-                .clone()
-                .ok_or_else(|| MmProxyError::MissingDataError("Tari block".to_string()))?,
-        )
-        .map_err(MmProxyError::MissingDataError)?;
-        debug!(target: LOG_TARGET, "New block received from Tari: {}", (tari_block));
+        let tari_block = block
+            .block
+            .ok_or_else(|| MmProxyError::GrpcResponseMissingField("block"))?;
 
-        let block_data = BlockTemplateDataBuilder::default();
-        let block_data = block_data
-            .tari_block(
-                block
-                    .block
-                    .ok_or_else(|| MmProxyError::GrpcResponseMissingField("block"))?,
-            )
+        let block_data = BlockTemplateDataBuilder::default()
+            .tari_block(tari_block.clone())
             .tari_miner_data(miner_data);
+
+        let tari_block = Block::try_from(tari_block).map_err(MmProxyError::MissingDataError)?;
+        debug!(target: LOG_TARGET, "Generated a new Tari block: {}", tari_block);
 
         // Deserialize the block template blob
         let block_template_blob = &monerod_resp["result"]["blocktemplate_blob"]
@@ -600,7 +602,17 @@ impl InnerService {
             }),
         );
 
-        self.block_templates.save(mining_hash, block_data.build()?).await;
+        self.block_templates
+            .save(mining_hash.clone(), block_data.build()?)
+            .await;
+
+        let l = self.block_templates.len().await;
+        debug!(
+            target: LOG_TARGET,
+            "Stored block data with hash `{}` (total stored = {})",
+            mining_hash.to_hex(),
+            l
+        );
 
         debug!(target: LOG_TARGET, "Returning template result: {}", monerod_resp);
         Ok(proxy::into_response(parts, &monerod_resp))
@@ -692,6 +704,8 @@ impl InnerService {
             return Ok(proxy::into_response(parts, &monero_resp));
         }
 
+        let monero_height = monero_resp["result"]["block_header"]["height"].as_u64().unwrap_or(0);
+
         let mut client = self.connect_grpc_client().await?;
         let tip_info = client.get_tip_info(grpc::Empty {}).await?;
         let tip_info = tip_info.into_inner();
@@ -706,6 +720,12 @@ impl InnerService {
             .await?;
 
         let tip_header = tip_header.into_inner();
+        debug!(
+            target: LOG_TARGET,
+            "Last block header (Monero = {}, Tari = {})",
+            monero_height,
+            tip_header.header.as_ref().map(|h| h.height).unwrap_or(0)
+        );
         let json_block_header = try_into_json_block_header(tip_header)?;
         let resp = append_aux_chain_data(
             monero_resp,
@@ -814,11 +834,11 @@ impl InnerService {
                 },
                 _ => {
                     let resp = builder
-                        // This is a cheap clone of the request body
-                        .body(request.body().clone())
-                        .send()
-                        .await
-                        .map_err(MmProxyError::MonerodRequestFailed)?;
+                                // This is a cheap clone of the request body
+                                .body(request.body().clone())
+                                .send()
+                                .await
+                                .map_err(MmProxyError::MonerodRequestFailed)?;
                     convert_reqwest_response_to_hyper_json_response(resp).await?
                 },
             }

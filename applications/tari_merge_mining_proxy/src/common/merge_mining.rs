@@ -62,25 +62,34 @@ pub fn construct_monero_data(block: Block, seed: String) -> Result<MoneroData, M
 }
 
 pub fn add_coinbase(
-    coinbase: Option<grpc::Transaction>,
+    coinbase_tx: grpc::Transaction,
     mut block: NewBlockTemplate,
 ) -> Result<grpc::NewBlockTemplate, MmProxyError>
 {
-    if let Some(tx) = coinbase {
-        let output = TransactionOutput::try_from(tx.clone().body.unwrap().outputs[0].clone())
-            .map_err(MmProxyError::MissingDataError)?;
-        let kernel =
-            TransactionKernel::try_from(tx.body.unwrap().kernels[0].clone()).map_err(MmProxyError::MissingDataError)?;
-        block.body.add_output(output);
-        block.body.add_kernel(kernel);
-        let template = grpc::NewBlockTemplate::try_from(block);
-        match template {
-            Ok(template) => Ok(template),
-            Err(_e) => Err(MmProxyError::MissingDataError("Template Invalid".to_string())),
-        }
-    } else {
-        Err(MmProxyError::MissingDataError("Coinbase Invalid".to_string()))
+    let body = coinbase_tx
+        .body
+        .as_ref()
+        .ok_or_else(|| MmProxyError::MissingDataError("coinbase.body".to_string()))?;
+    if body.outputs.len() != 1 {
+        return Err(MmProxyError::MissingDataError(format!(
+            "expected exactly one coinbase.body.outputs. Length is {}",
+            body.outputs.len()
+        )));
     }
+    if body.kernels.len() != 1 {
+        return Err(MmProxyError::MissingDataError(format!(
+            "expected exactly one coinbase.body.kernels. Length is {}",
+            body.kernels.len()
+        )));
+    }
+
+    let output = TransactionOutput::try_from(body.outputs[0].clone()).map_err(MmProxyError::MissingDataError)?;
+    let kernel = TransactionKernel::try_from(body.kernels[0].clone()).map_err(MmProxyError::MissingDataError)?;
+    block.body.add_output(output);
+    block.body.add_kernel(kernel);
+    let template = grpc::NewBlockTemplate::try_from(block)
+        .map_err(|err| MmProxyError::MissingDataError(format!("Invalid template: {}", err)))?;
+    Ok(template)
 }
 
 pub fn extract_tari_hash(monero: &Block) -> Option<&Hash> {

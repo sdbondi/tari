@@ -20,11 +20,11 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use crate::error::MmProxyError;
-use chrono::{self, DateTime, Duration, Utc};
+use chrono::{self, DateTime, Utc};
+use log::*;
 use std::{collections::HashMap, sync::Arc};
 use tari_app_grpc::tari_rpc::{Block, MinerData};
 use tokio::sync::RwLock;
-use tracing::trace;
 
 pub const LOG_TARGET: &str = "tari_mm_proxy::xmrig";
 
@@ -47,8 +47,8 @@ impl BlockTemplateRepositoryItem {
         }
     }
 
-    pub fn datetime(&self) -> DateTime<Utc> {
-        self.datetime
+    pub fn block_height(&self) -> u64 {
+        self.data.tari_block.header.as_ref().map(|h| h.height).unwrap_or(0)
     }
 }
 
@@ -69,6 +69,10 @@ impl BlockTemplateRepository {
         b.get(hash.as_ref()).map(|item| item.data.clone())
     }
 
+    pub async fn len(&self) -> usize {
+        self.blocks.read().await.len()
+    }
+
     pub async fn save(&self, hash: Vec<u8>, block_template: BlockTemplateData) {
         trace!(
             target: LOG_TARGET,
@@ -80,11 +84,16 @@ impl BlockTemplateRepository {
         b.insert(hash, repository_item);
     }
 
-    pub async fn remove_outdated(&self) {
-        trace!(target: LOG_TARGET, "Removing outdated blocktemplates");
+    pub async fn remove_many_less_than_height(&self, height: u64) {
+        trace!(
+            target: LOG_TARGET,
+            "Removing all blocktemplates with height less than {}",
+            height
+        );
         let mut b = self.blocks.write().await;
-        let threshold = Utc::now() - Duration::minutes(20);
-        *b = b.drain().filter(|(_, i)| i.datetime() >= threshold).collect();
+        let initial_len = b.len();
+        *b = b.drain().filter(|(_, i)| i.block_height() < height).collect();
+        debug!(target: LOG_TARGET, "Cleared {} block(s)", initial_len - b.len());
     }
 
     pub async fn remove<T: AsRef<[u8]>>(&self, hash: T) -> Option<BlockTemplateRepositoryItem> {
