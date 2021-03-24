@@ -21,6 +21,7 @@ use log::*;
 use recovery::prompt_private_key_from_seed_words;
 use tari_app_utilities::{initialization::init_configuration, utilities::ExitCodes};
 use tari_common::configuration::bootstrap::ApplicationType;
+use tari_comms::types::CommsPublicKey;
 use tari_shutdown::Shutdown;
 use wallet_modes::{command_mode, grpc_mode, recovery_mode, script_mode, tui_mode, WalletMode};
 
@@ -107,6 +108,11 @@ fn main_inner() -> Result<(), ExitCodes> {
     // get base node/s
     let base_node_config = runtime.block_on(get_base_node_peer_config(&config, &mut wallet))?;
     let base_node = base_node_config.get_base_node_peer()?;
+    let peer_seed_public_keys: Vec<CommsPublicKey> = base_node_config
+        .peer_seeds
+        .iter()
+        .map(|f| f.public_key.clone())
+        .collect();
 
     // start wallet
     runtime.block_on(start_wallet(&mut wallet, &base_node))?;
@@ -135,6 +141,7 @@ fn main_inner() -> Result<(), ExitCodes> {
             wallet.clone(),
             base_node,
             base_node_config,
+            peer_seed_public_keys,
             notify_script,
         ),
         WalletMode::Invalid => Err(ExitCodes::InputError(
