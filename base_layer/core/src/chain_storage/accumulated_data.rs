@@ -204,6 +204,10 @@ impl BlockHeaderAccumulatedDataBuilder {
         achieved: Difficulty,
     ) -> Self
     {
+        assert!(
+            self.achieved_difficulty.is_none(),
+            "achieved_difficulty can only be called once"
+        );
         match algo {
             PowAlgorithm::Monero => {
                 self.accumulated_monero_difficulty = Some(previous.accumulated_monero_difficulty + achieved);

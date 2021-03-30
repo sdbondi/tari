@@ -60,7 +60,7 @@ impl TargetDifficultyWindow {
     /// Returns true of the TargetDifficulty has `block_window` data points, otherwise false
     #[inline]
     pub fn is_full(&self) -> bool {
-        self.lwma.num_samples() == self.lwma.block_window() + 1
+        self.lwma.is_full()
     }
 
     pub fn len(&self) -> usize {

@@ -11,14 +11,14 @@ use crate::proof_of_work::{
     error::DifficultyAdjustmentError,
 };
 use log::*;
-use std::cmp;
+use std::{cmp, collections::VecDeque};
 use tari_crypto::tari_utilities::epoch_time::EpochTime;
 
 pub const LOG_TARGET: &str = "c::pow::lwma_diff";
 
 #[derive(Debug, Clone)]
 pub struct LinearWeightedMovingAverage {
-    target_difficulties: Vec<(EpochTime, Difficulty)>,
+    target_difficulties: VecDeque<(EpochTime, Difficulty)>,
     block_window: usize,
     target_time: u64,
     max_block_time: u64,
@@ -27,7 +27,7 @@ pub struct LinearWeightedMovingAverage {
 impl LinearWeightedMovingAverage {
     pub fn new(block_window: usize, target_time: u64, max_block_time: u64) -> Self {
         Self {
-            target_difficulties: Vec::with_capacity(block_window + 1),
+            target_difficulties: VecDeque::with_capacity(block_window + 1),
             block_window,
             target_time,
             max_block_time,
@@ -52,16 +52,15 @@ impl LinearWeightedMovingAverage {
         let ave_difficulty = difficulty as f64 / n as f64;
 
         let (mut previous_timestamp, _) = self.target_difficulties[0];
-        let mut this_timestamp;
         // Loop through N most recent blocks.
         for (i, (timestamp, _)) in self.target_difficulties.iter().skip(1).enumerate() {
             // We cannot have if solve_time < 1 then solve_time = 1, this will greatly increase the next timestamp
             // difficulty which will lower the difficulty
-            if *timestamp > previous_timestamp {
-                this_timestamp = *timestamp;
+            let this_timestamp = if *timestamp > previous_timestamp {
+                *timestamp
             } else {
-                this_timestamp = previous_timestamp.increase(1);
-            }
+                previous_timestamp.increase(1)
+            };
             let solve_time = cmp::min((this_timestamp - previous_timestamp).as_u64(), self.max_block_time);
             previous_timestamp = this_timestamp;
 
@@ -102,11 +101,11 @@ impl LinearWeightedMovingAverage {
 
     #[inline]
     fn capacity(&self) -> usize {
-        self.target_difficulties.capacity()
+        self.block_window + 1
     }
 
     #[inline]
-    pub fn is_at_capacity(&self) -> bool {
+    pub fn is_full(&self) -> bool {
         self.num_samples() == self.capacity()
     }
 
@@ -115,31 +114,26 @@ impl LinearWeightedMovingAverage {
         self.target_difficulties.len()
     }
 
-    #[inline]
-    pub(super) fn block_window(&self) -> usize {
-        self.block_window
-    }
-
     pub fn add_front(&mut self, timestamp: EpochTime, target_difficulty: Difficulty) {
         debug_assert!(
-            self.num_samples() <= self.block_window() + 1,
+            self.num_samples() <= self.capacity(),
             "LinearWeightedMovingAverage: len exceeded block_window"
         );
-        if self.is_at_capacity() {
-            self.target_difficulties.pop();
+        if self.is_full() {
+            self.target_difficulties.pop_back();
         }
-        self.target_difficulties.insert(0, (timestamp, target_difficulty));
+        self.target_difficulties.push_front((timestamp, target_difficulty));
     }
 
     pub fn add_back(&mut self, timestamp: EpochTime, target_difficulty: Difficulty) {
         debug_assert!(
-            self.num_samples() <= self.block_window() + 1,
+            self.num_samples() <= self.capacity(),
             "LinearWeightedMovingAverage: len exceeded block_window"
         );
-        if self.is_at_capacity() {
-            self.target_difficulties.remove(0);
+        if self.is_full() {
+            self.target_difficulties.pop_front();
         }
-        self.target_difficulties.push((timestamp, target_difficulty));
+        self.target_difficulties.push_back((timestamp, target_difficulty));
     }
 }
 
