@@ -68,10 +68,6 @@ impl Hooks {
         self.on_complete.push(Box::new(hook));
     }
 
-    pub fn call_on_complete_hooks(&mut self, final_block: Arc<ChainBlock>) {
-        self.on_complete.iter_mut().for_each(|f| (*f)(final_block.clone()));
-    }
-
     pub fn add_on_rewind_hook<H>(&mut self, hook: H)
     where H: FnMut(Vec<Arc<ChainBlock>>) + Send + Sync + 'static {
         self.on_rewind.push(Box::new(hook));

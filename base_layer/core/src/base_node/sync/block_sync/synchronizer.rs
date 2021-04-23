@@ -158,7 +158,6 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
 
         let mut block_stream = client.sync_blocks(request).await?;
         let mut prev_hash = best_full_block_hash;
-        let mut current_block = None;
         while let Some(block) = block_stream.next().await {
             let block = block?;
 
@@ -169,6 +168,7 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
                 .ok_or_else(|| {
                     BlockSyncError::ReceivedInvalidBlockBody("Peer sent hash for block header we do not have".into())
                 })?;
+            let prev_chain_meta = self.db.get_chain_metadata().await?;
 
             let header_hash = header.hash().clone();
 
@@ -219,6 +219,7 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
                     block.height(),
                     header_hash,
                     block.accumulated_data.total_accumulated_difficulty,
+                    prev_chain_meta.best_block().clone(),
                 )
                 .commit()
                 .await?;
@@ -238,22 +239,6 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
                 block.accumulated_data.accumulated_monero_difficulty,
                 block.accumulated_data.accumulated_blake_difficulty,
             );
-            current_block = Some(block);
-        }
-
-        if let Some(block) = current_block {
-            // Update metadata to last tip header
-            let header = &block.block.header;
-            let height = header.height;
-            let best_block = header.hash();
-            let accumulated_difficulty = block.accumulated_data.total_accumulated_difficulty;
-            self.db
-                .write_transaction()
-                .set_best_block(height, best_block.to_vec(), accumulated_difficulty)
-                .commit()
-                .await?;
-
-            self.hooks.call_on_complete_hooks(block);
         }
 
         debug!(target: LOG_TARGET, "Completed block sync with peer `{}`", peer);
