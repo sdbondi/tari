@@ -176,21 +176,17 @@ pub fn to_bytes(mnemonic_seq: &[String]) -> Result<Vec<u8>, MnemonicError> {
 
 /// Generates a vector of bytes that represent the provided mnemonic sequence of words using the specified language
 pub fn to_bytes_with_language(mnemonic_seq: &[String], language: &MnemonicLanguage) -> Result<Vec<u8>, MnemonicError> {
-    let mut bits: Vec<bool> = Vec::new();
+    let mut bits = Vec::with_capacity(11 * mnemonic_seq.len());
     for curr_word in mnemonic_seq {
-        match find_mnemonic_index_from_word(curr_word, &language) {
-            Ok(index) => {
-                let curr_bits = uint_to_bits(index, 11);
-                bits.extend(curr_bits.iter().cloned());
-            },
-            Err(err) => return Err(err),
-        }
+        let index = find_mnemonic_index_from_word(curr_word, &language)?;
+        // The number of bits required to can represent the max index (2048)
+        const BITS_REPR_INDEX: usize = 11;
+        let curr_bits = uint_to_bits(index, BITS_REPR_INDEX);
+        bits.extend(curr_bits);
     }
-    // Discard unused bytes
-    let mut bytes = bits_to_bytes(&bits);
-    for _i in 32..bytes.len() {
-        bytes.pop();
-    }
+    // Only consider the first 32 bytes
+    bits.truncate(32 * 8);
+    let bytes = bits_to_bytes(&bits);
 
     if bytes.len() == 32 {
         Ok(bytes)
