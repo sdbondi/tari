@@ -158,6 +158,7 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
 
         let mut block_stream = client.sync_blocks(request).await?;
         let mut prev_hash = best_full_block_hash;
+        let mut current_block = None;
         while let Some(block) = block_stream.next().await {
             let block = block?;
 
@@ -239,6 +240,12 @@ impl<B: BlockchainBackend + 'static> BlockSynchronizer<B> {
                 block.accumulated_data.accumulated_monero_difficulty,
                 block.accumulated_data.accumulated_blake_difficulty,
             );
+            current_block = Some(block);
+        }
+
+        if let Some(block) = current_block {
+
+            self.hooks.call_on_complete_hooks(block);
         }
 
         debug!(target: LOG_TARGET, "Completed block sync with peer `{}`", peer);

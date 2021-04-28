@@ -283,8 +283,7 @@ impl LMDBDatabase {
                             )));
                         };
                     }
-                    let header_height: Option<u64> = lmdb_get(&write_txn, &self.block_hashes_db, hash.as_slice())?;
-                    if header_height.is_none() {
+                    if !lmdb_exists(&write_txn, &self.block_hashes_db, hash.as_slice())? {
                         // we dont care about the header or the height, we just want to know its there.
                         return Err(ChainStorageError::InvalidOperation(format!(
                             "There is no Blockheader hash ({}) in db",
