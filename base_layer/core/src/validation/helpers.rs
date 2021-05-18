@@ -313,40 +313,34 @@ mod test {
         }
     }
 
-    #[cfg(test)]
-    #[allow(clippy::module_inception)]
-    mod test {
+    mod check_median_timestamp {
         use super::*;
 
-        mod check_median_timestamp {
-            use super::*;
+        #[test]
+        #[should_panic]
+        fn it_panics_if_empty() {
+            calc_median_timestamp(&[]);
+        }
 
-            #[test]
-            #[should_panic]
-            fn it_panics_if_empty() {
-                calc_median_timestamp(&[]);
-            }
+        #[test]
+        fn it_calculates_the_correct_median_timestamp() {
+            let median_timestamp = calc_median_timestamp(&[0.into()]);
+            assert_eq!(median_timestamp, 0.into());
 
-            #[test]
-            fn it_calculates_the_correct_median_timestamp() {
-                let median_timestamp = calc_median_timestamp(&[0.into()]);
-                assert_eq!(median_timestamp, 0.into());
+            let median_timestamp = calc_median_timestamp(&[123.into()]);
+            assert_eq!(median_timestamp, 123.into());
 
-                let median_timestamp = calc_median_timestamp(&[123.into()]);
-                assert_eq!(median_timestamp, 123.into());
+            let median_timestamp = calc_median_timestamp(&[2.into(), 4.into()]);
+            assert_eq!(median_timestamp, 3.into());
 
-                let median_timestamp = calc_median_timestamp(&[2.into(), 4.into()]);
-                assert_eq!(median_timestamp, 3.into());
+            let median_timestamp = calc_median_timestamp(&[0.into(), 100.into(), 0.into()]);
+            assert_eq!(median_timestamp, 100.into());
 
-                let median_timestamp = calc_median_timestamp(&[0.into(), 100.into(), 0.into()]);
-                assert_eq!(median_timestamp, 100.into());
+            let median_timestamp = calc_median_timestamp(&[1.into(), 2.into(), 3.into(), 4.into()]);
+            assert_eq!(median_timestamp, 2.into());
 
-                let median_timestamp = calc_median_timestamp(&[1.into(), 2.into(), 3.into(), 4.into()]);
-                assert_eq!(median_timestamp, 2.into());
-
-                let median_timestamp = calc_median_timestamp(&[1.into(), 2.into(), 3.into(), 4.into(), 5.into()]);
-                assert_eq!(median_timestamp, 3.into());
-            }
+            let median_timestamp = calc_median_timestamp(&[1.into(), 2.into(), 3.into(), 4.into(), 5.into()]);
+            assert_eq!(median_timestamp, 3.into());
         }
     }
 }
