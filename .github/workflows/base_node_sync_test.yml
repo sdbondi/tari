@@ -1,0 +1,71 @@
+# Build a new set of libraries when a new tag containing 'libwallet' is pushed
+name: Build libwallet
+on:
+  # Run manually
+  workflow_dispatch:
+  schedule:
+    - cron: "5 0 * * *"
+jobs:
+  full_sync_test:
+      name: sync test
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [
+            #ubuntu-18.04,
+              macos-10.15,
+              windows-2019
+          ]
+      runs-on: ${{ matrix.os }}
+      steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: ubuntu dependencies
+          if: startsWith(matrix.os,'ubuntu')
+          run: |
+            sudo apt-get update && \
+            sudo apt-get -y install \
+              openssl \
+              libssl-dev \
+              pkg-config \
+              libsqlite3-dev \
+              git \
+              cmake \
+              zip \
+              libc++-dev \
+              libc++abi-dev \
+              libprotobuf-dev \
+              protobuf-compiler
+
+        - name: macOS dependencies
+          if: startsWith(matrix.os,'macos')
+          run: brew install cmake zip
+
+        - name: windows dependencies
+          if: startsWith(matrix.os,'windows')
+          run: |
+            vcpkg.exe install sqlite3:x64-windows zlib:x64-windows
+            choco upgrade openssl llvm zip psutils -y
+
+        - name: windows env
+          if: startsWith(matrix.os,'Windows')
+          uses: allenevans/set-env@57c4e41b5835146bcd9889174001783dd682b6c5
+          with:
+            SQLITE3_LIB_DIR: 'C:\vcpkg\installed\x64-windows\lib'
+            OPENSSL_DIR: 'C:\Program Files\OpenSSL-Win64'
+            LIBCLANG_PATH: 'C:\Program Files\LLVM\bin'
+
+        - name: cache
+          uses: actions/cache@v2
+          with:
+            path: |
+              ~/.cargo/registry
+              ~/.cargo/git
+              target
+            key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+        - name: Sync Test
+          uses: actions/
+
+
