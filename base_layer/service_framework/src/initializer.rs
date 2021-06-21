@@ -21,6 +21,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::context::ServiceInitializerContext;
+use async_trait::async_trait;
 use futures::{Future, FutureExt};
 use std::pin::Pin;
 
@@ -28,6 +29,7 @@ pub type ServiceInitializationError = anyhow::Error;
 
 /// Implementors of this trait will initialize a service
 /// The `StackBuilder` builds impls of this trait.
+#[async_trait]
 pub trait ServiceInitializer {
     /// The future returned from the initialize function
     type Future: Future<Output = Result<(), ServiceInitializationError>>;
