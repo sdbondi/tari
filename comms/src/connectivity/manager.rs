@@ -345,7 +345,6 @@ impl ConnectivityManagerActor {
                         "{} peer '{}' is managed. Retrying.", status, node_id
                     );
                     self.connection_manager.send_dial_peer_no_reply(node_id.clone()).await?;
-                    // self.send_dial_request(node_id.clone()).await?;
                 },
                 ConnectionStatus::NotConnected => {
                     let status = self.pool.set_status(node_id, ConnectionStatus::Connecting);
@@ -394,7 +393,7 @@ impl ConnectivityManagerActor {
     }
 
     fn clean_connection_pool(&mut self) {
-        let managed_peers = self.managed_peers.clone();
+        let managed_peers = &self.managed_peers;
         let cleared_states = self.pool.filter_drain(|state| {
             (state.status() == ConnectionStatus::Failed || state.status() == ConnectionStatus::Disconnected) &&
                 !managed_peers.contains(state.node_id())
@@ -845,7 +844,7 @@ fn delayed_close(conn: PeerConnection, delay: Duration) {
         debug!(
             target: LOG_TARGET,
             "Closing connection from peer `{}` after delay",
-            conn.peer_node_id()
+            conn.peer_node_id(),
         );
         // Can ignore the error here, the error is already logged by peer connection
         let _ = conn.clone().disconnect_silent().await;
