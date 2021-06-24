@@ -33,7 +33,7 @@ use crate::{
 };
 use futures::{task::Context, Future};
 use log::*;
-use std::{pin::Pin, sync::Arc, task::Poll};
+use std::{sync::Arc, task::Poll};
 use tari_comms::{
     peer_manager::{NodeIdentity, PeerFeatures, PeerManager},
     pipeline::PipelineError,
@@ -112,24 +112,23 @@ impl<S> Service<DecryptedDhtMessage> for StoreMiddleware<S>
 where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
+
+    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, msg: DecryptedDhtMessage) -> Self::Future {
-        let future = StoreTask::new(
+        StoreTask::new(
             self.next_service.clone(),
             self.config.clone(),
             Arc::clone(&self.peer_manager),
             Arc::clone(&self.node_identity),
             self.saf_requester.clone(),
         )
-        .handle(msg);
-
-        Box::pin(future)
+        .handle(msg)
     }
 }
 

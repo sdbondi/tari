@@ -30,7 +30,7 @@ use crate::{
 use futures::{task::Context, Future};
 use log::*;
 use prost::Message;
-use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
+use std::{sync::Arc, task::Poll, time::Duration};
 use tari_comms::{
     connectivity::ConnectivityRequester,
     message::EnvelopeBody,
@@ -123,26 +123,25 @@ impl<S> DecryptionService<S> {
 }
 
 impl<S> Service<DhtInboundMessage> for DecryptionService<S>
-where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Clone + 'static
+where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Clone
 {
     type Error = PipelineError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
+
+    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, msg: DhtInboundMessage) -> Self::Future {
-        let future = Self::handle_message(
+        Self::handle_message(
             self.inner.clone(),
             Arc::clone(&self.node_identity),
             self.connectivity.clone(),
             self.config.ban_duration,
             msg,
-        );
-
-        Box::pin(future)
+        )
     }
 }
 

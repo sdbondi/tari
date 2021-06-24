@@ -23,7 +23,7 @@
 use crate::connectivity::MetricsCollectorHandle;
 use futures::{task::Context, Future};
 use log::*;
-use std::{pin::Pin, task::Poll};
+use std::task::Poll;
 use tari_comms::{message::InboundMessage, pipeline::PipelineError};
 use tower::{layer::Layer, Service, ServiceExt};
 
@@ -48,8 +48,9 @@ impl<S> Service<InboundMessage> for Metrics<S>
 where S: Service<InboundMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
+
+    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -64,7 +65,7 @@ where S: Service<InboundMessage, Response = (), Error = PipelineError> + Clone +
             debug!(target: LOG_TARGET, "Unable to write metric");
         }
 
-        Box::pin(next_service.oneshot(message))
+        next_service.oneshot(message)
     }
 }
 

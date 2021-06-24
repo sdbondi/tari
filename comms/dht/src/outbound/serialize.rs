@@ -27,7 +27,7 @@ use crate::{
 };
 use futures::{task::Context, Future};
 use log::*;
-use std::{pin::Pin, task::Poll};
+use std::task::Poll;
 use tari_comms::{
     message::{MessageExt, OutboundMessage},
     pipeline::PipelineError,
@@ -53,8 +53,9 @@ impl<S> Service<DhtOutboundMessage> for SerializeMiddleware<S>
 where S: Service<OutboundMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
+
+    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -62,7 +63,7 @@ where S: Service<OutboundMessage, Response = (), Error = PipelineError> + Clone 
 
     fn call(&mut self, message: DhtOutboundMessage) -> Self::Future {
         let next_service = self.inner.clone();
-        let future = async move {
+        async move {
             let DhtOutboundMessage {
                 tag,
                 destination_node_id,
@@ -113,9 +114,7 @@ where S: Service<OutboundMessage, Response = (), Error = PipelineError> + Clone 
                     body,
                 })
                 .await
-        };
-
-        Box::pin(future)
+        }
     }
 }
 

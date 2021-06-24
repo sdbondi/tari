@@ -24,7 +24,7 @@ use crate::{actor::DhtRequester, inbound::DhtInboundMessage};
 use digest::Input;
 use futures::{task::Context, Future};
 use log::*;
-use std::{pin::Pin, task::Poll};
+use std::task::Poll;
 use tari_comms::{pipeline::PipelineError, types::Challenge};
 use tari_utilities::hex::Hex;
 use tower::{layer::Layer, Service, ServiceExt};
@@ -55,11 +55,12 @@ impl<S> DedupMiddleware<S> {
 }
 
 impl<S> Service<DhtInboundMessage> for DedupMiddleware<S>
-where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clone + 'static
+where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clone
 {
     type Error = PipelineError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
+
+    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -68,7 +69,7 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
     fn call(&mut self, message: DhtInboundMessage) -> Self::Future {
         let next_service = self.next_service.clone();
         let mut dht_requester = self.dht_requester.clone();
-        let future = async move {
+        async move {
             let hash = hash_inbound_message(&message);
             trace!(
                 target: LOG_TARGET,
@@ -95,9 +96,7 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
                 message.dht_header.message_tag
             );
             next_service.oneshot(message).await
-        };
-
-        Box::pin(future)
+        }
     }
 }
 
