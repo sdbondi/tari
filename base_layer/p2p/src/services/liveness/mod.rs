@@ -70,7 +70,7 @@ use crate::{
     },
     tari_message::TariMessageType,
 };
-use futures::{future, Future, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use log::*;
 use std::sync::Arc;
 use tari_comms::connectivity::ConnectivityRequester;
