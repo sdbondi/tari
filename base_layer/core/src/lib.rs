@@ -22,7 +22,6 @@
 
 // Needed to make futures::select! work
 #![recursion_limit = "512"]
-#![feature(min_type_alias_impl_trait)]
 #![feature(shrink_to)]
 // #![cfg_attr(not(debug_assertions), deny(unused_variables))]
 // #![cfg_attr(not(debug_assertions), deny(unused_imports))]
