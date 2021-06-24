@@ -44,7 +44,7 @@ use crate::{
 };
 use futures::{channel::mpsc, future, Future};
 use log::*;
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 use tari_comms::{
     connectivity::ConnectivityRequester,
     message::{InboundMessage, OutboundMessage},

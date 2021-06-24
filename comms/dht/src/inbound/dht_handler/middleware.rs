@@ -23,7 +23,7 @@
 use super::task::ProcessDhtMessage;
 use crate::{discovery::DhtDiscoveryRequester, inbound::DecryptedDhtMessage, outbound::OutboundMessageRequester};
 use futures::{task::Context, Future};
-use std::{sync::Arc, task::Poll};
+use std::{pin::Pin, sync::Arc, task::Poll};
 use tari_comms::{
     peer_manager::{NodeIdentity, PeerManager},
     pipeline::PipelineError,
@@ -60,19 +60,18 @@ impl<S> DhtHandlerMiddleware<S> {
 }
 
 impl<S> Service<DecryptedDhtMessage> for DhtHandlerMiddleware<S>
-where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Clone
+where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
-
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.next_service.poll_ready(cx)
     }
 
     fn call(&mut self, message: DecryptedDhtMessage) -> Self::Future {
-        ProcessDhtMessage::new(
+        let future = ProcessDhtMessage::new(
             self.next_service.clone(),
             Arc::clone(&self.peer_manager),
             self.outbound_service.clone(),
@@ -80,6 +79,8 @@ where S: Service<DecryptedDhtMessage, Response = (), Error = PipelineError> + Cl
             self.discovery_requester.clone(),
             message,
         )
-        .run()
+        .run();
+
+        Box::pin(future)
     }
 }

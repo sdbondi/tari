@@ -22,7 +22,7 @@
 
 use futures::{task::Context, Future, TryFutureExt};
 use log::*;
-use std::{borrow::Cow, fmt::Display, marker::PhantomData, task::Poll};
+use std::{borrow::Cow, fmt::Display, marker::PhantomData, pin::Pin, task::Poll};
 use tari_comms::pipeline::PipelineError;
 use tower::{layer::Layer, Service, ServiceExt};
 
@@ -73,14 +73,13 @@ impl<'a, S> MessageLoggingService<'a, S> {
 
 impl<S, R> Service<R> for MessageLoggingService<'_, S>
 where
-    S: Service<R> + Clone,
+    S: Service<R> + Clone + 'static,
     S::Error: Into<PipelineError> + Send + Sync + 'static,
-    R: Display,
+    R: Display + 'static,
 {
     type Error = PipelineError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = S::Response;
-
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -89,6 +88,8 @@ where
     fn call(&mut self, msg: R) -> Self::Future {
         trace!(target: LOG_TARGET, "{}{}", self.prefix_msg, msg);
         let mut inner = self.inner.clone();
-        async move { inner.ready_and().and_then(|s| s.call(msg)).await.map_err(Into::into) }
+        let future = async move { inner.ready_and().and_then(|s| s.call(msg)).await.map_err(Into::into) };
+
+        Box::pin(future)
     }
 }

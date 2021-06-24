@@ -23,7 +23,7 @@
 use crate::{inbound::DhtInboundMessage, proto::envelope::Network};
 use futures::{task::Context, Future};
 use log::*;
-use std::task::Poll;
+use std::{pin::Pin, task::Poll};
 use tari_comms::pipeline::PipelineError;
 use tower::{layer::Layer, Service, ServiceExt};
 
@@ -52,9 +52,8 @@ impl<S> Service<DhtInboundMessage> for ValidateMiddleware<S>
 where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
-
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -63,7 +62,7 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
     fn call(&mut self, message: DhtInboundMessage) -> Self::Future {
         let next_service = self.next_service.clone();
         let target_network = self.target_network;
-        async move {
+        let future = async move {
             if message.dht_header.network == target_network && message.dht_header.is_valid() {
                 trace!(
                     target: LOG_TARGET,
@@ -84,7 +83,9 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
             }
 
             Ok(())
-        }
+        };
+
+        Box::pin(future)
     }
 }
 

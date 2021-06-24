@@ -24,7 +24,7 @@ use crate::{inbound::DhtInboundMessage, proto::envelope::DhtEnvelope};
 use futures::{task::Context, Future};
 use log::*;
 use prost::Message;
-use std::{convert::TryInto, sync::Arc, task::Poll};
+use std::{convert::TryInto, pin::Pin, sync::Arc, task::Poll};
 use tari_comms::{message::InboundMessage, pipeline::PipelineError, PeerManager};
 use tower::{layer::Layer, Service, ServiceExt};
 
@@ -54,9 +54,8 @@ impl<S> Service<InboundMessage> for DhtDeserializeMiddleware<S>
 where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clone + 'static
 {
     type Error = PipelineError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
     type Response = ();
-
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -65,7 +64,7 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
     fn call(&mut self, message: InboundMessage) -> Self::Future {
         let next_service = self.next_service.clone();
         let peer_manager = self.peer_manager.clone();
-        async move {
+        let future = async move {
             trace!(target: LOG_TARGET, "Deserializing InboundMessage {}", message.tag);
 
             let InboundMessage {
@@ -99,7 +98,9 @@ where S: Service<DhtInboundMessage, Response = (), Error = PipelineError> + Clon
                     Err(err.into())
                 },
             }
-        }
+        };
+
+        Box::pin(future)
     }
 }
 
