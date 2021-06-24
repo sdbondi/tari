@@ -23,6 +23,7 @@
 use crate::bootstrap::BaseNodeBootstrapper;
 use log::*;
 use std::sync::Arc;
+use tari_app_utilities::app_updater::SoftwareUpdaterHandle;
 use tari_common::{DatabaseType, GlobalConfig};
 use tari_comms::{peer_manager::NodeIdentity, protocol::rpc::RpcServerHandle, CommsNode};
 use tari_comms_dht::Dht;
@@ -110,6 +111,11 @@ impl BaseNodeContext {
     /// Returns the base node DHT
     pub fn base_node_dht(&self) -> &Dht {
         &self.base_node_dht
+    }
+
+    /// Returns a software update handle
+    pub fn software_updater(&self) -> SoftwareUpdaterHandle {
+        self.base_node_handles.expect_handle()
     }
 
     /// Returns a handle to the comms RPC server

@@ -32,7 +32,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tari_app_utilities::consts;
+use tari_app_utilities::{app_updater::SoftwareUpdaterHandle, consts};
 use tari_common::GlobalConfig;
 use tari_comms::{
     connectivity::ConnectivityRequester,
@@ -72,6 +72,7 @@ pub struct CommandHandler {
     node_service: LocalNodeCommsInterface,
     mempool_service: LocalMempoolService,
     state_machine_info: watch::Receiver<StatusInfo>,
+    software_updater: SoftwareUpdaterHandle,
 }
 
 impl CommandHandler {
@@ -89,6 +90,7 @@ impl CommandHandler {
             node_service: ctx.local_node(),
             mempool_service: ctx.local_mempool(),
             state_machine_info: ctx.get_state_machine_info_channel(),
+            software_updater: ctx.software_updater(),
         }
     }
 
@@ -189,10 +191,21 @@ impl CommandHandler {
         });
     }
 
+    /// Check for updates
+    pub fn check_for_updates(&self) {
+        let mut updater = self.software_updater.clone();
+        println!("Checking for updates (current version: {})...", consts::APP_VERSION);
+        updater.trigger_check_for_updates();
+    }
+
     /// Function process the version command
     pub fn print_version(&self) {
         println!("Version: {}", consts::APP_VERSION);
         println!("Author: {}", consts::APP_AUTHOR);
+
+        if let Some(ref update) = *self.software_updater.notifier().borrow() {
+            println!("New version available: {}", update);
+        }
     }
 
     pub fn get_chain_meta(&self) {
@@ -1015,6 +1028,10 @@ impl CommandHandler {
     /// Function to process the whoami command
     pub fn whoami(&self) {
         println!("{}", self.base_node_identity);
+    }
+
+    pub(crate) fn get_software_updater(&self) -> SoftwareUpdaterHandle {
+        self.software_updater.clone()
     }
 }
 

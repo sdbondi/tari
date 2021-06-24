@@ -226,6 +226,7 @@ async fn run_node(node_config: Arc<GlobalConfig>, bootstrap: ConfigBootstrap) ->
             node_config.network.into(),
             ctx.state_machine(),
             ctx.base_node_comms().peer_manager(),
+            ctx.software_updater(),
         );
 
         task::spawn(run_grpc(grpc, node_config.grpc_base_node_address, shutdown.to_signal()));
@@ -326,6 +327,7 @@ async fn cli_loop(parser: Parser, mut shutdown: Shutdown) {
 
     let mut shutdown_signal = shutdown.to_signal();
     let start_time = Instant::now();
+    let mut software_update_notif = command_handler.get_software_updater().notifier().clone();
     loop {
         let delay_time = if start_time.elapsed() < Duration::from_secs(120) {
             Duration::from_secs(2)
@@ -352,6 +354,17 @@ async fn cli_loop(parser: Parser, mut shutdown: Shutdown) {
                     }
                 }
             },
+            resp = software_update_notif.recv().fuse() => {
+                if let Some(Some(update)) = resp {
+                    println!(
+                        "Version {} of the {} is available: {} (sha: {})",
+                        update.version(),
+                        update.app(),
+                        update.download_url(),
+                        update.to_hash_hex()
+                    );
+                }
+            }
             _ = interval => {
                command_handler.status();
             },
