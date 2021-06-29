@@ -126,6 +126,7 @@ pub struct LMDBDatabase {
     orphan_header_accumulated_data_db: DatabaseRef,
     orphan_chain_tips_db: DatabaseRef,
     orphan_parent_map_index: DatabaseRef,
+    total_deleted_bitmap_bytes: std::sync::atomic::AtomicUsize,
     _file_lock: Arc<File>,
 }
 
@@ -155,6 +156,7 @@ impl LMDBDatabase {
             env,
             env_config: store.env_config(),
             _file_lock: Arc::new(file_lock),
+            total_deleted_bitmap_bytes: 0.into(),
         };
 
         Ok(res)
@@ -917,8 +919,27 @@ impl LMDBDatabase {
             .unwrap_or_else(BlockAccumulatedData::default);
 
         let mut deleted = deleted;
+        let diff_sz = bincode::serialized_size(&DeletedBitmap {
+            deleted: deleted.clone(),
+        })
+        .unwrap() as usize;
+        let card_diff = deleted.cardinality();
         deleted.or_inplace(&prev_block_accum_data.deleted.deleted);
         block_accum_data.deleted = DeletedBitmap { deleted };
+        let sz = bincode::serialized_size(&block_accum_data.deleted).unwrap() as usize;
+        let total = self
+            .total_deleted_bitmap_bytes
+            .fetch_add(diff_sz, std::sync::atomic::Ordering::Relaxed) +
+            diff_sz;
+        error!(
+            target: LOG_TARGET,
+            "DELETED cardinality: {}, bitmap_sz: {} , total_diff_sz: {}, diff_sz = {}, card_diff = {}",
+            block_accum_data.deleted.deleted.cardinality(),
+            sz,
+            total,
+            diff_sz,
+            card_diff
+        );
         lmdb_replace(&write_txn, &self.block_accumulated_data_db, &height, &block_accum_data)?;
         Ok(())
     }

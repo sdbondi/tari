@@ -331,6 +331,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
 
         let mut output_mmr = MerkleMountainRange::<HashDigest, _>::new(output_pruned_set);
         let mut proof_mmr = MerkleMountainRange::<HashDigest, _>::new(rp_pruned_set);
+        let mut diff_total_size = 0;
 
         while let Some(response) = output_stream.next().await {
             let res: SyncUtxosResponse = response?;
@@ -397,13 +398,16 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                         )));
                     }
 
+                    diff_total_size += diff_bitmap.len();
                     debug!(
                         target: LOG_TARGET,
-                        "UTXO: {} (Header #{}), added {} utxos, added {} txos",
+                        "UTXO: {} (Header #{}), added {} utxos, added {} txos, deleted bitmap: {} bytes, {} total",
                         mmr_position,
                         current_header.height(),
                         height_utxo_counter,
-                        height_txo_counter
+                        height_txo_counter,
+                        diff_bitmap.len(),
+                        diff_total_size
                     );
 
                     height_txo_counter = 0;
@@ -420,6 +424,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
 
                     // Add in the changes
                     let bitmap = Bitmap::deserialize(&diff_bitmap);
+                    let deleted_diff_map = bitmap.clone();
                     deleted.or_inplace(&bitmap);
                     deleted.run_optimize();
 
@@ -458,7 +463,7 @@ impl<'a, B: BlockchainBackend + 'static> HorizonStateSynchronization<'a, B> {
                         current_header.hash().clone(),
                         proof_mmr.get_pruned_hash_set()?,
                     );
-                    txn.update_deleted_with_diff(current_header.hash().clone(), output_mmr.deleted().clone());
+                    txn.update_deleted_with_diff(current_header.hash().clone(), deleted_diff_map);
 
                     txn.commit().await?;
 
