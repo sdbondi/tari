@@ -423,6 +423,8 @@ impl TransactionInput {
 
     /// This will check if the input and the output is the same commitment by looking at the commitment and features.
     /// This will ignore the output rangeproof
+    // TODO: This should compare all features that are the same for an input and output, this needs the script details
+    // as well
     pub fn is_equal_to(&self, output: &TransactionOutput) -> bool {
         self.commitment == output.commitment && self.features == output.features
     }
