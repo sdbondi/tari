@@ -47,6 +47,7 @@ use tari_core::transactions::{
     transaction::Transaction,
     transaction_protocol::{recipient::RecipientState, sender::TransactionSenderMessage},
 };
+use tari_crypto::tari_utilities::Hashable;
 use tokio::time::delay_for;
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::receive_protocol";
@@ -395,7 +396,7 @@ where TBackend: TransactionBackend + 'static
 
             let finalized_outputs = finalized_transaction.body.outputs();
 
-            if !finalized_outputs.iter().any(|o| o == &rtp_output) {
+            if !finalized_outputs.iter().any(|o| o.hash() == rtp_output.hash()) {
                 warn!(
                     target: LOG_TARGET,
                     "Finalized Transaction does not contain the Receiver's output"
@@ -417,11 +418,25 @@ where TBackend: TransactionBackend + 'static
                 None,
             );
 
+            finalized_transaction
+                .validate_internal_consistency(&Default::default(), None)
+                .map_err(|e| TransactionServiceProtocolError::new(self.id, TransactionServiceError::from(e)))?;
             self.resources
                 .db
                 .complete_inbound_transaction(self.id, completed_transaction.clone())
                 .await
                 .map_err(|e| TransactionServiceProtocolError::new(self.id, TransactionServiceError::from(e)))?;
+
+            // Update output metadata signature if not valid
+            for output in finalized_transaction.body.outputs() {
+                if output.verify_metadata_signature().is_err() {
+                    self.resources
+                        .output_manager_service
+                        .update_output_metadata_signature(output.clone())
+                        .await
+                        .map_err(|e| TransactionServiceProtocolError::new(self.id, TransactionServiceError::from(e)))?;
+                }
+            }
 
             info!(
                 target: LOG_TARGET,
