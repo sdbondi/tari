@@ -309,7 +309,7 @@ impl PeerConnectionActor {
 
     pub async fn run(mut self) {
         loop {
-            futures::select! {
+            tokio::select! {
                 request = self.request_rx.select_next_some() => self.handle_request(request).await,
 
                 maybe_substream = self.incoming_substreams.next() => {

@@ -157,7 +157,7 @@ impl ConnectivityManagerActor {
             .take()
             .expect("ConnectivityManager initialized without a shutdown_signal");
 
-        let mut connection_manager_events = self.connection_manager.get_event_subscription().fuse();
+        let mut connection_manager_events = self.connection_manager.get_event_subscription();
 
         let interval = self.config.connection_pool_refresh_interval;
         let mut ticker = time::interval_at(
@@ -166,18 +166,17 @@ impl ConnectivityManagerActor {
                 .expect("connection_pool_refresh_interval cause overflow")
                 .into(),
             interval,
-        )
-        .fuse();
+        );
 
         self.publish_event(ConnectivityEvent::ConnectivityStateInitialized);
 
         loop {
-            futures::select! {
+            tokio::select! {
                 req = self.request_rx.select_next_some() => {
                     self.handle_request(req).await;
                 },
 
-                event = connection_manager_events.select_next_some() => {
+                event = connection_manager_events.recv() => {
                     if let Ok(event) = event {
                         if let Err(err) = self.handle_connection_manager_event(&event).await {
                             error!(target:LOG_TARGET, "Error handling connection manager event: {:?}", err);
@@ -185,13 +184,13 @@ impl ConnectivityManagerActor {
                     }
                 },
 
-                _ = ticker.next() => {
+                _ = ticker.tick() => {
                     if let Err(err) = self.refresh_connection_pool().await {
                         error!(target: LOG_TARGET, "Error when refreshing connection pools: {:?}", err);
                     }
                 },
 
-                _ = shutdown_signal => {
+                _ = &mut shutdown_signal => {
                     info!(target: LOG_TARGET, "ConnectivityManager is shutting down because it received the shutdown signal");
                     self.disconnect_all().await;
                     break;
@@ -841,7 +840,7 @@ impl ConnectivityManagerActor {
 
 fn delayed_close(conn: PeerConnection, delay: Duration) {
     task::spawn(async move {
-        time::delay_for(delay).await;
+        time::sleep(delay).await;
         debug!(
             target: LOG_TARGET,
             "Closing connection from peer `{}` after delay",

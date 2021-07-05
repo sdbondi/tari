@@ -26,6 +26,7 @@
 
 //! Noise Socket
 
+use crate::types::CommsPublicKey;
 use futures::ready;
 use log::*;
 use snow::{error::StateProblem, HandshakeState, TransportState};
@@ -35,9 +36,8 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-// use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use crate::types::CommsPublicKey;
-use futures::{io::Error, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+// use futures::{io::Error, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tari_crypto::tari_utilities::ByteArray;
 
 const LOG_TARGET: &str = "comms::noise::socket";
@@ -351,7 +351,7 @@ where TSocket: AsyncRead + Unpin
 impl<TSocket> AsyncRead for NoiseSocket<TSocket>
 where TSocket: AsyncRead + Unpin
 {
-    fn poll_read(self: Pin<&mut Self>, context: &mut Context, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    fn poll_read(self: Pin<&mut Self>, context: &mut Context, buf: &mut ReadBuf) -> Poll<io::Result<usize>> {
         self.get_mut().poll_read(context, buf)
     }
 }
@@ -501,8 +501,8 @@ where TSocket: AsyncWrite + Unpin
         self.get_mut().poll_flush(cx)
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        Pin::new(&mut self.socket).poll_close(cx)
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.socket).poll_shutdown(cx)
     }
 }
 
@@ -531,7 +531,7 @@ where TSocket: AsyncRead + AsyncWrite + Unpin
                     target: LOG_TARGET,
                     "Noise handshake failed because '{:?}'. Closing socket.", err
                 );
-                self.socket.close().await?;
+                self.socket.shutdown().await?;
                 Err(err)
             },
         }

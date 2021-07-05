@@ -283,7 +283,7 @@ impl<T: WalletBackend + 'static> BaseNodeMonitor<T> {
     }
 
     async fn sleep_or_shutdown(&self) -> Result<(), BaseNodeMonitorError> {
-        let delay = time::delay_for(self.interval);
+        let delay = time::sleep(self.interval);
         let mut shutdown_signal = self.shutdown_signal.clone();
         if let Either::Right(_) = future::select(delay, &mut shutdown_signal).await {
             return Err(BaseNodeMonitorError::NodeShuttingDown);

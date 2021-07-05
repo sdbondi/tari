@@ -87,7 +87,7 @@ use tari_wallet::{
 use tokio::{
     runtime::Runtime,
     sync::{broadcast, broadcast::channel},
-    time::delay_for,
+    time::sleep,
 };
 
 #[allow(clippy::type_complexity)]
@@ -1318,7 +1318,7 @@ fn test_utxo_stxo_invalid_txo_validation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut success = false;
         loop {
             futures::select! {
@@ -1358,7 +1358,7 @@ fn test_utxo_stxo_invalid_txo_validation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut success = false;
         loop {
             futures::select! {
@@ -1397,7 +1397,7 @@ fn test_utxo_stxo_invalid_txo_validation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut success = false;
         loop {
             futures::select! {
@@ -1498,7 +1498,7 @@ fn test_base_node_switch_during_validation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut abort = false;
         loop {
             futures::select! {
@@ -1558,7 +1558,7 @@ fn test_txo_validation_connection_timeout_retries() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut timeout = 0;
         let mut failed = 0;
         loop {
@@ -1629,7 +1629,7 @@ fn test_txo_validation_rpc_error_retries() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut failed = 0;
         loop {
             futures::select! {
@@ -1700,7 +1700,7 @@ fn test_txo_validation_rpc_timeout() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut failed = 0;
         loop {
             futures::select! {
@@ -1767,7 +1767,7 @@ fn test_txo_validation_base_node_not_synced() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut delayed = 0;
         loop {
             futures::select! {
@@ -1793,7 +1793,7 @@ fn test_txo_validation_base_node_not_synced() {
     rpc_service_state.set_utxos(vec![unspent_tx_output1]);
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut success = false;
         loop {
             futures::select! {

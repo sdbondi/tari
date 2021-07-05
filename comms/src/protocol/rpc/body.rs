@@ -205,8 +205,8 @@ impl Buf for BodyBytes {
         self.0.as_ref().map(Buf::remaining).unwrap_or(0)
     }
 
-    fn bytes(&self) -> &[u8] {
-        self.0.as_ref().map(Buf::bytes).unwrap_or(&[])
+    fn chunk(&self) -> &[u8] {
+        self.0.as_ref().map(Buf::chunk).unwrap_or(&[])
     }
 
     fn advance(&mut self, cnt: usize) {

@@ -54,7 +54,7 @@ use tari_core::transactions::{
     SenderTransactionProtocol,
 };
 use tari_p2p::tari_message::TariMessageType;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::send_protocol";
 const LOG_TARGET_STRESS: &str = "stress_test::send_protocol";
@@ -283,7 +283,7 @@ where TBackend: TransactionBackend + 'static
             },
             Some(t) => t,
         };
-        let mut timeout_delay = delay_for(timeout_duration).fuse();
+        let mut timeout_delay = sleep(timeout_duration).fuse();
 
         // check to see if a resend is due
         let resend = match outbound_tx.last_send_timestamp {
@@ -329,7 +329,7 @@ where TBackend: TransactionBackend + 'static
         #[allow(unused_assignments)]
         let mut reply = None;
         loop {
-            let mut resend_timeout = delay_for(self.resources.config.transaction_resend_period).fuse();
+            let mut resend_timeout = sleep(self.resources.config.transaction_resend_period).fuse();
             futures::select! {
                 (spk, rr) = receiver.select_next_some() => {
                     let rr_tx_id = rr.tx_id;

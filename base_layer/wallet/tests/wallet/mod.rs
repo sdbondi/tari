@@ -73,7 +73,7 @@ use tari_wallet::{
     WalletSqlite,
 };
 use tempfile::tempdir;
-use tokio::{runtime::Runtime, time::delay_for};
+use tokio::{runtime::Runtime, time::sleep};
 
 fn create_peer(public_key: CommsPublicKey, net_address: Multiaddr) -> Peer {
     Peer::new(
@@ -247,7 +247,7 @@ async fn test_wallet() {
         .await
         .unwrap();
 
-    let mut delay = delay_for(Duration::from_secs(60)).fuse();
+    let mut delay = sleep(Duration::from_secs(60)).fuse();
     let mut reply_count = false;
     loop {
         futures::select! {
@@ -593,13 +593,13 @@ fn test_store_and_forward_send_tx() {
         .unwrap();
 
     // Waiting here for a while to make sure the discovery retry is over
-    alice_runtime.block_on(async { delay_for(Duration::from_secs(60)).await });
+    alice_runtime.block_on(async { sleep(Duration::from_secs(60)).await });
 
     alice_runtime
         .block_on(alice_wallet.transaction_service.cancel_transaction(tx_id))
         .unwrap();
 
-    alice_runtime.block_on(async { delay_for(Duration::from_secs(60)).await });
+    alice_runtime.block_on(async { sleep(Duration::from_secs(60)).await });
 
     let carol_wallet = carol_runtime
         .block_on(create_wallet(
@@ -625,7 +625,7 @@ fn test_store_and_forward_send_tx() {
         .unwrap();
 
     carol_runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
 
         let mut tx_recv = false;
         let mut tx_cancelled = false;

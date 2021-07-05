@@ -43,9 +43,6 @@ use futures::{
     future::{BoxFuture, Either, FusedFuture},
     pin_mut,
     stream::{Fuse, FuturesUnordered},
-    AsyncRead,
-    AsyncWrite,
-    AsyncWriteExt,
     FutureExt,
     SinkExt,
     StreamExt,
@@ -53,7 +50,11 @@ use futures::{
 use log::*;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tari_shutdown::{Shutdown, ShutdownSignal};
-use tokio::time;
+use tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    time,
+};
+use tokio_util::compat::TokioAsyncReadCompatExt;
 
 const LOG_TARGET: &str = "comms::connection_manager::dialer";
 
@@ -133,15 +134,15 @@ where
             .expect("Establisher initialized without a shutdown");
         debug!(target: LOG_TARGET, "Connection dialer started");
         loop {
-            futures::select! {
-                request = self.request_rx.select_next_some() => self.handle_request(&mut pending_dials, request),
-                (dial_state, dial_result) = pending_dials.select_next_some() => {
-                    self.handle_dial_result(dial_state, dial_result).await;
-                }
-                _ = shutdown => {
+            tokio::select! {
+                _ = &mut shutdown => {
                     info!(target: LOG_TARGET, "Connection dialer shutting down because the shutdown signal was received");
                     self.cancel_all_dials();
                     break;
+                }
+                request = self.request_rx.select_next_some() => self.handle_request(&mut pending_dials, request),
+                (dial_state, dial_result) = pending_dials.select_next_some() => {
+                    self.handle_dial_result(dial_state, dial_result).await;
                 }
             }
         }
@@ -342,8 +343,7 @@ where
         cancel_signal: ShutdownSignal,
     ) -> Result<PeerConnection, ConnectionManagerError> {
         static CONNECTION_DIRECTION: ConnectionDirection = ConnectionDirection::Outbound;
-
-        let mut muxer = Yamux::upgrade_connection(socket, CONNECTION_DIRECTION)
+        let mut muxer = Yamux::upgrade_connection(socket.compat(), CONNECTION_DIRECTION)
             .await
             .map_err(|err| ConnectionManagerError::YamuxUpgradeFailure(err.to_string()))?;
 
@@ -437,9 +437,9 @@ where
                 current_state.peer.node_id.short_str(),
                 backoff_duration.as_secs()
             );
-            let mut delay = time::delay_for(backoff_duration).fuse();
-            let mut cancel_signal = current_state.get_cancel_signal();
-            futures::select! {
+            let delay = time::sleep(backoff_duration).fuse();
+            let cancel_signal = current_state.get_cancel_signal();
+            tokio::select! {
                 _ = delay => {
                     debug!(target: LOG_TARGET, "[Attempt {}] Connecting to peer '{}'", current_state.num_attempts(), current_state.peer.node_id.short_str());
                     match Self::dial_peer(current_state, &noise_config, &current_transport, config.network_info.network_byte).await {

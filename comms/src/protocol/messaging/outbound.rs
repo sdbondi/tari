@@ -35,7 +35,6 @@ use std::{
     io,
     time::{Duration, Instant},
 };
-use tokio::stream as tokio_stream;
 
 const LOG_TARGET: &str = "comms::protocol::messaging::outbound";
 /// The number of times to retry sending a failed message before publishing a SendMessageFailed event.

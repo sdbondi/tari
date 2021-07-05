@@ -79,7 +79,7 @@ use tari_wallet::{
     types::ValidationRetryStrategy,
 };
 use tempfile::{tempdir, TempDir};
-use tokio::{sync::broadcast, task, time::delay_for};
+use tokio::{sync::broadcast, task, time::sleep};
 
 // Just in case other options become apparent in later testing
 #[derive(PartialEq)]
@@ -391,7 +391,7 @@ async fn tx_broadcast_protocol_submit_success_i() {
     );
 
     // Check that the appropriate events were emitted
-    let mut delay = delay_for(Duration::from_secs(5)).fuse();
+    let mut delay = sleep(Duration::from_secs(5)).fuse();
     let mut broadcast = false;
     let mut unconfirmed = false;
     let mut confirmed = false;
@@ -477,7 +477,7 @@ async fn tx_broadcast_protocol_submit_rejection() {
     assert!(db_completed_tx.is_err());
 
     // Check that the appropriate events were emitted
-    let mut delay = delay_for(Duration::from_secs(1)).fuse();
+    let mut delay = sleep(Duration::from_secs(1)).fuse();
     let mut cancelled = false;
     loop {
         futures::select! {
@@ -665,7 +665,7 @@ async fn tx_broadcast_protocol_submit_success_followed_by_rejection() {
     assert!(db_completed_tx.is_err());
 
     // Check that the appropriate events were emitted
-    let mut delay = delay_for(Duration::from_secs(1)).fuse();
+    let mut delay = sleep(Duration::from_secs(1)).fuse();
     let mut cancelled = false;
     loop {
         futures::select! {
@@ -838,7 +838,7 @@ async fn tx_broadcast_protocol_connection_problem() {
     let join_handle = task::spawn(protocol.execute());
 
     // Check that the connection problem event was emitted at least twice
-    let mut delay = delay_for(Duration::from_secs(10)).fuse();
+    let mut delay = sleep(Duration::from_secs(10)).fuse();
     let mut connection_issues = 0;
     loop {
         futures::select! {
@@ -1397,7 +1397,7 @@ async fn tx_validation_protocol_tx_ends_on_base_node_end() {
     let result = join_handle.await.unwrap();
     assert!(result.is_ok());
 
-    let mut delay = delay_for(Duration::from_secs(1)).fuse();
+    let mut delay = sleep(Duration::from_secs(1)).fuse();
     let mut aborted = false;
     loop {
         futures::select! {
@@ -1609,7 +1609,7 @@ async fn tx_validation_protocol_rpc_client_broken_finite_retries() {
     assert!(result.is_err());
 
     // Check that the connection problem event was emitted at least twice
-    let mut delay = delay_for(Duration::from_secs(10)).fuse();
+    let mut delay = sleep(Duration::from_secs(10)).fuse();
     let mut timeouts = 0i32;
     let mut failures = 0i32;
     loop {
@@ -1710,7 +1710,7 @@ async fn tx_validation_protocol_base_node_not_synced() {
     let result = join_handle.await.unwrap();
     assert!(result.is_err());
 
-    let mut delay = delay_for(Duration::from_secs(10)).fuse();
+    let mut delay = sleep(Duration::from_secs(10)).fuse();
     let mut delayed = 0i32;
     let mut failures = 0i32;
     loop {

@@ -23,9 +23,9 @@
 use super::{ProtocolError, ProtocolId};
 use bitflags::bitflags;
 use bytes::{Bytes, BytesMut};
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::*;
 use std::convert::TryInto;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const LOG_TARGET: &str = "comms::connection_manager::protocol";
 

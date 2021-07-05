@@ -244,7 +244,7 @@ where
                 .join(", ")
         );
         loop {
-            futures::select! {
+            tokio::select! {
                 event = self.internal_event_rx.select_next_some() => {
                     self.handle_event(event).await;
                 },
@@ -253,7 +253,7 @@ where
                     self.handle_request(request).await;
                 },
 
-                _ = shutdown => {
+                _ = &mut shutdown => {
                     info!(target: LOG_TARGET, "ConnectionManager is shutting down because it received the shutdown signal");
                     break;
                 }

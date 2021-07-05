@@ -31,7 +31,7 @@ use tari_service_framework::{
     ServiceInitializerContext,
 };
 use tari_shutdown::ShutdownSignal;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tower::Service;
 
 pub struct ServiceB {
@@ -134,7 +134,7 @@ impl ServiceInitializer for ServiceBInitializer {
             println!("Service B has shutdown and initializer spawned task is now ending");
         });
 
-        delay_for(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(10)).await;
         Ok(())
     }
 }

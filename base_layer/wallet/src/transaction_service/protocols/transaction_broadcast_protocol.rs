@@ -44,7 +44,7 @@ use tari_core::{
     transactions::{transaction::Transaction, types::Signature},
 };
 use tari_crypto::tari_utilities::hex::Hex;
-use tokio::{sync::broadcast, time::delay_for};
+use tokio::{sync::broadcast, time::sleep};
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::broadcast_protocol";
 
@@ -109,7 +109,7 @@ where TBackend: TransactionBackend + 'static
                 .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
             let mut connection: Option<PeerConnection> = None;
 
-            let delay = delay_for(self.timeout);
+            let delay = sleep(self.timeout);
 
             debug!(
                 target: LOG_TARGET,
@@ -243,7 +243,7 @@ where TBackend: TransactionBackend + 'static
                 },
             };
 
-            let delay = delay_for(self.timeout);
+            let delay = sleep(self.timeout);
             loop {
                 futures::select! {
                     new_base_node = base_node_update_receiver.select_next_some() => {

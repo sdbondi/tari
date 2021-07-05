@@ -41,8 +41,6 @@ use futures::{
     channel::{mpsc, oneshot},
     future::Either,
     task::{Context, Poll},
-    AsyncRead,
-    AsyncWrite,
     FutureExt,
     SinkExt,
     StreamExt,
@@ -55,7 +53,10 @@ use std::{
     marker::PhantomData,
     time::{Duration, Instant},
 };
-use tokio::time;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    time,
+};
 use tower::{Service, ServiceExt};
 
 const LOG_TARGET: &str = "comms::rpc::client";

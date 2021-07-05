@@ -381,10 +381,10 @@ async fn inactivity_timeout() {
     let mut framed = MessagingProtocol::framed(socket_out);
     for _ in 0..5u8 {
         framed.send(Bytes::from_static(b"some message")).await.unwrap();
-        time::delay_for(Duration::from_millis(1)).await;
+        time::sleep(Duration::from_millis(1)).await;
     }
 
-    time::delay_for(Duration::from_millis(10)).await;
+    time::sleep(Duration::from_millis(10)).await;
 
     let err = framed.send(Bytes::from_static(b"another message")).await.unwrap_err();
     assert_eq!(err.kind(), io::ErrorKind::BrokenPipe);

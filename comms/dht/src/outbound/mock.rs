@@ -45,7 +45,7 @@ use tari_comms::{
     message::{MessageTag, MessagingReplyTx},
     protocol::messaging::SendFailReason,
 };
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const LOG_TARGET: &str = "mock::outbound_requester";
 
@@ -192,7 +192,7 @@ impl OutboundServiceMock {
                                 ResponseType::QueuedSuccessDelay(delay) => {
                                     let (response, mut inner_reply_tx) = self.add_call((*params).clone(), body);
                                     reply_tx.send(response).expect("Reply channel cancelled");
-                                    delay_for(delay).await;
+                                    sleep(delay).await;
                                     inner_reply_tx.reply_success();
                                 },
                                 resp => {

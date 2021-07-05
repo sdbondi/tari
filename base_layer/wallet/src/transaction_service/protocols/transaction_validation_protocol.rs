@@ -43,7 +43,7 @@ use tari_core::{
     },
     proto::{base_node::Signatures as SignaturesProto, types::Signature as SignatureProto},
 };
-use tokio::{sync::broadcast, time::delay_for};
+use tokio::{sync::broadcast, time::sleep};
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::validation_protocol";
 
@@ -159,7 +159,7 @@ where TBackend: TransactionBackend + 'static
                 .map_err(|e| TransactionServiceProtocolError::new(self.id, TransactionServiceError::from(e)))?;
             let mut connection: Option<PeerConnection> = None;
 
-            let delay = delay_for(self.timeout);
+            let delay = sleep(self.timeout);
 
             debug!(
                 target: LOG_TARGET,
@@ -279,7 +279,7 @@ where TBackend: TransactionBackend + 'static
                 } else {
                     break 'main;
                 };
-                let delay = delay_for(self.timeout);
+                let delay = sleep(self.timeout);
                 futures::select! {
                     new_base_node = base_node_update_receiver.select_next_some() => {
                         match new_base_node {

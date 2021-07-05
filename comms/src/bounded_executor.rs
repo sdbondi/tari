@@ -135,7 +135,9 @@ impl BoundedExecutor {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let permit = self.semaphore.clone().acquire_owned().await;
+        // SAFETY: acquire_owned only fails if the semaphore is closed (i.e self.semaphore.close() is called) - this
+        // never happens in this implementation
+        let permit = self.semaphore.clone().acquire_owned().await.expect("semaphore closed");
         self.do_spawn(permit, future)
     }
 
@@ -219,7 +221,7 @@ mod test {
         },
         time::Duration,
     };
-    use tokio::time::delay_for;
+    use tokio::time::sleep;
 
     #[runtime::test_basic]
     async fn spawn() {
@@ -230,7 +232,7 @@ mod test {
         // Spawn 1
         let task1_fut = executor
             .spawn(async move {
-                delay_for(Duration::from_millis(1)).await;
+                sleep(Duration::from_millis(1)).await;
                 flag_cloned.store(true, Ordering::SeqCst);
             })
             .await;

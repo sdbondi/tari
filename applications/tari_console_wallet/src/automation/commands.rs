@@ -59,7 +59,7 @@ use tari_wallet::{
 };
 use tokio::{
     runtime::Handle,
-    time::{delay_for, timeout},
+    time::{sleep, timeout},
 };
 
 pub const LOG_TARGET: &str = "wallet::automation::commands";
@@ -178,7 +178,7 @@ pub async fn coin_split(
 async fn wait_for_comms(connectivity_requester: &ConnectivityRequester) -> Result<bool, CommandError> {
     let mut connectivity = connectivity_requester.get_event_subscription().fuse();
     print!("Waiting for connectivity... ");
-    let mut timeout = delay_for(Duration::from_secs(30)).fuse();
+    let mut timeout = sleep(Duration::from_secs(30)).fuse();
     loop {
         futures::select! {
             result = connectivity.select_next_some() => {
@@ -305,7 +305,7 @@ pub async fn make_it_rain(
         target: LOG_TARGET,
         "make-it-rain delaying for {:?} ms - scheduled to start at {}", delay_ms, start_time
     );
-    delay_for(Duration::from_millis(delay_ms)).await;
+    sleep(Duration::from_millis(delay_ms)).await;
 
     let num_txs = (txps * duration as f64) as usize;
 
@@ -318,7 +318,7 @@ pub async fn make_it_rain(
         let target_ms = (i as f64 / (txps / 1000.0)) as i64;
         if target_ms - actual_ms > 0 {
             // Maximum delay between Txs set to 120 s
-            delay_for(Duration::from_millis((target_ms - actual_ms).min(120_000i64) as u64)).await;
+            sleep(Duration::from_millis((target_ms - actual_ms).min(120_000i64) as u64)).await;
         }
         // Send Tx
         let amount = start_amount + inc_amount * (i as u64);

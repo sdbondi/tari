@@ -69,7 +69,7 @@ use tari_core::{
 };
 use tari_service_framework::{reply_channel, reply_channel::SenderService};
 use tari_shutdown::ShutdownSignal;
-use tokio::{sync::broadcast, time::delay_for};
+use tokio::{sync::broadcast, time::sleep};
 
 pub const LOG_TARGET: &str = "wallet::utxo_scanning";
 
@@ -697,7 +697,7 @@ where TBackend: WalletBackend + 'static
         let mut shutdown = self.shutdown_signal.clone();
         let mut delay_time = Duration::from_secs(1);
         loop {
-            let mut work_interval = delay_for(delay_time).fuse();
+            let mut work_interval = sleep(delay_time).fuse();
 
             futures::select! {
             _ = work_interval => {

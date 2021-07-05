@@ -27,7 +27,7 @@ use tari_app_grpc::tari_rpc::{base_node_client::BaseNodeClient, wallet_client::W
 use tari_app_utilities::{initialization::init_configuration, utilities::ExitCodes};
 use tari_common::{configuration::bootstrap::ApplicationType, ConfigBootstrap, DefaultConfigLoader, GlobalConfig};
 use tari_core::blocks::BlockHeader;
-use tokio::{runtime::Runtime, time::delay_for};
+use tokio::{runtime::Runtime, time::sleep};
 use tonic::transport::Channel;
 use utils::{coinbase_request, extract_outputs_and_kernels};
 
@@ -75,7 +75,7 @@ async fn main_inner() -> Result<(), ExitCodes> {
                 error!("Connection error: {:?}", err);
                 loop {
                     debug!("Holding for {:?}", config.wait_timeout());
-                    delay_for(config.wait_timeout()).await;
+                    sleep(config.wait_timeout()).await;
                     match connect(&config, &global).await {
                         Ok((nc, wc)) => {
                             node_conn = nc;
@@ -99,7 +99,7 @@ async fn main_inner() -> Result<(), ExitCodes> {
             Err(err) => {
                 error!("Error: {:?}", err);
                 debug!("Holding for {:?}", config.wait_timeout());
-                delay_for(config.wait_timeout()).await;
+                sleep(config.wait_timeout()).await;
             },
             Ok(submitted) => {
                 if submitted {

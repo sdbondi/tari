@@ -40,7 +40,7 @@ use tari_core::{
     transactions::{transaction::TransactionOutput, types::Signature},
 };
 use tari_crypto::tari_utilities::{hash::Hashable, hex::Hex};
-use tokio::{sync::broadcast, time::delay_for};
+use tokio::{sync::broadcast, time::sleep};
 
 const LOG_TARGET: &str = "wallet::output_manager_service::utxo_validation_task";
 
@@ -181,7 +181,7 @@ where TBackend: OutputManagerBackend + 'static
                 .map_err(|e| OutputManagerProtocolError::new(self.id, OutputManagerError::from(e)))?;
             let mut connection: Option<PeerConnection> = None;
 
-            let delay = delay_for(self.resources.config.peer_dial_retry_timeout);
+            let delay = sleep(self.resources.config.peer_dial_retry_timeout);
 
             debug!(
                 target: LOG_TARGET,
@@ -293,7 +293,7 @@ where TBackend: OutputManagerBackend + 'static
                     batch_num,
                     batch_total
                 );
-                let delay = delay_for(self.retry_delay);
+                let delay = sleep(self.retry_delay);
                 futures::select! {
                     new_base_node = base_node_update_receiver.select_next_some() => {
                         match new_base_node {

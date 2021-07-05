@@ -21,7 +21,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use super::{event::TorControlEvent, parsers, response::ResponseLine, LOG_TARGET};
-use crate::{compat::IoCompat, runtime::task};
+use crate::runtime::task;
 use futures::{channel::mpsc, future, future::Either, AsyncRead, AsyncWrite, SinkExt, Stream, StreamExt};
 use log::*;
 use std::fmt;
@@ -39,7 +39,7 @@ where
     let (mut responses_tx, responses_rx) = mpsc::channel(100);
 
     task::spawn(async move {
-        let framed = Framed::new(IoCompat::new(socket), LinesCodec::new());
+        let framed = Framed::new(socket, LinesCodec::new());
         let (mut sink, mut stream) = framed.split();
         loop {
             let either = future::select(cmd_rx.next(), stream.next()).await;

@@ -150,7 +150,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static
                 target: LOG_TARGET,
                 "Mempool sync still on hold, waiting for bootstrap to finish",
             );
-            tokio::time::delay_for(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
         loop {
             futures::select! {

@@ -508,7 +508,7 @@ async fn handle_outbound_tx(
 
 fn spawn_request_timeout(mut timeout_sender: mpsc::Sender<RequestKey>, request_key: RequestKey, timeout: Duration) {
     task::spawn(async move {
-        tokio::time::delay_for(timeout).await;
+        tokio::time::sleep(timeout).await;
         let _ = timeout_sender.send(request_key).await;
     });
 }

@@ -25,9 +25,9 @@ use tokio::runtime;
 // Re-export
 pub use tokio::task;
 #[cfg(test)]
-pub use tokio_macros::test;
+pub use tokio::test as test_basic;
 #[cfg(test)]
-pub use tokio_macros::test_basic;
+pub use tokio::test;
 
 /// Return the current tokio executor. Panics if the tokio runtime is not started.
 #[inline]

@@ -13,8 +13,6 @@
 //! See [CommsBuilder] for more information on using this library.
 //!
 //! [CommsBuilder]: ./builder/index.html
-// Recursion limit for futures::select!
-#![recursion_limit = "512"]
 #![feature(min_type_alias_impl_trait)]
 // Required to use `Ip4Addr::is_global`. Stabilisation imminent https://github.com/rust-lang/rust/issues/27709
 #![feature(ip)]
@@ -50,7 +48,6 @@ mod runtime;
 
 pub mod backoff;
 pub mod bounded_executor;
-pub mod compat;
 pub mod memsocket;
 pub mod protocol;
 #[macro_use]

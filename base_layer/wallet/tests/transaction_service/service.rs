@@ -140,7 +140,7 @@ use tokio::{
     runtime,
     runtime::{Builder, Runtime},
     sync::{broadcast, broadcast::channel},
-    time::delay_for,
+    time::sleep,
 };
 
 fn create_runtime() -> Runtime {
@@ -495,7 +495,7 @@ fn manage_single_transaction() {
 
     let mut alice_event_stream = alice_ts.get_event_stream_fused();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(2)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(2)).await });
 
     let (mut bob_ts, mut bob_oms, bob_comms) = setup_transaction_service(
         &mut runtime,
@@ -545,7 +545,7 @@ fn manage_single_transaction() {
         .expect("Alice sending tx");
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(90)).fuse();
+        let mut delay = sleep(Duration::from_secs(90)).fuse();
         let mut count = 0;
         loop {
             futures::select! {
@@ -564,7 +564,7 @@ fn manage_single_transaction() {
 
     let mut tx_id = 0u64;
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(90)).fuse();
+        let mut delay = sleep(Duration::from_secs(90)).fuse();
         let mut finalized = 0;
         loop {
             futures::select! {
@@ -769,7 +769,7 @@ fn send_one_sided_transaction_to_other() {
     });
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut found = false;
         loop {
             futures::select! {
@@ -1027,7 +1027,7 @@ fn manage_multiple_transactions() {
     );
     let mut alice_event_stream = alice_ts.get_event_stream_fused();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
 
     // Spin up Bob and Carol
     let (mut bob_ts, mut bob_oms, bob_comms) = setup_transaction_service(
@@ -1043,7 +1043,7 @@ fn manage_multiple_transactions() {
         shutdown.to_signal(),
     );
     let mut bob_event_stream = bob_ts.get_event_stream_fused();
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
 
     let (mut carol_ts, mut carol_oms, carol_comms) = setup_transaction_service(
         &mut runtime,
@@ -1061,14 +1061,14 @@ fn manage_multiple_transactions() {
 
     // Establish some connections beforehand, to reduce the amount of work done concurrently in tests
     // Connect Bob and Alice
-    runtime.block_on(async { delay_for(Duration::from_secs(3)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(3)).await });
 
     let _ = runtime.block_on(
         bob_comms
             .connectivity()
             .dial_peer(alice_node_identity.node_id().clone()),
     );
-    runtime.block_on(async { delay_for(Duration::from_secs(3)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(3)).await });
 
     // Connect alice to carol
     let _ = runtime.block_on(
@@ -1136,7 +1136,7 @@ fn manage_multiple_transactions() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(90)).fuse();
+        let mut delay = sleep(Duration::from_secs(90)).fuse();
         let mut tx_reply = 0;
         let mut finalized = 0;
         loop {
@@ -1164,7 +1164,7 @@ fn manage_multiple_transactions() {
     log::trace!("Alice received all Tx messages");
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(90)).fuse();
+        let mut delay = sleep(Duration::from_secs(90)).fuse();
         let mut tx_reply = 0;
         let mut finalized = 0;
         loop {
@@ -1189,7 +1189,7 @@ fn manage_multiple_transactions() {
     });
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(90)).fuse();
+        let mut delay = sleep(Duration::from_secs(90)).fuse();
         let mut finalized = 0;
         loop {
             futures::select! {
@@ -1309,7 +1309,7 @@ fn test_accepting_unknown_tx_id_and_malformed_reply() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut errors = 0;
         loop {
             futures::select! {
@@ -1441,7 +1441,7 @@ fn finalize_tx_with_incorrect_pubkey() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(15)).fuse();
+        let mut delay = sleep(Duration::from_secs(15)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -1575,7 +1575,7 @@ fn finalize_tx_with_missing_output() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(15)).fuse();
+        let mut delay = sleep(Duration::from_secs(15)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -1687,7 +1687,7 @@ fn discovery_async_return_test() {
     let mut txid = 0;
     let mut is_success = true;
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -1718,7 +1718,7 @@ fn discovery_async_return_test() {
     let mut success_result = false;
     let mut success_tx_id = 0u64;
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
 
         loop {
             futures::select! {
@@ -1740,7 +1740,7 @@ fn discovery_async_return_test() {
     assert!(success_result);
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -1976,7 +1976,7 @@ fn test_transaction_cancellation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -2000,7 +2000,7 @@ fn test_transaction_cancellation() {
             None => (),
             Some(_) => break,
         }
-        runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+        runtime.block_on(async { sleep(Duration::from_secs(5)).await });
         if i >= 12 {
             panic!("Pending outbound transaction should have been added by now");
         }
@@ -2012,7 +2012,7 @@ fn test_transaction_cancellation() {
 
     // Wait for cancellation event, in an effort to nail down where the issue is for the flakey CI test
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut cancelled = false;
         loop {
             futures::select! {
@@ -2083,7 +2083,7 @@ fn test_transaction_cancellation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -2147,7 +2147,7 @@ fn test_transaction_cancellation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         loop {
             futures::select! {
                 event = alice_event_stream.select_next_some() => {
@@ -2177,7 +2177,7 @@ fn test_transaction_cancellation() {
         )))
         .unwrap();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
 
     runtime
         .block_on(alice_ts.get_pending_inbound_transactions())
@@ -2191,7 +2191,7 @@ fn test_transaction_cancellation() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut cancelled = false;
         loop {
             futures::select! {
@@ -2320,7 +2320,7 @@ fn test_direct_vs_saf_send_of_tx_reply_and_finalize() {
         .try_into()
         .unwrap();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
     assert_eq!(bob_outbound_service.call_count(), 0, "Should be no more calls");
     let (_wallet_backend, backend, oms_backend, _, _temp_dir) = make_wallet_databases(None);
 
@@ -2362,7 +2362,7 @@ fn test_direct_vs_saf_send_of_tx_reply_and_finalize() {
         .try_into()
         .unwrap();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
     assert_eq!(bob2_outbound_service.call_count(), 0, "Should be no more calls");
 
     // Test finalize is sent Direct Only.
@@ -2383,7 +2383,7 @@ fn test_direct_vs_saf_send_of_tx_reply_and_finalize() {
     let _ = alice_outbound_service.pop_call().unwrap();
     let _ = alice_outbound_service.pop_call().unwrap();
 
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
     assert_eq!(alice_outbound_service.call_count(), 0, "Should be no more calls");
 
     // Now to repeat sending so we can test the SAF send of the finalize message
@@ -2454,7 +2454,7 @@ fn test_direct_vs_saf_send_of_tx_reply_and_finalize() {
 
     assert_eq!(alice_outbound_service.call_count(), 1);
     let _ = alice_outbound_service.pop_call();
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
     assert_eq!(alice_outbound_service.call_count(), 0, "Should be no more calls2");
 }
 
@@ -2510,7 +2510,7 @@ fn test_tx_direct_send_behaviour() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut direct_count = 0;
         let mut saf_count = 0;
         loop {
@@ -2553,7 +2553,7 @@ fn test_tx_direct_send_behaviour() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut direct_count = 0;
         let mut saf_count = 0;
         loop {
@@ -2597,7 +2597,7 @@ fn test_tx_direct_send_behaviour() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut direct_count = 0;
         loop {
             futures::select! {
@@ -2639,7 +2639,7 @@ fn test_tx_direct_send_behaviour() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut saf_count = 0;
         loop {
             futures::select! {
@@ -2786,7 +2786,7 @@ fn test_restarting_transaction_protocols() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(15)).fuse();
+        let mut delay = sleep(Duration::from_secs(15)).fuse();
         let mut received_reply = false;
         loop {
             futures::select! {
@@ -2828,7 +2828,7 @@ fn test_restarting_transaction_protocols() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(15)).fuse();
+        let mut delay = sleep(Duration::from_secs(15)).fuse();
         let mut received_finalized = false;
         loop {
             futures::select! {
@@ -3053,7 +3053,7 @@ fn test_coinbase_monitoring_stuck_in_mempool() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3092,7 +3092,7 @@ fn test_coinbase_monitoring_stuck_in_mempool() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3223,7 +3223,7 @@ fn test_coinbase_monitoring_with_base_node_change_and_mined() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3290,7 +3290,7 @@ fn test_coinbase_monitoring_with_base_node_change_and_mined() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3421,7 +3421,7 @@ fn test_coinbase_monitoring_mined_not_synced() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3460,7 +3460,7 @@ fn test_coinbase_monitoring_mined_not_synced() {
         println!("  {}", e)
     }
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(30)).fuse();
+        let mut delay = sleep(Duration::from_secs(30)).fuse();
         let mut count = 0usize;
         loop {
             futures::select! {
@@ -3682,7 +3682,7 @@ fn test_transaction_resending() {
         assert_eq!(bob_reply_message.tx_id, tx_id);
     }
 
-    runtime.block_on(async { delay_for(Duration::from_secs(2)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(2)).await });
     // See if sending a second message too soon is ignored
     runtime
         .block_on(bob_tx_sender.send(create_dummy_message(
@@ -3694,7 +3694,7 @@ fn test_transaction_resending() {
     assert!(bob_outbound_service.wait_call_count(1, Duration::from_secs(2)).is_err());
 
     // Wait for the cooldown to expire but before the resend period has elapsed see if a repeat illicts a reponse.
-    runtime.block_on(async { delay_for(Duration::from_secs(2)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(2)).await });
     runtime
         .block_on(bob_tx_sender.send(create_dummy_message(
             alice_sender_message.into(),
@@ -3741,7 +3741,7 @@ fn test_transaction_resending() {
         .is_err());
 
     // Wait for the cooldown to expire but before the resend period has elapsed see if a repeat illicts a reponse.
-    runtime.block_on(async { delay_for(Duration::from_secs(2)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(2)).await });
 
     runtime
         .block_on(alice_tx_reply_sender.send(create_dummy_message(
@@ -4059,7 +4059,7 @@ fn test_replying_to_cancelled_tx() {
         assert_eq!(data.tx_id, tx_id);
     }
     // Need a moment for Alice's wallet to finish writing to its database before cancelling
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
 
     runtime.block_on(alice_ts.cancel_transaction(tx_id)).unwrap();
 
@@ -4109,7 +4109,7 @@ fn test_replying_to_cancelled_tx() {
     assert_eq!(bob_reply_message.tx_id, tx_id);
 
     // Wait for cooldown to expire
-    runtime.block_on(async { delay_for(Duration::from_secs(5)).await });
+    runtime.block_on(async { sleep(Duration::from_secs(5)).await });
 
     let _ = alice_outbound_service.take_calls();
 
@@ -4341,7 +4341,7 @@ fn test_transaction_timeout_cancellation() {
     assert_eq!(carol_reply_message.tx_id, tx_id);
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut transaction_cancelled = false;
         loop {
             futures::select! {
@@ -4519,7 +4519,7 @@ fn transaction_service_tx_broadcast() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx1_received = false;
         loop {
             futures::select! {
@@ -4565,7 +4565,7 @@ fn transaction_service_tx_broadcast() {
     });
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx1_mined = false;
         loop {
             futures::select! {
@@ -4593,7 +4593,7 @@ fn transaction_service_tx_broadcast() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx2_received = false;
         loop {
             futures::select! {
@@ -4643,7 +4643,7 @@ fn transaction_service_tx_broadcast() {
     });
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx2_cancelled = false;
         loop {
             futures::select! {
@@ -4763,7 +4763,7 @@ fn broadcast_all_completed_transactions_on_startup() {
 
     let mut event_stream = alice_ts.get_event_stream_fused();
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut found1 = false;
         let mut found2 = false;
         let mut found3 = false;
@@ -4905,7 +4905,7 @@ fn transaction_service_tx_broadcast_with_base_node_change() {
         .unwrap();
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx1_received = false;
         loop {
             futures::select! {
@@ -4985,7 +4985,7 @@ fn transaction_service_tx_broadcast_with_base_node_change() {
     });
 
     runtime.block_on(async {
-        let mut delay = delay_for(Duration::from_secs(60)).fuse();
+        let mut delay = sleep(Duration::from_secs(60)).fuse();
         let mut tx_mined = false;
         loop {
             futures::select! {

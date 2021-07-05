@@ -45,7 +45,7 @@ use crate::{
     CommsBuilder,
     Substream,
 };
-use futures::{channel::mpsc, AsyncRead, AsyncWrite, StreamExt};
+use futures::{channel::mpsc, AsyncRead, AsyncWrite};
 use log::*;
 use std::{iter, sync::Arc, time::Duration};
 use tari_shutdown::ShutdownSignal;
@@ -121,11 +121,10 @@ impl UnspawnedCommsNode {
         mut events: broadcast::Receiver<Arc<ConnectionManagerEvent>>,
     ) -> Result<Multiaddr, CommsBuilderError> {
         loop {
-            let event = time::timeout(Duration::from_secs(10), events.next())
+            let event = time::timeout(Duration::from_secs(10), events.recv())
                 .await
                 .map_err(|_| CommsBuilderError::ConnectionManagerEventStreamTimeout)?
-                .ok_or(CommsBuilderError::ConnectionManagerEventStreamClosed)?
-                .map_err(|_| CommsBuilderError::ConnectionManagerEventStreamLagged)?;
+                .map_err(|_| CommsBuilderError::ConnectionManagerEventStreamClosed)?;
 
             match &*event {
                 ConnectionManagerEvent::Listening(addr) => return Ok(addr.clone()),

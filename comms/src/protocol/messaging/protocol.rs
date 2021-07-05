@@ -22,7 +22,6 @@
 
 use super::error::MessagingProtocolError;
 use crate::{
-    compat::IoCompat,
     connectivity::{ConnectivityEvent, ConnectivityRequester},
     framing,
     message::{InboundMessage, MessageTag, OutboundMessage},
@@ -151,10 +150,10 @@ impl MessagingProtocol {
 
     pub async fn run(mut self) {
         let mut shutdown_signal = self.shutdown_signal.clone();
-        let mut connectivity_events = self.connectivity.get_event_subscription().fuse();
+        let mut connectivity_events = self.connectivity.get_event_subscription();
 
         loop {
-            futures::select! {
+            tokio::select! {
                 event = self.internal_messaging_event_rx.select_next_some() => {
                     self.handle_internal_messaging_event(event).await;
                 },
@@ -169,7 +168,7 @@ impl MessagingProtocol {
                     }
                 },
 
-                event = connectivity_events.select_next_some() => {
+                event = connectivity_events.recv() => {
                     if let Ok(event) = event {
                         self.handle_connectivity_event(&event);
                     }
@@ -188,7 +187,7 @@ impl MessagingProtocol {
     }
 
     #[inline]
-    pub fn framed<TSubstream>(socket: TSubstream) -> Framed<IoCompat<TSubstream>, LengthDelimitedCodec>
+    pub fn framed<TSubstream>(socket: TSubstream) -> Framed<TSubstream, LengthDelimitedCodec>
     where TSubstream: AsyncRead + AsyncWrite + Unpin {
         framing::canonical(socket, MAX_FRAME_LENGTH)
     }

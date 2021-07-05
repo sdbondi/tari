@@ -154,7 +154,7 @@ pub async fn discovery(wallets: &[TestNode], messaging_events_rx: &mut NodeEvent
                     start.elapsed()
                 );
 
-                time::delay_for(Duration::from_secs(5)).await;
+                time::sleep(Duration::from_secs(5)).await;
                 total_messages += drain_messaging_events(messaging_events_rx, false).await;
             },
             Err(err) => {
@@ -166,7 +166,7 @@ pub async fn discovery(wallets: &[TestNode], messaging_events_rx: &mut NodeEvent
                     err
                 );
 
-                time::delay_for(Duration::from_secs(5)).await;
+                time::sleep(Duration::from_secs(5)).await;
                 total_messages += drain_messaging_events(messaging_events_rx, false).await;
             },
         }
@@ -464,7 +464,7 @@ pub async fn do_store_and_forward_message_propagation(
     }
 
     banner!("⏰ Waiting a few seconds for messages to propagate around the network...");
-    time::delay_for(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(5)).await;
 
     let mut total_messages = drain_messaging_events(messaging_rx, false).await;
 
@@ -943,5 +943,5 @@ async fn setup_comms_dht(
 
 pub async fn take_a_break(num_nodes: usize) {
     banner!("Taking a break for a few seconds to let things settle...");
-    time::delay_for(Duration::from_millis(num_nodes as u64 * 100)).await;
+    time::sleep(Duration::from_millis(num_nodes as u64 * 100)).await;
 }

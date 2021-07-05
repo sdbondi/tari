@@ -26,7 +26,6 @@
 use bytes::{Buf, Bytes};
 use futures::{
     channel::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    io::{AsyncRead, AsyncWrite, Error, ErrorKind, Result},
     ready,
     stream::{FusedStream, Stream},
     task::{Context, Poll},
@@ -36,6 +35,10 @@ use std::{
     num::NonZeroU16,
     pin::Pin,
     sync::Mutex,
+};
+use tokio::{
+    io,
+    io::{AsyncRead, AsyncWrite, ErrorKind, ReadBuf},
 };
 
 lazy_static! {
@@ -170,7 +173,7 @@ impl MemoryListener {
     /// ```
     ///
     /// [`local_addr`]: #method.local_addr
-    pub fn bind(port: u16) -> Result<Self> {
+    pub fn bind(port: u16) -> io::Result<Self> {
         let mut switchboard = (&*SWITCHBOARD).lock().unwrap();
 
         // Get the port we should bind to.  If 0 was given, use a random port
@@ -262,11 +265,11 @@ impl MemoryListener {
         Incoming { inner: self }
     }
 
-    fn poll_accept(&mut self, context: &mut Context) -> Poll<Result<MemorySocket>> {
+    fn poll_accept(&mut self, context: &mut Context) -> Poll<io::Result<MemorySocket>> {
         match Pin::new(&mut self.incoming).poll_next(context) {
             Poll::Ready(Some(socket)) => Poll::Ready(Ok(socket)),
             Poll::Ready(None) => {
-                let err = Error::new(ErrorKind::Other, "MemoryListener unknown error");
+                let err = io::Error::new(ErrorKind::Other, "MemoryListener unknown error");
                 Poll::Ready(Err(err))
             },
             Poll::Pending => Poll::Pending,
@@ -283,7 +286,7 @@ pub struct Incoming<'a> {
 }
 
 impl<'a> Stream for Incoming<'a> {
-    type Item = Result<MemorySocket>;
+    type Item = io::Result<MemorySocket>;
 
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Option<Self::Item>> {
         let socket = ready!(self.inner.poll_accept(context)?);
@@ -371,7 +374,7 @@ impl MemorySocket {
     /// let socket = MemorySocket::connect(16)?;
     /// # Ok(())}
     /// ```
-    pub fn connect(port: u16) -> Result<MemorySocket> {
+    pub fn connect(port: u16) -> io::Result<MemorySocket> {
         let mut switchboard = (&*SWITCHBOARD).lock().unwrap();
 
         // Find port to connect to
@@ -399,7 +402,11 @@ impl MemorySocket {
 
 impl AsyncRead for MemorySocket {
     /// Attempt to read from the `AsyncRead` into `buf`.
-    fn poll_read(mut self: Pin<&mut Self>, mut context: &mut Context, buf: &mut [u8]) -> Poll<Result<usize>> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        mut context: &mut Context,
+        read_buf: &mut ReadBuf,
+    ) -> Poll<io::Result<usize>> {
         if self.incoming.is_terminated() {
             if self.seen_eof {
                 return Poll::Ready(Err(ErrorKind::UnexpectedEof.into()));
@@ -408,6 +415,8 @@ impl AsyncRead for MemorySocket {
                 return Poll::Ready(Ok(0));
             }
         }
+
+        let buf = read_buf.filled_mut();
 
         let mut bytes_read = 0;
 
@@ -455,14 +464,14 @@ impl AsyncRead for MemorySocket {
 
 impl AsyncWrite for MemorySocket {
     /// Attempt to write bytes from `buf` into the outgoing channel.
-    fn poll_write(mut self: Pin<&mut Self>, context: &mut Context, buf: &[u8]) -> Poll<Result<usize>> {
+    fn poll_write(mut self: Pin<&mut Self>, context: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
         let len = buf.len();
 
         match self.outgoing.poll_ready(context) {
             Poll::Ready(Ok(())) => {
                 if let Err(e) = self.outgoing.start_send(Bytes::copy_from_slice(buf)) {
                     if e.is_disconnected() {
-                        return Poll::Ready(Err(Error::new(ErrorKind::BrokenPipe, e)));
+                        return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, e)));
                     }
 
                     // Unbounded channels should only ever have "Disconnected" errors
@@ -471,7 +480,7 @@ impl AsyncWrite for MemorySocket {
             },
             Poll::Ready(Err(e)) => {
                 if e.is_disconnected() {
-                    return Poll::Ready(Err(Error::new(ErrorKind::BrokenPipe, e)));
+                    return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, e)));
                 }
 
                 // Unbounded channels should only ever have "Disconnected" errors
@@ -484,12 +493,12 @@ impl AsyncWrite for MemorySocket {
     }
 
     /// Attempt to flush the channel. Cannot Fail.
-    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context) -> Poll<Result<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 
     /// Attempt to close the channel. Cannot Fail.
-    fn poll_close(self: Pin<&mut Self>, _context: &mut Context) -> Poll<Result<()>> {
+    fn poll_shutdown(self: Pin<&mut Self>, _context: &mut Context) -> Poll<io::Result<()>> {
         self.outgoing.close_channel();
 
         Poll::Ready(Ok(()))
@@ -504,10 +513,9 @@ mod test {
         io::{AsyncReadExt, AsyncWriteExt},
         stream::StreamExt,
     };
-    use std::io::Result;
 
     #[test]
-    fn listener_bind() -> Result<()> {
+    fn listener_bind() -> io::Result<()> {
         let port = acquire_next_memsocket_port().into();
         let listener = MemoryListener::bind(port)?;
         assert_eq!(listener.local_addr(), port);
@@ -516,7 +524,7 @@ mod test {
     }
 
     #[test]
-    fn simple_connect() -> Result<()> {
+    fn simple_connect() -> io::Result<()> {
         let port = acquire_next_memsocket_port().into();
         let mut listener = MemoryListener::bind(port)?;
 
@@ -534,7 +542,7 @@ mod test {
     }
 
     #[test]
-    fn listen_on_port_zero() -> Result<()> {
+    fn listen_on_port_zero() -> io::Result<()> {
         let mut listener = MemoryListener::bind(0)?;
         let listener_addr = listener.local_addr();
 
@@ -559,8 +567,8 @@ mod test {
     }
 
     #[test]
-    fn listener_correctly_frees_port_on_drop() -> Result<()> {
-        fn connect_on_port(port: u16) -> Result<()> {
+    fn listener_correctly_frees_port_on_drop() -> io::Result<()> {
+        fn connect_on_port(port: u16) -> io::Result<()> {
             let mut listener = MemoryListener::bind(port)?;
             let mut dialer = MemorySocket::connect(port)?;
             let mut listener_socket = block_on(listener.incoming().next()).unwrap()?;
@@ -583,7 +591,7 @@ mod test {
     }
 
     #[test]
-    fn simple_write_read() -> Result<()> {
+    fn simple_write_read() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"hello world"))?;
@@ -598,7 +606,7 @@ mod test {
     }
 
     #[test]
-    fn partial_read() -> Result<()> {
+    fn partial_read() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"foobar"))?;
@@ -614,7 +622,7 @@ mod test {
     }
 
     #[test]
-    fn partial_read_write_both_sides() -> Result<()> {
+    fn partial_read_write_both_sides() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"foobar"))?;
@@ -638,7 +646,7 @@ mod test {
     }
 
     #[test]
-    fn many_small_writes() -> Result<()> {
+    fn many_small_writes() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"words"))?;
@@ -657,7 +665,7 @@ mod test {
     }
 
     #[test]
-    fn read_zero_bytes() -> Result<()> {
+    fn read_zero_bytes() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"way of kings"))?;
@@ -673,7 +681,7 @@ mod test {
     }
 
     #[test]
-    fn read_bytes_with_large_buffer() -> Result<()> {
+    fn read_bytes_with_large_buffer() -> io::Result<()> {
         let (mut a, mut b) = MemorySocket::new_pair();
 
         block_on(a.write_all(b"way of kings"))?;

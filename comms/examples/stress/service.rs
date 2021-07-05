@@ -452,7 +452,7 @@ async fn messaging_flood(
             .map(Ok),
         );
         outbound_tx.send_all(&mut iter).await?;
-        time::delay_for(Duration::from_secs(5)).await;
+        time::sleep(Duration::from_secs(5)).await;
         outbound_tx
             .send(OutboundMessage::new(peer.clone(), Bytes::from_static(&[0u8; 4])))
             .await?;

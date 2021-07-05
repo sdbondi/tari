@@ -38,6 +38,7 @@ use futures::{channel::mpsc, AsyncRead, AsyncWrite, SinkExt, StreamExt};
 use log::*;
 use std::{borrow::Cow, fmt, fmt::Display, num::NonZeroU16};
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 /// Client for the Tor control port.
 ///
@@ -80,8 +81,8 @@ impl TorControlPortClient {
         &self.event_tx
     }
 
-    pub fn get_event_stream(&self) -> broadcast::Receiver<TorControlEvent> {
-        self.event_tx.subscribe()
+    pub fn get_event_stream(&self) -> BroadcastStream<TorControlEvent> {
+        BroadcastStream::new(self.event_tx.subscribe())
     }
 
     /// Authenticate with the tor control port

@@ -333,8 +333,7 @@ async fn cli_loop(parser: Parser, mut shutdown: Shutdown) {
             Duration::from_secs(30)
         };
 
-        let mut interval = time::delay_for(delay_time).fuse();
-
+        let mut interval = time::sleep(delay_time).fuse();
         futures::select! {
             res = read_command_fut => {
                 match res {

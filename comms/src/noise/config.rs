@@ -31,11 +31,11 @@ use crate::{
     },
     peer_manager::NodeIdentity,
 };
-use futures::{AsyncRead, AsyncWrite};
 use log::*;
 use snow::{self, params::NoiseParams};
 use std::sync::Arc;
 use tari_crypto::tari_utilities::ByteArray;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 const LOG_TARGET: &str = "comms::noise";
 pub(super) const NOISE_IX_PARAMETER: &str = "Noise_IX_25519_ChaChaPoly_BLAKE2b";

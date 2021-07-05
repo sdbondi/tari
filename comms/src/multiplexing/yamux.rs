@@ -35,12 +35,14 @@ use futures::{
 use log::*;
 use std::{future::Future, io, pin::Pin, sync::Arc, task::Poll};
 use tari_shutdown::{Shutdown, ShutdownSignal};
+use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use yamux::Mode;
 
 type IncomingRx = mpsc::Receiver<yamux::Stream>;
 type IncomingTx = mpsc::Sender<yamux::Stream>;
 
 // Reexport
+use tokio::io::ReadBuf;
 pub use yamux::ConnectionError;
 
 const LOG_TARGET: &str = "comms::multiplexing::yamux";
@@ -151,7 +153,7 @@ impl Control {
     pub async fn open_stream(&mut self) -> Result<Substream, ConnectionError> {
         let stream = self.inner.open_stream().await?;
         Ok(Substream {
-            stream,
+            stream: stream.compat(),
             counter_guard: self.substream_counter.new_guard(),
         })
     }
@@ -218,27 +220,27 @@ impl Drop for IncomingSubstreams {
 
 #[derive(Debug)]
 pub struct Substream {
-    stream: yamux::Stream,
+    stream: Compat<yamux::Stream>,
     counter_guard: CounterGuard,
 }
 
-impl AsyncRead for Substream {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_read(cx, buf)
+impl tokio::io::AsyncRead for Substream {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf) -> Poll<io::Result<()>> {
+        self.stream.get_mut().poll_read(cx, buf)
     }
 }
 
-impl AsyncWrite for Substream {
+impl tokio::io::AsyncWrite for Substream {
     fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_write(cx, buf)
+        self.stream.get_mut().poll_write(cx, buf)
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_flush(cx)
+        self.stream.get_mut().poll_flush(cx)
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_close(cx)
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.stream.get_mut().poll_shutdown(cx)
     }
 }
 

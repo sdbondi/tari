@@ -76,7 +76,7 @@ use tari_crypto::{
 };
 use tari_p2p::{initialization::CommsConfig, transport::TransportType, Network};
 use tari_shutdown::{Shutdown, ShutdownSignal};
-use tokio::{runtime::Handle, time::delay_for};
+use tokio::{runtime::Handle, time::sleep};
 
 // Used to generate test wallet data
 
@@ -367,7 +367,7 @@ pub async fn generate_wallet_test_data<
     outbound_tx_ids.push(tx_id);
     message_index = (message_index + 1) % messages.len();
 
-    let mut delay = delay_for(Duration::from_secs(60)).fuse();
+    let mut delay = sleep(Duration::from_secs(60)).fuse();
     let mut count = 0;
     loop {
         futures::select! {
@@ -501,7 +501,7 @@ pub async fn generate_wallet_test_data<
         .await;
     message_index = (message_index + 1) % messages.len();
 
-    let mut delay = delay_for(Duration::from_secs(60)).fuse();
+    let mut delay = sleep(Duration::from_secs(60)).fuse();
     let mut count = 0;
     loop {
         futures::select! {
@@ -523,7 +523,7 @@ pub async fn generate_wallet_test_data<
         "Event waiting timed out before receiving expected events 2"
     );
 
-    let mut delay = delay_for(Duration::from_secs(60)).fuse();
+    let mut delay = sleep(Duration::from_secs(60)).fuse();
     let mut count = 0;
     loop {
         futures::select! {
@@ -604,7 +604,7 @@ pub async fn generate_wallet_test_data<
         )
         .await?;
 
-    let mut delay = delay_for(Duration::from_secs(60)).fuse();
+    let mut delay = sleep(Duration::from_secs(60)).fuse();
     let mut count = 0;
     loop {
         futures::select! {
@@ -719,7 +719,7 @@ pub async fn generate_wallet_test_data<
         .await
         .unwrap();
 
-    delay_for(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     shutdown_a.trigger().unwrap();
     shutdown_b.trigger().unwrap();

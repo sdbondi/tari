@@ -47,7 +47,7 @@ use tari_core::transactions::{
     transaction::Transaction,
     transaction_protocol::{recipient::RecipientState, sender::TransactionSenderMessage},
 };
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::receive_protocol";
 const LOG_TARGET_STRESS: &str = "stress_test::receive_protocol";
@@ -262,7 +262,7 @@ where TBackend: TransactionBackend + 'static
             },
             Some(t) => t,
         };
-        let mut timeout_delay = delay_for(timeout_duration).fuse();
+        let mut timeout_delay = sleep(timeout_duration).fuse();
 
         // check to see if a resend is due
         let resend = match inbound_tx.last_send_timestamp {
@@ -309,7 +309,7 @@ where TBackend: TransactionBackend + 'static
         let mut incoming_finalized_transaction = None;
         loop {
             loop {
-                let mut resend_timeout = delay_for(self.resources.config.transaction_resend_period).fuse();
+                let mut resend_timeout = sleep(self.resources.config.transaction_resend_period).fuse();
                 futures::select! {
                     (spk, tx_id, tx) = receiver.select_next_some() => {
                         incoming_finalized_transaction = Some(tx);

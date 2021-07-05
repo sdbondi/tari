@@ -83,7 +83,7 @@ impl InboundMessaging {
         let stream = stream.rate_limit(self.rate_limit_capacity, self.rate_limit_restock_interval);
 
         let mut stream = match self.inactivity_timeout {
-            Some(timeout) => Either::Left(tokio::stream::StreamExt::timeout(stream, timeout)),
+            Some(timeout) => Either::Left(tokio_stream::StreamExt::timeout(stream, timeout)),
             None => Either::Right(stream.map(Ok)),
         };
 

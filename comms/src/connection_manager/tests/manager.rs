@@ -291,7 +291,7 @@ async fn simultaneous_dial_events() {
     // assert!(count_string_occurrences(&events2, &["PeerDisconnected"]) >= 1);
 }
 
-#[tokio_macros::test_basic]
+#[runtime::test_basic]
 async fn dial_cancelled() {
     let mut shutdown = Shutdown::new();
 

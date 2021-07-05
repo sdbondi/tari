@@ -138,7 +138,7 @@ mod test {
 
         let mut rate_limited = repeater.rate_limit(10, Duration::from_secs(100)).fuse();
 
-        let mut timeout = time::delay_for(Duration::from_millis(50)).fuse();
+        let mut timeout = time::sleep(Duration::from_millis(50)).fuse();
         let mut count = 0usize;
         loop {
             let either = futures::future::select(rate_limited.select_next_some(), timeout).await;
@@ -159,7 +159,7 @@ mod test {
 
         let mut rate_limited = repeater.rate_limit(10, Duration::from_millis(10)).fuse();
 
-        let mut timeout = time::delay_for(Duration::from_millis(50)).fuse();
+        let mut timeout = time::sleep(Duration::from_millis(50)).fuse();
         let mut count = 0usize;
         loop {
             let either = futures::future::select(rate_limited.select_next_some(), timeout).await;

@@ -34,7 +34,6 @@ use crate::{
 use futures::{
     channel::{mpsc, oneshot},
     SinkExt,
-    StreamExt,
 };
 use log::*;
 use std::{
@@ -42,7 +41,11 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{sync::broadcast, time};
+use tokio::{
+    sync::{broadcast, broadcast::error::RecvError},
+    time,
+};
+
 const LOG_TARGET: &str = "comms::connectivity::requester";
 
 pub type ConnectivityEventRx = broadcast::Receiver<Arc<ConnectivityEvent>>;
@@ -254,10 +257,9 @@ impl ConnectivityRequester {
         let mut last_known_peer_count = status.num_connected_nodes();
         loop {
             debug!(target: LOG_TARGET, "Waiting for connectivity event");
-            let recv_result = time::timeout(remaining, connectivity_events.next())
+            let recv_result = time::timeout(remaining, connectivity_events.recv())
                 .await
-                .map_err(|_| ConnectivityError::OnlineWaitTimeout(last_known_peer_count))?
-                .ok_or(ConnectivityError::ConnectivityEventStreamClosed)?;
+                .map_err(|_| ConnectivityError::OnlineWaitTimeout(last_known_peer_count))?;
 
             remaining = timeout
                 .checked_sub(start.elapsed())
@@ -287,14 +289,14 @@ impl ConnectivityRequester {
                         );
                     },
                 },
-                Err(broadcast::RecvError::Closed) => {
+                Err(RecvError::Closed) => {
                     error!(
                         target: LOG_TARGET,
                         "Connectivity event stream closed unexpectedly. System may be shutting down."
                     );
                     break Err(ConnectivityError::ConnectivityEventStreamClosed);
                 },
-                Err(broadcast::RecvError::Lagged(n)) => {
+                Err(RecvError::Lagged(n)) => {
                     warn!(target: LOG_TARGET, "Lagging behind on {} connectivity event(s)", n);
                     // We lagged, so could have missed the state change. Check it explicitly.
                     let status = self.get_connectivity_status().await?;

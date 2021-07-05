@@ -41,7 +41,7 @@ use tari_core::{
     transactions::types::Signature,
 };
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
-use tokio::{sync::broadcast, time::delay_for};
+use tokio::{sync::broadcast, time::sleep};
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::coinbase_monitoring";
 
@@ -254,7 +254,7 @@ where TBackend: TransactionBackend + 'static
                 },
             }
 
-            let delay = delay_for(self.timeout);
+            let delay = sleep(self.timeout);
             let mut base_node_connection = match connection {
                 None => {
                     futures::select! {
@@ -307,7 +307,7 @@ where TBackend: TransactionBackend + 'static
                     TransactionServiceError::InvalidCompletedTransaction,
                 ));
             }
-            let delay = delay_for(self.timeout).fuse();
+            let delay = sleep(self.timeout).fuse();
             loop {
                 futures::select! {
                     new_base_node = base_node_update_receiver.select_next_some() => {

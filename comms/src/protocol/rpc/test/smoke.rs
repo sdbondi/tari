@@ -398,7 +398,7 @@ impl SlowGreetingService {
 impl GreetingRpc for SlowGreetingService {
     async fn say_hello(&self, _: Request<SayHelloRequest>) -> Result<Response<SayHelloResponse>, RpcStatus> {
         let delay = *self.delay.read().await;
-        time::delay_for(delay).await;
+        time::sleep(delay).await;
         Ok(Response::new(SayHelloResponse {
             greeting: "took a while to load".to_string(),
         }))

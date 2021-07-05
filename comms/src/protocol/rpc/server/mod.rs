@@ -257,7 +257,7 @@ where
             .expect("PeerRpcServer initialized without request_rx");
 
         loop {
-            futures::select! {
+            tokio::select! {
                  maybe_notif = protocol_notifs.next() => {
                      match maybe_notif {
                          Some(notif) => self.handle_protocol_notification(notif).await?,

@@ -41,7 +41,7 @@ use crate::{
     utils::multiaddr::multiaddr_to_socketaddr,
     PeerManager,
 };
-use futures::{channel::mpsc, future, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, SinkExt, StreamExt};
+use futures::{channel::mpsc, future, SinkExt, StreamExt};
 use log::*;
 use std::{
     convert::TryInto,
@@ -53,7 +53,11 @@ use std::{
     time::Duration,
 };
 use tari_shutdown::ShutdownSignal;
-use tokio::time;
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    time,
+};
+use tokio_util::compat::TokioAsyncReadCompatExt;
 
 const LOG_TARGET: &str = "comms::connection_manager::listener";
 
@@ -118,7 +122,7 @@ where
                 self.send_event(ConnectionManagerEvent::Listening(address)).await;
 
                 loop {
-                    futures::select! {
+                    tokio::select! {
                         inbound_result = inbound.select_next_some() => {
                             if let Some((inbound_future, peer_addr)) = log_if_error!(target: LOG_TARGET, inbound_result, "Inbound connection failed because '{error}'",) {
                                 if let Some(socket) = log_if_error!(target: LOG_TARGET, inbound_future.await,  "Inbound connection failed because '{error}'",) {
@@ -126,7 +130,7 @@ where
                                 }
                             }
                         },
-                        _ = shutdown_signal => {
+                        _ = &mut shutdown_signal => {
                             info!(target: LOG_TARGET, "PeerListener is shutting down because the shutdown signal was triggered");
                             break;
                         },
@@ -264,7 +268,7 @@ where
                             "No liveness sessions available or permitted for peer address '{}'", peer_addr
                         );
 
-                        let _ = socket.close().await;
+                        let _ = socket.shutdown().await;
                     }
                 },
                 None => {
@@ -320,7 +324,7 @@ where
         // Check if we know the peer and if it is banned
         let known_peer = common::find_unbanned_peer(&peer_manager, &authenticated_public_key).await?;
 
-        let mut muxer = Yamux::upgrade_connection(noise_socket, CONNECTION_DIRECTION)
+        let mut muxer = Yamux::upgrade_connection(noise_socket.compat(), CONNECTION_DIRECTION)
             .await
             .map_err(|err| ConnectionManagerError::YamuxUpgradeFailure(err.to_string()))?;
 

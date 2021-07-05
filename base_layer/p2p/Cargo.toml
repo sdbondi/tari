@@ -34,7 +34,7 @@ semver = "1.0.1"
 serde = "1.0.90"
 serde_derive = "1.0.90"
 thiserror = "1.0.20"
-tokio = {version="0.2.10", features=["blocking"]}
+tokio = {version="1.8", features=[]}
 tower = "0.3.0-alpha.2"
 tower-service = { version="0.3.0-alpha.2" }
 trust-dns-client = {version="0.19.5", features=["dns-over-rustls"]}
