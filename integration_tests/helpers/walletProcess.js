@@ -11,12 +11,13 @@ const csvParser = require("csv-parser");
 let outputProcess;
 
 class WalletProcess {
-  constructor(name, options, logFilePath, seedWords) {
+  constructor(name, excludeTestEnvars, options, logFilePath, seedWords) {
     this.name = name;
     this.options = options;
     this.logFilePath = logFilePath ? path.resolve(logFilePath) : logFilePath;
     this.recoverWallet = !!seedWords;
     this.seedWords = seedWords;
+    this.excludeTestEnvars = excludeTestEnvars;
   }
 
   async init() {
@@ -57,21 +58,23 @@ class WalletProcess {
         fs.mkdirSync(this.baseDir + "/log", { recursive: true });
       }
 
-      const envs = createEnv(
-        this.name,
-        true,
-        "cwalletid.json",
-        "127.0.0.1",
-        this.grpcPort,
-        this.port,
-        "127.0.0.1",
-        "8080",
-        "8081",
-        "127.0.0.1:8084",
-        this.options,
-        this.peerSeeds
-      );
-
+      let envs = [];
+      if (!this.excludeTestEnvars) {
+        envs = createEnv(
+          this.name,
+          true,
+          "cwalletid.json",
+          "127.0.0.1",
+          this.grpcPort,
+          this.port,
+          "127.0.0.1",
+          "8080",
+          "8081",
+          "127.0.0.1:8084",
+          this.options,
+          this.peerSeeds
+        );
+      }
       if (saveFile) {
         fs.appendFileSync(`${this.baseDir}/.env`, JSON.stringify(envs));
       }
@@ -82,9 +85,14 @@ class WalletProcess {
       });
 
       ps.stdout.on("data", (data) => {
-        // console.log(`stdout: ${data}`);
+        //console.log(`stdout: ${data}`);
         fs.appendFileSync(`${this.baseDir}/log/stdout.log`, data.toString());
-        if (data.toString().match(/Starting grpc server/)) {
+        if (
+          (!this.recoverWallet &&
+            data.toString().match(/Starting grpc server/)) ||
+          (this.recoverWallet &&
+            data.toString().match(/Initializing logging according/))
+        ) {
           resolve(ps);
         }
       });
@@ -125,9 +133,9 @@ class WalletProcess {
         "-Z",
         "unstable-options",
         "--out-dir",
-        __dirname + "/../temp/out",
+        process.cwd() + "/temp/out",
       ]);
-      outputProcess = __dirname + "/../temp/out/tari_console_wallet";
+      outputProcess = process.cwd() + "/temp/out/tari_console_wallet";
     }
     return outputProcess;
   }
