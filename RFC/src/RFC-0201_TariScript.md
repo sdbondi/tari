@@ -234,7 +234,7 @@ pub struct TransactionOutput {
     /// The sender offset pubkey, K_O
     sender_offset_public_key: PublicKey
     /// UTXO signature with the sender offset private key, k_O
-    sender_metadata_signature : Signature
+    metadata_signature : Signature
 }
 ```
 

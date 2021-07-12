@@ -352,11 +352,11 @@ the script public key.
 The script offset provides a proof that every script public key \\( K\_{Si} \\) and sender offset public key 
 \\( K\_{Oi} \\) provided for the a transaction's inputs and outputs are correct.
 
-## Sender Metadata Signature
-[sender metadata signature]: #sender-metadata-signature
+## Metadata Signature
+[metadata signature]: #metadata-signature
 
-The sender metadata signature is used to sign the metadata of the UTXO with the [sender offset] private key
-\\( k_{Oi} \\) and this stops malleability of the UTXO metadata.
+The metadata signature is used to sign the metadata of the UTXO with the [sender offset] private key
+\\( k_{Oi} \\). This prevents malleability of the UTXO metadata.
 
 ## Sender Offset Keypair
 [sender offset]: #sender-offset-keypair
@@ -415,7 +415,7 @@ is a list of instructions linked in a non&nbsp;malleable way to each output, spe
 [transaction]: #transaction "Base layer tari coin transfers."
 
 Transactions are activities recorded on the Tari [blockchain] running on the [base layer]. Transactions always involve a
-transfer of [Tari coin]s.
+transfer of [Tari coin]s. A [mimblewimble](#mimblewimble) transaction body consists of one or more blinded inputs and outputs.
 
 
 ## Transaction Pool
