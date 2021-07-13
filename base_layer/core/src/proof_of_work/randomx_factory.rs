@@ -13,34 +13,36 @@ const LOG_TARGET: &str = "c::pow::randomx_factory";
 pub struct RandomXConfig {
     pub use_large_pages: bool,
 }
-
-impl From<&RandomXConfig> for RandomXFlag {
-    fn from(source: &RandomXConfig) -> Self {
-        let mut result = RandomXFlag::get_recommended_flags();
-        if source.use_large_pages {
-            result |= RandomXFlag::FLAG_LARGE_PAGES
-        }
-        result
-    }
-}
+// impl From<&RandomXConfig> for RandomXFlag {
+//     fn from(source: &RandomXConfig) -> Self {
+//         let mut result = RandomXFlag::get_recommended_flags();
+//         if source.use_large_pages {
+//             result |= RandomXFlag::FLAG_LARGE_PAGES
+//         }
+//         result
+//     }
+// }
 
 #[derive(Clone)]
 pub struct RandomXVMInstance {
     // Note: If the cache and dataset drops, the vm will be wonky, so have to store all
     // three for now
-    instance: Arc<Mutex<(RandomXVM, RandomXCache, RandomXDataset)>>,
+    // instance: Arc<Mutex<(RandomXVM, RandomXCache, RandomXDataset)>>,
+    instance: Arc<Mutex<(RandomXVM, RandomXDataset)>>,
 }
 
 impl RandomXVMInstance {
     // Note: Can maybe even get more gains by creating a new VM and sharing the dataset and cache
     pub fn new(key: &[u8]) -> Result<Self, RandomXError> {
-        let flags = RandomXFlag::get_recommended_flags();
-        let cache = RandomXCache::new(flags, key)?;
-        let dataset = RandomXDataset::new(flags, &cache, 0)?;
-        let vm = RandomXVM::new(flags, Some(&cache), Some(&dataset))?;
+        let flags = RandomXFlag::get_recommended_flags() ^ RandomXFlag::FLAG_FULL_MEM;
+        // let cache = RandomXCache::new(flags, key)?;
+        // let dataset = RandomXDataset::new(flags, &cache, 0)?;
+        let dataset = RandomXDataset::minimal(flags)?;
+        let vm = RandomXVM::new(flags, None, Some(&dataset))?;
 
         Ok(Self {
-            instance: Arc::new(Mutex::new((vm, cache, dataset))),
+            // instance: Arc::new(Mutex::new((vm, cache, dataset))),
+            instance: Arc::new(Mutex::new((vm, dataset))),
         })
     }
 
@@ -125,5 +127,27 @@ impl RandomXFactoryInner {
         self.vms.insert(Vec::from(key), (Instant::now(), vm.clone()));
 
         Ok(vm)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // #[test]
+    // fn test() {
+    //     // const key: &[u8] = &[1u8; 60][..];
+    //     let key = [1u8; 60];
+    //     // let flags = RandomXFlag::get_recommended_flags();
+    //     // let flags =  !flags;
+    //     let flags = RandomXFlag::FLAG_LARGE_PAGES;
+    //     eprintln!("flags = {:?}", flags);
+    //     let cache = RandomXCache::new(flags, &key[..]).unwrap();
+    // }
+    #[test]
+    fn test() {
+        let a = RandomXFactory::new(Default::default(), 10);
+        let b = a.create(&b"asd"[..]).unwrap();
+        let hash = b.calculate_hash(&b"balh"[..]).unwrap();
+        eprintln!("hash = {:?}", hash);
     }
 }
