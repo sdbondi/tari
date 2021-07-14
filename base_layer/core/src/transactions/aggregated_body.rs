@@ -316,8 +316,18 @@ impl AggregateBody {
         self.verify_kernel_signatures()?;
         self.validate_kernel_sum(total_offset, &factories.commitment)?;
 
-        self.validate_range_proofs(&factories.range_proof)?;
-        self.verify_metadata_signatures()?;
+        trace!(target: LOG_TARGET, "Checking range proofs");
+        for o in &self.outputs {
+            if !o.verify_range_proof(&factories.range_proof)? {
+                return Err(TransactionError::ValidationError(
+                    "Range proof could not be verified".into(),
+                ));
+            }
+
+            trace!(target: LOG_TARGET, "Checking metadata signatures");
+            o.verify_metadata_signature()?;
+        }
+
         self.validate_script_offset(script_offset_g, &factories.commitment)
     }
 
@@ -405,20 +415,7 @@ impl AggregateBody {
         Ok(())
     }
 
-    fn validate_range_proofs(&self, range_proof_service: &RangeProofService) -> Result<(), TransactionError> {
-        trace!(target: LOG_TARGET, "Checking range proofs");
-        for o in &self.outputs {
-            if !o.verify_range_proof(&range_proof_service)? {
-                return Err(TransactionError::ValidationError(
-                    "Range proof could not be verified".into(),
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn verify_metadata_signatures(&self) -> Result<(), TransactionError> {
-        trace!(target: LOG_TARGET, "Checking sender signatures");
         for o in &self.outputs {
             o.verify_metadata_signature()?;
         }
