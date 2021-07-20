@@ -22,13 +22,16 @@
 //
 //! # Global configuration of tari base layer system
 
-use crate::{configuration::Network, ConfigurationError};
+use crate::{
+    configuration::{bootstrap::ApplicationType, Network},
+    ConfigurationError,
+};
 use config::{Config, ConfigError, Environment};
 use multiaddr::Multiaddr;
 use std::{
     convert::TryInto,
     fmt,
-    fmt::Formatter,
+    fmt::{Display, Formatter},
     net::SocketAddr,
     num::{NonZeroU16, TryFromIntError},
     path::PathBuf,
@@ -128,32 +131,38 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn convert_from(mut cfg: Config) -> Result<Self, ConfigurationError> {
+    pub fn convert_from(application: ApplicationType, mut cfg: Config) -> Result<Self, ConfigurationError> {
         // Add in settings from the environment (with a prefix of TARI_NODE)
         // Eg.. `TARI_NODE_DEBUG=1 ./target/app` would set the `debug` key
         let env = Environment::with_prefix("tari").separator("__");
         cfg.merge(env)
             .map_err(|e| ConfigurationError::new("environment variable", &e.to_string()))?;
 
-        let network = cfg
-            .get_str("base_node.network")
-            .map_err(|e| ConfigurationError::new("base_node.network", &e.to_string()))?
-            .parse()?;
+        // Use {application}.network, if that is not found, use common.network
+        let network = one_of::<Network>(&cfg, &[
+            &format!("{}.network", application.as_config_str()),
+            "common.network",
+        ])?;
 
-        convert_node_config(network, cfg)
+        convert_node_config(application, network, cfg)
     }
 }
 
-fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, ConfigurationError> {
-    let net_str = network.to_string().to_lowercase();
+fn convert_node_config(
+    application: ApplicationType,
+    network: Network,
+    cfg: Config,
+) -> Result<GlobalConfig, ConfigurationError> {
+    let app_str = application.as_config_str();
+    let net_str = network.as_str();
 
-    let key = config_string("base_node", &net_str, "data_dir");
+    let key = config_string(app_str, &net_str, "data_dir");
     let data_dir: PathBuf = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
         .into();
 
-    let key = config_string("base_node", &net_str, "db_type");
+    let key = config_string(app_str, &net_str, "db_type");
     let db_type = cfg
         .get_str(&key)
         .map(|s| s.to_lowercase())
@@ -163,12 +172,12 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         "memory" => Ok(DatabaseType::Memory),
         "lmdb" => Ok(DatabaseType::LMDB(data_dir.join("db"))),
         invalid_opt => Err(ConfigurationError::new(
-            "base_node.db_type",
+            app_str,
             &format!("Invalid option: {}", invalid_opt),
         )),
     }?;
 
-    let key = config_string("base_node", &net_str, "db_init_size_mb");
+    let key = config_string(app_str, &net_str, "db_init_size_mb");
     let init_size_mb = match cfg.get_int(&key) {
         Ok(mb) if mb < DB_INIT_MIN_MB => {
             return Err(ConfigurationError::new(
@@ -183,7 +192,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         },
     };
 
-    let key = config_string("base_node", &net_str, "db_grow_size_mb");
+    let key = config_string(app_str, &net_str, "db_grow_size_mb");
     let grow_size_mb = match cfg.get_int(&key) {
         Ok(mb) if mb < DB_GROW_MIN_MB => {
             return Err(ConfigurationError::new(
@@ -198,7 +207,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         },
     };
 
-    let key = config_string("base_node", &net_str, "db_resize_threshold_mb");
+    let key = config_string(app_str, &net_str, "db_resize_threshold_mb");
     let resize_threshold_mb = match cfg.get_int(&key) {
         Ok(mb) if mb < DB_RESIZE_MIN_MB => {
             return Err(ConfigurationError::new(
@@ -227,63 +236,63 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
 
     let db_config = LMDBConfig::new_from_mb(init_size_mb, grow_size_mb, resize_threshold_mb);
 
-    let key = config_string("base_node", &net_str, "orphan_storage_capacity");
+    let key = config_string(app_str, &net_str, "orphan_storage_capacity");
     let orphan_storage_capacity = cfg
         .get_int(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))? as usize;
 
-    let key = config_string("base_node", &net_str, "orphan_db_clean_out_threshold");
+    let key = config_string(app_str, &net_str, "orphan_db_clean_out_threshold");
     let orphan_db_clean_out_threshold = cfg
         .get_int(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))? as usize;
 
-    let key = config_string("base_node", &net_str, "pruning_horizon");
+    let key = config_string(app_str, &net_str, "pruning_horizon");
     let pruning_horizon = cfg
         .get_int(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))? as u64;
 
-    let key = config_string("base_node", &net_str, "pruned_mode_cleanup_interval");
+    let key = config_string(app_str, &net_str, "pruned_mode_cleanup_interval");
     let pruned_mode_cleanup_interval = cfg
         .get_int(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))? as u64;
 
     // Thread counts
-    let key = config_string("base_node", &net_str, "core_threads");
+    let key = config_string(app_str, &net_str, "core_threads");
     let core_threads =
         optional(cfg.get_int(&key).map(|n| n as usize)).map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
-    let key = config_string("base_node", &net_str, "max_threads");
+    let key = config_string(app_str, &net_str, "max_threads");
     let max_threads =
         optional(cfg.get_int(&key).map(|n| n as usize)).map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
     // Max RandomX VMs
-    let key = config_string("base_node", &net_str, "max_randomx_vms");
+    let key = config_string(app_str, &net_str, "max_randomx_vms");
     let max_randomx_vms = optional(cfg.get_int(&key).map(|n| n as usize))
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
         .unwrap_or(2) as usize;
 
     // Base node identity path
-    let key = config_string("base_node", &net_str, "base_node_identity_file");
+    let key = config_string(app_str, &net_str, "base_node_identity_file");
     let base_node_identity_file = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
         .into();
 
     // Console wallet identity path
-    let key = config_string("base_node", &net_str, "console_wallet_identity_file");
+    let key = config_string(app_str, &net_str, "console_wallet_identity_file");
     let console_wallet_identity_file = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
         .into();
 
-    let key = config_string("base_node", &net_str, "console_wallet_tor_identity_file");
+    let key = config_string(app_str, &net_str, "console_wallet_tor_identity_file");
     let console_wallet_tor_identity_file = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
         .into();
 
     // Tor private key persistence
-    let key = config_string("base_node", &net_str, "base_node_tor_identity_file");
+    let key = config_string(app_str, &net_str, "base_node_tor_identity_file");
     let base_node_tor_identity_file = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?
@@ -292,13 +301,13 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
     // Transport
     let comms_transport = network_transport_config(&cfg, &net_str)?;
 
-    let key = config_string("base_node", &net_str, "allow_test_addresses");
+    let key = config_string(app_str, &net_str, "allow_test_addresses");
     let allow_test_addresses = cfg
         .get_bool(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
     // Public address
-    let key = config_string("base_node", &net_str, "public_address");
+    let key = config_string(app_str, &net_str, "public_address");
     let public_address = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
@@ -308,12 +317,12 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         })?;
 
     // GPRC enabled
-    let key = config_string("base_node", &net_str, "grpc_enabled");
+    let key = config_string(app_str, &net_str, "grpc_enabled");
     let grpc_enabled = cfg
         .get_bool(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
-    let key = config_string("base_node", &net_str, "grpc_base_node_address");
+    let key = config_string(app_str, &net_str, "grpc_base_node_address");
     let grpc_base_node_address = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
@@ -322,7 +331,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
                 .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
         })?;
 
-    let key = config_string("base_node", &net_str, "grpc_console_wallet_address");
+    let key = config_string(app_str, &net_str, "grpc_console_wallet_address");
     let grpc_console_wallet_address = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
@@ -332,7 +341,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         })?;
 
     // Peer and DNS seeds
-    let key = config_string("base_node", &net_str, "peer_seeds");
+    let key = config_string(app_str, &net_str, "peer_seeds");
     // Peer seeds can be an array or a comma separated list (e.g. in an ENVVAR)
     let peer_seeds = match cfg.get_array(&key) {
         Ok(seeds) => seeds.into_iter().map(|v| v.into_str().unwrap()).collect(),
@@ -342,7 +351,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
         },
     };
 
-    let key = config_string("base_node", &net_str, "dns_seeds_name_server");
+    let key = config_string(app_str, &net_str, "dns_seeds_name_server");
     let dns_seeds_name_server = cfg
         .get_str(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
@@ -351,12 +360,12 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
                 .map_err(|e| ConfigurationError::new(&key, &e.to_string()))
         })?;
 
-    let key = config_string("base_node", &net_str, "dns_seeds_use_dnssec");
+    let key = config_string(app_str, &net_str, "dns_seeds_use_dnssec");
     let dns_seeds_use_dnssec = cfg
         .get_bool(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
-    let key = config_string("base_node", &net_str, "dns_seeds");
+    let key = config_string(app_str, &net_str, "dns_seeds");
     let dns_seeds = optional(cfg.get_array(&key))?
         .unwrap_or_default()
         .into_iter()
@@ -369,18 +378,18 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
     let console_wallet_peer_db_path = data_dir.join("console_wallet_peer_db");
 
     // set base node wallet
-    let key = config_string("base_node", &net_str, "enable_wallet");
+    let key = config_string(app_str, &net_str, "enable_wallet");
     let enable_wallet = cfg
         .get_bool(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))?;
 
-    let key = config_string("base_node", &net_str, "flood_ban_max_msg_count");
+    let key = config_string(app_str, &net_str, "flood_ban_max_msg_count");
     let flood_ban_max_msg_count = cfg
         .get_int(&key)
         .map_err(|e| ConfigurationError::new(&key, &e.to_string()))? as usize;
 
     // block sync
-    let key = config_string("base_node", &net_str, "force_sync_peers");
+    let key = config_string(app_str, &net_str, "force_sync_peers");
     let force_sync_peers = optional(
         cfg.get_array(&key)
             .map(|values| values.into_iter().map(|v| v.into_str().unwrap()).collect()),
@@ -388,7 +397,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
     .unwrap_or_default();
 
     // Liveness auto ping interval
-    let key = config_string("base_node", &net_str, "auto_ping_interval");
+    let key = config_string(app_str, &net_str, "auto_ping_interval");
     let auto_ping_interval = match cfg.get_int(&key) {
         Ok(seconds) => seconds as u64,
         Err(ConfigError::NotFound(_)) => 30,
@@ -396,7 +405,7 @@ fn convert_node_config(network: Network, cfg: Config) -> Result<GlobalConfig, Co
     };
 
     // blocks_behind_before_considered_lagging when a node should switch over from listening to lagging
-    let key = config_string("base_node", &net_str, "blocks_behind_before_considered_lagging");
+    let key = config_string(app_str, &net_str, "blocks_behind_before_considered_lagging");
     let blocks_behind_before_considered_lagging = optional(cfg.get_int(&key))?.unwrap_or(0) as u64;
 
     // set wallet_db_file
@@ -721,6 +730,21 @@ fn optional<T>(result: Result<T, ConfigError>) -> Result<Option<T>, ConfigError>
         Err(ConfigError::NotFound(_)) => Ok(None),
         Err(err) => Err(err),
     }
+}
+
+fn one_of<T>(cfg: &Config, keys: &[&str]) -> Result<T, ConfigError>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    for k in keys {
+        if let Some(v) = optional(cfg.get_str(k))? {
+            return v
+                .parse()
+                .map_err(|err| ConfigError::Message(format!("Failed to parse {}: {}", k, err)));
+        }
+    }
+    Err(ConfigError::NotFound(format!("{} not found", keys.join(","))))
 }
 
 fn network_transport_config(cfg: &Config, network: &str) -> Result<CommsTransport, ConfigurationError> {

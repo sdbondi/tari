@@ -79,6 +79,11 @@
 
 # If you are not running a wallet from this configuration, you can simply leave everything in this section commented out
 
+# Select the network to connect to. Valid options are:
+#   mainnet - the "real" Tari network (default)
+#   weatherwax - the Tari test net
+network = "weatherwax"
+
 [wallet]
 
 # The relative folder to store your local key data and transaction history. DO NOT EVER DELETE THIS FILE unless you
