@@ -49,6 +49,7 @@ use std::{cmp, fmt, fmt::Display, sync::Arc};
 use tari_comms::{
     connectivity::{ConnectivityError, ConnectivityRequester, ConnectivitySelection},
     peer_manager::{NodeId, NodeIdentity, PeerFeatures, PeerManager, PeerManagerError, PeerQuery, PeerQuerySortBy},
+    types::CommsPublicKey,
 };
 use tari_shutdown::ShutdownSignal;
 use tari_utilities::message_format::{MessageFormat, MessageFormatError};
@@ -96,12 +97,13 @@ impl From<SendError> for DhtActorError {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum DhtRequest {
     /// Send a Join request to the network
     SendJoin,
     /// Inserts a message signature to the msg hash cache. This operation replies with a boolean
     /// which is true if the signature already exists in the cache, otherwise false
-    MsgHashCacheInsert(Vec<u8>, oneshot::Sender<bool>),
+    MsgHashCacheInsert(Vec<u8>, CommsPublicKey, oneshot::Sender<bool>),
     /// Fetch selected peers according to the broadcast strategy
     SelectPeers(BroadcastStrategy, oneshot::Sender<Vec<NodeId>>),
     GetMetadata(DhtMetadataKey, oneshot::Sender<Result<Option<Vec<u8>>, DhtActorError>>),
@@ -113,7 +115,7 @@ impl Display for DhtRequest {
         use DhtRequest::*;
         match self {
             SendJoin => f.write_str("SendJoin"),
-            MsgHashCacheInsert(_, _) => f.write_str("MsgHashCacheInsert"),
+            MsgHashCacheInsert(_, _, _) => f.write_str("MsgHashCacheInsert"),
             SelectPeers(s, _) => f.write_str(&format!("SelectPeers (Strategy={})", s)),
             GetMetadata(key, _) => f.write_str(&format!("GetMetadata (key={})", key)),
             SetMetadata(key, value, _) => {
@@ -145,10 +147,14 @@ impl DhtRequester {
         reply_rx.await.map_err(|_| DhtActorError::ReplyCanceled)
     }
 
-    pub async fn insert_message_hash(&mut self, signature: Vec<u8>) -> Result<bool, DhtActorError> {
+    pub async fn insert_message_hash(
+        &mut self,
+        message_hash: Vec<u8>,
+        public_key: CommsPublicKey,
+    ) -> Result<bool, DhtActorError> {
         let (reply_tx, reply_rx) = oneshot::channel();
         self.sender
-            .send(DhtRequest::MsgHashCacheInsert(signature, reply_tx))
+            .send(DhtRequest::MsgHashCacheInsert(message_hash, public_key, reply_tx))
             .await?;
 
         reply_rx.await.map_err(|_| DhtActorError::ReplyCanceled)
@@ -241,7 +247,7 @@ impl DhtActor {
 
         let mut pending_jobs = FuturesUnordered::new();
 
-        let mut cleanup_ticker = time::interval(self.config.dedup_cache_trim_interval).fuse();
+        let mut dedup_cache_trim_ticker = time::interval(self.config.dedup_cache_trim_interval).fuse();
 
         let mut shutdown_signal = self
             .shutdown_signal
@@ -261,7 +267,7 @@ impl DhtActor {
                     }
                 },
 
-                _ = cleanup_ticker.select_next_some() => {
+                _ = dedup_cache_trim_ticker.select_next_some() => {
                     if let Err(err) = self.msg_hash_dedup_cache.truncate().await {
                         error!(target: LOG_TARGET, "Error when trimming message dedup cache: {:?}", err);
                     }
@@ -294,10 +300,10 @@ impl DhtActor {
                 let outbound_requester = self.outbound_requester.clone();
                 Box::pin(Self::broadcast_join(node_identity, outbound_requester))
             },
-            MsgHashCacheInsert(hash, reply_tx) => {
+            MsgHashCacheInsert(hash, public_key, reply_tx) => {
                 let msg_hash_cache = self.msg_hash_dedup_cache.clone();
                 Box::pin(async move {
-                    match msg_hash_cache.insert_body_hash_if_unique(hash).await {
+                    match msg_hash_cache.insert_body_hash_if_unique(hash, public_key).await {
                         Ok(already_exists) => {
                             let _ = reply_tx.send(already_exists).map_err(|_| DhtActorError::ReplyCanceled);
                         },
@@ -730,11 +736,20 @@ mod test {
         actor.spawn();
 
         let signature = vec![1u8, 2, 3];
-        let is_dup = requester.insert_message_hash(signature.clone()).await.unwrap();
+        let is_dup = requester
+            .insert_message_hash(signature.clone(), CommsPublicKey::default())
+            .await
+            .unwrap();
         assert!(!is_dup);
-        let is_dup = requester.insert_message_hash(signature).await.unwrap();
+        let is_dup = requester
+            .insert_message_hash(signature, CommsPublicKey::default())
+            .await
+            .unwrap();
         assert!(is_dup);
-        let is_dup = requester.insert_message_hash(Vec::new()).await.unwrap();
+        let is_dup = requester
+            .insert_message_hash(Vec::new(), CommsPublicKey::default())
+            .await
+            .unwrap();
         assert!(!is_dup);
     }
 
@@ -777,7 +792,7 @@ mod test {
         for key in &signatures {
             let is_dup = actor
                 .msg_hash_dedup_cache
-                .insert_body_hash_if_unique(key.clone())
+                .insert_body_hash_if_unique(key.clone(), CommsPublicKey::default())
                 .await
                 .unwrap();
             // let is_dup = requester.insert_message_hash(key.clone()).await.unwrap();
@@ -787,7 +802,7 @@ mod test {
         for key in &signatures {
             let is_dup = actor
                 .msg_hash_dedup_cache
-                .insert_body_hash_if_unique(key.clone())
+                .insert_body_hash_if_unique(key.clone(), CommsPublicKey::default())
                 .await
                 .unwrap();
             // let is_dup = requester.insert_message_hash(key.clone()).await.unwrap();
@@ -799,12 +814,18 @@ mod test {
 
         // Verify that the last half of the signatures are still present in the cache
         for key in signatures.iter().take(capacity * 2).skip(capacity) {
-            let is_dup = requester.insert_message_hash(key.clone()).await.unwrap();
+            let is_dup = requester
+                .insert_message_hash(key.clone(), CommsPublicKey::default())
+                .await
+                .unwrap();
             assert!(is_dup);
         }
         // Verify that the first half of the signatures have been removed and can be re-inserted into cache
         for key in signatures.iter().take(capacity) {
-            let is_dup = requester.insert_message_hash(key.clone()).await.unwrap();
+            let is_dup = requester
+                .insert_message_hash(key.clone(), CommsPublicKey::default())
+                .await
+                .unwrap();
             assert!(!is_dup);
         }
 
@@ -813,7 +834,10 @@ mod test {
 
         // Verify that the last half of the signatures have been removed and can be re-inserted into cache
         for key in signatures.iter().take(capacity * 2).skip(capacity) {
-            let is_dup = requester.insert_message_hash(key.clone()).await.unwrap();
+            let is_dup = requester
+                .insert_message_hash(key.clone(), CommsPublicKey::default())
+                .await
+                .unwrap();
             assert!(!is_dup);
         }
 

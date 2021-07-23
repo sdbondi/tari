@@ -21,36 +21,18 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
+    dedup::{dedup_cache_sql::DedupCacheSql, update_dedup_cache_sql::UpdateDedupCacheSql},
     schema::dedup_cache,
     storage::{DbConnection, StorageError},
 };
-use chrono::{NaiveDateTime, Utc};
+use chrono::Utc;
 use diesel::{dsl, result::DatabaseErrorKind, ExpressionMethods, QueryDsl, RunQueryDsl};
 use log::*;
-use std::cmp::max;
-use tari_crypto::tari_utilities::ByteArray;
+use tari_comms::types::CommsPublicKey;
+use tari_crypto::tari_utilities::{hex::Hex, ByteArray};
 use tari_utilities::hex;
 
 const LOG_TARGET: &str = "comms::dht::dedup_cache";
-
-//#[derive(Clone, Debug, Queryable, Insertable, PartialEq)]
-#[derive(Clone, Debug, Queryable, Identifiable)]
-#[table_name = "dedup_cache"]
-struct DedupCacheSql {
-    pub id: i32,
-    pub body_hash: String,
-    pub number_of_hits: i32,
-    pub stored_at: NaiveDateTime,
-    pub last_hit_at: NaiveDateTime,
-}
-
-#[derive(Clone, Debug, Insertable, Default, AsChangeset)]
-#[table_name = "dedup_cache"]
-pub struct UpdateDedupCacheSql {
-    pub body_hash: Option<String>,
-    pub number_of_hits: Option<i32>,
-    pub last_hit_at: Option<NaiveDateTime>,
-}
 
 #[derive(Clone)]
 pub struct DedupCacheDatabase {
@@ -60,7 +42,6 @@ pub struct DedupCacheDatabase {
 
 impl DedupCacheDatabase {
     pub fn new(connection: DbConnection, capacity: usize) -> Self {
-        let capacity = max(capacity, 100);
         debug!(
             target: LOG_TARGET,
             "Message dedup cache capacity initialized at {}", capacity,
@@ -69,9 +50,14 @@ impl DedupCacheDatabase {
     }
 
     /// Inserts and returns Ok(true) if the item already existed and Ok(false) if it didn't
-    pub async fn insert_body_hash_if_unique(&self, body_hash: Vec<u8>) -> Result<bool, StorageError> {
-        let body_hash_string = hex::to_hex(&body_hash.as_bytes());
-        match self.insert_body_hash(body_hash_string.clone()).await {
+    pub async fn insert_body_hash_if_unique(
+        &self,
+        body_hash: Vec<u8>,
+        public_key: CommsPublicKey,
+    ) -> Result<bool, StorageError> {
+        let body_hash = hex::to_hex(&body_hash.as_bytes());
+        let public_key = public_key.to_hex();
+        match self.insert_body_hash(body_hash.clone(), public_key.clone()).await {
             Ok(val) => {
                 if val == 0 {
                     warn!(
@@ -82,7 +68,7 @@ impl DedupCacheDatabase {
                 Ok(false)
             },
             Err(e) => match e {
-                StorageError::UniqueViolation(_) => match self.update_number_of_hits(body_hash_string).await {
+                StorageError::UniqueViolation(_) => match self.increment_number_of_hits(body_hash, public_key).await {
                     Ok(_) => Ok(true),
                     Err(e) => Err(e),
                 },
@@ -103,32 +89,36 @@ impl DedupCacheDatabase {
                 // Hysteresis added to minimize database impact
                 if msg_count > capacity {
                     let remove_count = msg_count - capacity;
-                    let message_ids: Vec<i32> = dedup_cache::table
-                        .select(dedup_cache::id)
-                        .order_by(dedup_cache::stored_at.asc())
-                        .limit(remove_count as i64)
-                        .get_results(conn)?;
                     num_removed = diesel::delete(dedup_cache::table)
-                        .filter(dedup_cache::id.eq_any(message_ids))
+                        .filter(
+                            dedup_cache::id.eq_any(
+                                dedup_cache::table
+                                    .select(dedup_cache::id)
+                                    .order_by(dedup_cache::last_hit_at.asc())
+                                    .limit(remove_count as i64)
+                                    .get_results::<i32>(conn)?,
+                            ),
+                        )
                         .execute(conn)?;
                 }
                 debug!(
                     target: LOG_TARGET,
-                    "Message dedup cache: msg_count {}, capacity {}, num_removed {}", msg_count, capacity, num_removed,
+                    "Message dedup cache: count {}, capacity {}, removed {}", msg_count, capacity, num_removed,
                 );
                 Ok(num_removed)
             })
             .await
     }
 
-    async fn insert_body_hash(&self, body_hash: String) -> Result<usize, StorageError> {
+    async fn insert_body_hash(&self, body_hash: String, public_key: String) -> Result<usize, StorageError> {
         self.connection
             .with_connection_async(move |conn| {
                 let insert_result = diesel::insert_into(dedup_cache::table)
                     .values(UpdateDedupCacheSql {
                         body_hash: Some(body_hash.clone()),
+                        sender_public_key: Some(public_key),
                         number_of_hits: Some(1),
-                        last_hit_at: Some(DedupCacheDatabase::formatted_naive_date_time()?),
+                        last_hit_at: Some(Utc::now().naive_utc()),
                     })
                     .execute(conn)
                     .map_err(Into::into);
@@ -144,15 +134,16 @@ impl DedupCacheDatabase {
             .await
     }
 
-    async fn update_number_of_hits(&self, body_hash: String) -> Result<usize, StorageError> {
+    async fn increment_number_of_hits(&self, body_hash: String, public_key: String) -> Result<usize, StorageError> {
         let record_to_update = self.find_by_body_hash(body_hash.clone()).await?;
         self.connection
             .with_connection_async(move |conn| {
                 diesel::update(dedup_cache::table.filter(dedup_cache::body_hash.eq(&body_hash)))
                     .set(UpdateDedupCacheSql {
                         body_hash: None,
+                        sender_public_key: Some(public_key),
                         number_of_hits: Some(record_to_update.number_of_hits + 1),
-                        last_hit_at: Some(DedupCacheDatabase::formatted_naive_date_time()?),
+                        last_hit_at: Some(Utc::now().naive_utc()),
                     })
                     .execute(conn)
                     .map_err(Into::into)
@@ -168,17 +159,5 @@ impl DedupCacheDatabase {
                     .first::<DedupCacheSql>(conn)?)
             })
             .await
-    }
-
-    // This function makes it easier for humans to read the database entries; database field 'stored_at' has a
-    // 'DEFAULT CURRENT_TIMESTAMP' setting and its format is '2021-07-23 04:01:14'. When the 'last_hit_at' field is
-    // populated with 'Utc::now().naive_utc()' its format is '2021-07-23 04:01:14.235873992', which makes it difficult
-    // to compare visually. Resolution less than one second is not required.
-    fn formatted_naive_date_time() -> Result<NaiveDateTime, StorageError> {
-        NaiveDateTime::parse_from_str(
-            Utc::now().naive_utc().format("%Y-%m-%d %H:%M:%S").to_string().as_str(),
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .map_err(|e| StorageError::ParseError(e.to_string()))
     }
 }
