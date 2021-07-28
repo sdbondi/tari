@@ -20,15 +20,21 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::transaction_service::{
-    error::TransactionServiceProtocolError,
-    storage::database::{TransactionBackend, TransactionDatabase},
+use crate::{
+    error::WalletError::TransactionServiceError,
+    transaction_service::{
+        error::{TransactionServiceError, TransactionServiceProtocolError},
+        storage::{
+            database::{TransactionBackend, TransactionDatabase},
+            models::CompletedTransaction,
+        },
+    },
 };
 use tari_common_types::types::BlockHash;
 use tari_core::transactions::transaction::Transaction;
 
 pub struct TransactionValidationProtocolV2<TTransactionBackend: TransactionBackend + 'static> {
-    db: TransactionDatabase<TBackend>,
+    db: TransactionDatabase<TTransactionBackend>,
     operation_id: u64,
     batch_size: usize,
 }
@@ -58,11 +64,11 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         Ok(self.operation_id)
     }
 
-    async fn check_for_reorgs(&self) -> Result<(), TransactionServiceProtocolError> {
+    async fn check_for_reorgs(&self) -> Result<(), TransactionServiceError> {
         loop {
-            if let Some((last_mined_transaction, mined_in_block_hash, mined_height)) =
-                self.fetch_last_mined_transaction().await?
-            {
+            if let Some(last_mined_transaction) = self.get_last_mined_transaction().await? {
+                let mined_height = last_mined_transaction.mined_height.unwrap(); // TODO: fix unwrap
+                let mined_in_block_hash = last_mined_transaction.mined_in_block.clone().unwrap(); // TODO: fix unwrap.
                 let block_at_height = self.get_base_node_block_at_height(mined_height).await?;
                 if block_at_height != mined_in_block_hash {
                     // Chain has reorged since we last
@@ -91,7 +97,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
 
     async fn get_last_mined_transaction(
         &self,
-    ) -> Result<Option<(Transaction, BlockHash, u64)>, TransactionServiceProtocolError> {
+    ) -> Result<Option<CompletedTransaction>, TransactionServiceProtocolError> {
         self.db.get_last_mined_transaction().await
     }
 
@@ -108,7 +114,10 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         unimplemented!()
     }
 
-    async fn update_transaction_as_unmined(&self, tx: &Transaction) -> Result<(), TransactionServiceProtocolError> {
+    async fn update_transaction_as_unmined(
+        &self,
+        tx: &CompletedTransaction,
+    ) -> Result<(), TransactionServiceProtocolError> {
         unimplemented!()
     }
 }

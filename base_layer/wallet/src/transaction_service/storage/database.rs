@@ -58,8 +58,7 @@ pub trait TransactionBackend: Send + Sync + Clone {
     /// Retrieve the record associated with the provided DbKey
     fn fetch(&self, key: &DbKey) -> Result<Option<DbValue>, TransactionStorageError>;
 
-    fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError>;
-
+    fn fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError>;
 
     /// Check if a record with the provided key exists in the backend.
     fn contains(&self, key: &DbKey) -> Result<bool, TransactionStorageError>;
