@@ -32,6 +32,7 @@ use crate::{
             transaction_receive_protocol::{TransactionReceiveProtocol, TransactionReceiveProtocolStage},
             transaction_send_protocol::{TransactionSendProtocol, TransactionSendProtocolStage},
             transaction_validation_protocol::TransactionValidationProtocol,
+            transaction_validation_protocol_v2::TransactionValidationProtocolV2,
         },
         storage::{
             database::{TransactionBackend, TransactionDatabase},
@@ -1496,15 +1497,17 @@ where
         match self.base_node_public_key.clone() {
             None => return Err(TransactionServiceError::NoBaseNodeKeysProvided),
             Some(pk) => {
-                let protocol = TransactionValidationProtocol::new(
-                    id,
-                    self.resources.clone(),
-                    pk,
-                    timeout,
-                    self.base_node_update_publisher.subscribe(),
-                    self.timeout_update_publisher.subscribe(),
-                    retry_strategy,
-                );
+                // let protocol = TransactionValidationProtocol::new(
+                //     id,
+                //     self.resources.clone(),
+                //     pk,
+                //     timeout,
+                //     self.base_node_update_publisher.subscribe(),
+                //     self.timeout_update_publisher.subscribe(),
+                //     retry_strategy,
+                // );
+                let protocol = TransactionValidationProtocolV2::new();
+
                 let join_handle = tokio::spawn(protocol.execute());
                 join_handles.push(join_handle);
             },

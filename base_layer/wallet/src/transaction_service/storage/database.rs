@@ -57,6 +57,10 @@ const LOG_TARGET: &str = "wallet::transaction_service::database";
 pub trait TransactionBackend: Send + Sync + Clone {
     /// Retrieve the record associated with the provided DbKey
     fn fetch(&self, key: &DbKey) -> Result<Option<DbValue>, TransactionStorageError>;
+
+    fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError>;
+
+
     /// Check if a record with the provided key exists in the backend.
     fn contains(&self, key: &DbKey) -> Result<bool, TransactionStorageError>;
     /// Modify the state the of the backend with a write operation
@@ -361,6 +365,10 @@ where T: TransactionBackend + 'static
         .await
         .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(*t)
+    }
+
+    pub async fn get_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError> {
+        self.db.fetch_last_mined_transaction()
     }
 
     pub async fn get_completed_transaction_cancelled_or_not(
