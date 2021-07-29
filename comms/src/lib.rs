@@ -22,6 +22,8 @@ mod macros;
 mod builder;
 pub use builder::{CommsBuilder, CommsBuilderError, CommsNode, UnspawnedCommsNode};
 
+mod ban_manager;
+
 pub mod connection_manager;
 pub use connection_manager::{validate_peer_addresses, PeerConnection, PeerConnectionError};
 
