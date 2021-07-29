@@ -24,6 +24,7 @@ table! {
         valid -> Integer,
         confirmations -> Nullable<BigInt>,
         mined_height -> Nullable<BigInt>,
+        mined_in_block -> Nullable<Binary>,
     }
 }
 

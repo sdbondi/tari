@@ -31,7 +31,6 @@ use crate::{
             transaction_coinbase_monitoring_protocol::TransactionCoinbaseMonitoringProtocol,
             transaction_receive_protocol::{TransactionReceiveProtocol, TransactionReceiveProtocolStage},
             transaction_send_protocol::{TransactionSendProtocol, TransactionSendProtocolStage},
-            transaction_validation_protocol::TransactionValidationProtocol,
             transaction_validation_protocol_v2::TransactionValidationProtocolV2,
         },
         storage::{
@@ -69,6 +68,7 @@ use tari_comms_dht::outbound::OutboundMessageRequester;
 #[cfg(feature = "test_harness")]
 use tari_core::transactions::{tari_amount::uT, types::BlindingFactor};
 use tari_core::{
+    base_node::sync::rpc::BaseNodeSyncRpcClient,
     crypto::keys::SecretKey,
     proto::base_node as base_node_proto,
     transactions::{
@@ -1482,7 +1482,7 @@ where
 
     async fn start_transaction_validation_protocol(
         &mut self,
-        retry_strategy: ValidationRetryStrategy,
+        _retry_strategy: ValidationRetryStrategy,
         join_handles: &mut FuturesUnordered<JoinHandle<Result<u64, TransactionServiceProtocolError>>>,
     ) -> Result<u64, TransactionServiceError> {
         if self.base_node_public_key.is_none() {
@@ -1490,7 +1490,7 @@ where
         }
         trace!(target: LOG_TARGET, "Starting transaction validation protocols");
         let id = OsRng.next_u64();
-        let timeout = match self.power_mode {
+        let _timeout = match self.power_mode {
             PowerMode::Normal => self.config.broadcast_monitoring_timeout,
             PowerMode::Low => self.config.low_power_polling_timeout,
         };
@@ -1506,7 +1506,13 @@ where
                 //     self.timeout_update_publisher.subscribe(),
                 //     retry_strategy,
                 // );
-                let protocol = TransactionValidationProtocolV2::new();
+
+                let protocol = TransactionValidationProtocolV2::new(
+                    self.resources.db.clone(),
+                    pk,
+                    self.resources.connectivity_manager.clone(),
+                    self.resources.config.clone(),
+                );
 
                 let join_handle = tokio::spawn(protocol.execute());
                 join_handles.push(join_handle);

@@ -45,6 +45,7 @@ use std::{
     fmt::{Display, Error, Formatter},
     sync::Arc,
 };
+use tari_common_types::types::BlockHash;
 use tari_comms::types::CommsPublicKey;
 use tari_core::transactions::{tari_amount::MicroTari, transaction::Transaction, types::BlindingFactor};
 
@@ -59,6 +60,8 @@ pub trait TransactionBackend: Send + Sync + Clone {
     fn fetch(&self, key: &DbKey) -> Result<Option<DbValue>, TransactionStorageError>;
 
     fn fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError>;
+
+    fn fetch_unmined_transactions(&self) -> Result<Vec<CompletedTransaction>, TransactionStorageError>;
 
     /// Check if a record with the provided key exists in the backend.
     fn contains(&self, key: &DbKey) -> Result<bool, TransactionStorageError>;
@@ -126,7 +129,12 @@ pub trait TransactionBackend: Send + Sync + Clone {
     /// Update a transactions number of confirmations
     fn update_confirmations(&self, tx_id: TxId, confirmations: u64) -> Result<(), TransactionStorageError>;
     /// Update a transactions mined height
-    fn update_mined_height(&self, tx_id: TxId, mined_height: u64) -> Result<(), TransactionStorageError>;
+    fn update_mined_height(
+        &self,
+        tx_id: TxId,
+        mined_height: u64,
+        mined_in_block: BlockHash,
+    ) -> Result<(), TransactionStorageError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -368,6 +376,10 @@ where T: TransactionBackend + 'static
 
     pub async fn get_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError> {
         self.db.fetch_last_mined_transaction()
+    }
+
+    pub async fn fetch_unmined_transactions(&self) -> Result<Vec<CompletedTransaction>, TransactionStorageError> {
+        self.db.fetch_unmined_transactions()
     }
 
     pub async fn get_completed_transaction_cancelled_or_not(
@@ -738,9 +750,10 @@ where T: TransactionBackend + 'static
         &self,
         tx_id: TxId,
         mined_height: u64,
+        mined_in_block: BlockHash,
     ) -> Result<(), TransactionStorageError> {
         let db_clone = self.db.clone();
-        tokio::task::spawn_blocking(move || db_clone.update_mined_height(tx_id, mined_height))
+        tokio::task::spawn_blocking(move || db_clone.update_mined_height(tx_id, mined_height, mined_in_block))
             .await
             .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(())

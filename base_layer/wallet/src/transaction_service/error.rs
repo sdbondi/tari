@@ -27,7 +27,7 @@ use crate::{
 use diesel::result::Error as DieselError;
 use futures::channel::oneshot::Canceled;
 use serde_json::Error as SerdeJsonError;
-use tari_comms::{peer_manager::node_id::NodeIdError, protocol::rpc::RpcError};
+use tari_comms::{connectivity::ConnectivityError, peer_manager::node_id::NodeIdError, protocol::rpc::RpcError};
 use tari_comms_dht::outbound::DhtOutboundError;
 use tari_core::transactions::{transaction::TransactionError, transaction_protocol::TransactionProtocolError};
 use tari_p2p::services::liveness::error::LivenessError;
@@ -141,6 +141,12 @@ pub enum TransactionServiceError {
     MaximumAttemptsExceeded,
     #[error("Byte array error")]
     ByteArrayError(#[from] tari_crypto::tari_utilities::ByteArrayError),
+
+    #[error("Connectivity error: {source}")]
+    ConnectivityError {
+        #[from]
+        source: ConnectivityError,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -198,5 +204,18 @@ impl TransactionServiceProtocolError {
 impl From<TransactionServiceProtocolError> for TransactionServiceError {
     fn from(tspe: TransactionServiceProtocolError) -> Self {
         tspe.error
+    }
+}
+
+pub trait TransactionServiceProtocolWrapper<TRes> {
+    fn for_protocol(self, id: u64) -> Result<TRes, TransactionServiceProtocolError>;
+}
+
+impl<TRes, TErr: Into<TransactionServiceError>> TransactionServiceProtocolWrapper<TRes> for Result<TRes, TErr> {
+    fn for_protocol(self, id: u64) -> Result<TRes, TransactionServiceProtocolError> {
+        match self {
+            Ok(r) => Ok(r),
+            Err(e) => Err(TransactionServiceProtocolError::new(id, e.into())),
+        }
     }
 }

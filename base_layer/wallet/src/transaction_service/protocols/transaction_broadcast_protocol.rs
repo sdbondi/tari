@@ -23,7 +23,7 @@
 use crate::{
     output_manager_service::TxId,
     transaction_service::{
-        error::{TransactionServiceError, TransactionServiceProtocolError},
+        error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolWrapper},
         handle::TransactionEvent,
         service::TransactionServiceResources,
         storage::{
@@ -500,16 +500,25 @@ where TBackend: TransactionBackend + 'static
                 .db
                 .set_transaction_confirmations(self.tx_id, response.confirmations)
                 .await
-                .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                .for_protocol(self.tx_id)?;
 
             self.resources
                 .db
                 .set_transaction_mined_height(
                     self.tx_id,
                     response.height_of_longest_chain.saturating_sub(response.confirmations),
+                    response
+                        .block_hash
+                        .map(|bh| bh.clone())
+                        .ok_or_else(|| {
+                            TransactionServiceError::InvalidMessageError(
+                                "Block hash was not provided for mined transaction".to_string(),
+                            )
+                        })
+                        .for_protocol(self.tx_id)?,
                 )
                 .await
-                .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                .for_protocol(self.tx_id)?;
 
             if response.confirmations >= self.resources.config.num_confirmations_required as u64 {
                 info!(
@@ -530,7 +539,7 @@ where TBackend: TransactionBackend + 'static
                 .db
                 .mine_completed_transaction(self.tx_id)
                 .await
-                .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                .for_protocol(self.tx_id)?;
             let _ = self
                 .resources
                 .event_publisher

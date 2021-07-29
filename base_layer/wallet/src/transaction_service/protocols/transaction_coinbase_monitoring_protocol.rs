@@ -23,7 +23,7 @@
 use crate::{
     output_manager_service::TxId,
     transaction_service::{
-        error::{TransactionServiceError, TransactionServiceProtocolError},
+        error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolWrapper},
         handle::TransactionEvent,
         service::TransactionServiceResources,
         storage::{database::TransactionBackend, models::CompletedTransaction},
@@ -505,13 +505,13 @@ where TBackend: TransactionBackend + 'static
                         completed_tx.transaction.body.outputs().clone(),
                     )
                     .await
-                    .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                    .for_protocol(self.tx_id)?;
 
                 self.resources
                     .db
                     .confirm_broadcast_or_coinbase_transaction(self.tx_id)
                     .await
-                    .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                    .for_protocol(self.tx_id)?;
 
                 let _ = self
                     .resources
@@ -536,14 +536,26 @@ where TBackend: TransactionBackend + 'static
 
             self.resources
                 .db
-                .set_transaction_mined_height(self.tx_id, self.block_height)
+                .set_transaction_mined_height(
+                    self.tx_id,
+                    self.block_height,
+                    response
+                        .block_hash
+                        .clone()
+                        .ok_or_else(|| {
+                            TransactionServiceError::InvalidMessageError(
+                                "Missing block hash for mined transaction".to_string(),
+                            )
+                        })
+                        .for_protocol(self.tx_id)?,
+                )
                 .await
-                .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                .for_protocol(self.tx_id)?;
             self.resources
                 .db
                 .mine_completed_transaction(self.tx_id)
                 .await
-                .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                .for_protocol(self.tx_id)?;
 
             let _ = self
                 .resources

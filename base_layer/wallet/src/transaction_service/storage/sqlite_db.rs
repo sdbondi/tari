@@ -46,10 +46,11 @@ use diesel::{prelude::*, result::Error as DieselError, SqliteConnection};
 use log::*;
 use std::{
     collections::HashMap,
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     str::from_utf8,
     sync::{Arc, MutexGuard, RwLock},
 };
+use tari_common_types::types::BlockHash;
 use tari_comms::types::CommsPublicKey;
 use tari_core::transactions::{tari_amount::MicroTari, types::PublicKey};
 use tari_crypto::tari_utilities::{
@@ -505,17 +506,10 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
             Ok(v) => {
                 if TransactionStatus::try_from(v.status)? == TransactionStatus::Completed {
                     v.update(
-                        UpdateCompletedTransactionSql::from(UpdateCompletedTransaction {
-                            status: Some(TransactionStatus::Broadcast),
-                            timestamp: None,
-                            cancelled: None,
-                            direction: None,
-                            send_count: None,
-                            last_send_timestamp: None,
-                            valid: None,
-                            confirmations: None,
-                            mined_height: None,
-                        }),
+                        UpdateCompletedTransactionSql {
+                            status: Some(TransactionStatus::Broadcast as i32),
+                            ..Default::default()
+                        },
                         &(*conn),
                     )?;
                 }
@@ -536,17 +530,10 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
         match CompletedTransactionSql::find_by_cancelled(tx_id, false, &(*conn)) {
             Ok(v) => {
                 v.update(
-                    UpdateCompletedTransactionSql::from(UpdateCompletedTransaction {
-                        status: Some(TransactionStatus::MinedUnconfirmed),
-                        timestamp: None,
-                        cancelled: None,
-                        direction: None,
-                        send_count: None,
-                        last_send_timestamp: None,
-                        valid: None,
-                        confirmations: None,
-                        mined_height: None,
-                    }),
+                    UpdateCompletedTransactionSql {
+                        status: Some(TransactionStatus::MinedUnconfirmed as i32),
+                        ..Default::default()
+                    },
                     &(*conn),
                 )?;
             },
@@ -646,17 +633,10 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
 
         if let Ok(tx) = CompletedTransactionSql::find_by_cancelled(tx_id, false, &(*conn)) {
             tx.update(
-                UpdateCompletedTransactionSql::from(UpdateCompletedTransaction {
-                    status: None,
+                UpdateCompletedTransactionSql {
                     timestamp: Some(timestamp),
-                    cancelled: None,
-                    direction: None,
-                    send_count: None,
-                    last_send_timestamp: None,
-                    valid: None,
-                    confirmations: None,
-                    mined_height: None,
-                }),
+                    ..Default::default()
+                },
                 &(*conn),
             )?;
         }
@@ -803,16 +783,9 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
 
         if let Ok(tx) = CompletedTransactionSql::find(tx_id, &conn) {
             let update = UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
-                cancelled: None,
-                direction: None,
-                transaction_protocol: None,
                 send_count: Some(tx.send_count + 1),
                 last_send_timestamp: Some(Some(Utc::now().naive_utc())),
-                valid: None,
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             };
             tx.update(update, &conn)?;
         } else if let Ok(tx) = OutboundTransactionSql::find(tx_id, &conn) {
@@ -918,11 +891,16 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
         Ok(())
     }
 
-    fn update_mined_height(&self, tx_id: u64, mined_height: u64) -> Result<(), TransactionStorageError> {
+    fn update_mined_height(
+        &self,
+        tx_id: u64,
+        mined_height: u64,
+        mined_in_block: BlockHash,
+    ) -> Result<(), TransactionStorageError> {
         let conn = self.database_connection.acquire_lock();
         match CompletedTransactionSql::find_by_cancelled(tx_id, false, &(*conn)) {
             Ok(v) => {
-                v.update_mined_height(mined_height, &(*conn))?;
+                v.update_mined_height(mined_height, mined_in_block, &(*conn))?;
             },
             Err(TransactionStorageError::DieselError(DieselError::NotFound)) => {
                 return Err(TransactionStorageError::ValueNotFound(DbKey::CompletedTransaction(
@@ -932,6 +910,33 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
             Err(e) => return Err(e),
         };
         Ok(())
+    }
+
+    fn fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        let mut tx = completed_transactions::table
+            .filter(completed_transactions::mined_height.is_not_null())
+            .order_by(completed_transactions::mined_height.desc())
+            .first::<CompletedTransactionSql>(&*conn)
+            .optional()?;
+        Ok(match tx {
+            Some(mut tx) => {
+                self.decrypt_if_necessary(&mut tx)?;
+                Some(tx.try_into()?)
+            },
+            None => None,
+        })
+    }
+
+    fn fetch_unmined_transactions(&self) -> Result<Vec<CompletedTransaction>, TransactionStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        Ok(completed_transactions::table
+            .filter(completed_transactions::mined_height.is_null())
+            .order_by(completed_transactions::tx_id)
+            .load::<CompletedTransactionSql>(&*conn)?
+            .into_iter()
+            .map(|ct| ct.try_into())
+            .collect::<Result<_, _>>()?)
     }
 }
 
@@ -1322,6 +1327,7 @@ struct CompletedTransactionSql {
     valid: i32,
     confirmations: Option<i64>,
     mined_height: Option<i64>,
+    mined_in_block: Option<Vec<u8>>,
 }
 
 impl CompletedTransactionSql {
@@ -1406,16 +1412,8 @@ impl CompletedTransactionSql {
     pub fn cancel(&self, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
                 cancelled: Some(1i32),
-                direction: None,
-                transaction_protocol: None,
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1427,15 +1425,7 @@ impl CompletedTransactionSql {
         self.update(
             UpdateCompletedTransactionSql {
                 status: Some(TransactionStatus::MinedConfirmed as i32),
-                timestamp: None,
-                cancelled: None,
-                direction: None,
-                transaction_protocol: None,
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1447,15 +1437,7 @@ impl CompletedTransactionSql {
         self.update(
             UpdateCompletedTransactionSql {
                 status: Some(TransactionStatus::MinedUnconfirmed as i32),
-                timestamp: None,
-                cancelled: None,
-                direction: None,
-                transaction_protocol: None,
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1466,16 +1448,8 @@ impl CompletedTransactionSql {
     pub fn set_validity(&self, valid: bool, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
-                cancelled: None,
-                direction: None,
-                transaction_protocol: None,
-                send_count: None,
-                last_send_timestamp: None,
                 valid: Some(valid as i32),
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1486,16 +1460,8 @@ impl CompletedTransactionSql {
     pub fn update_encryption(&self, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
-                cancelled: None,
-                direction: None,
                 transaction_protocol: Some(self.transaction_protocol.clone()),
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
-                confirmations: None,
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1510,16 +1476,10 @@ impl CompletedTransactionSql {
     ) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
-                cancelled: None,
-                direction: None,
+                // TODO: this seems wrong
                 transaction_protocol: Some(self.transaction_protocol.clone()),
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
                 confirmations: Some(Some(confirmations as i64)),
-                mined_height: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1530,20 +1490,14 @@ impl CompletedTransactionSql {
     pub fn update_mined_height(
         &self,
         mined_height: u64,
+        mined_in_block: BlockHash,
         conn: &SqliteConnection,
     ) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
-                status: None,
-                timestamp: None,
-                cancelled: None,
-                direction: None,
-                transaction_protocol: None,
-                send_count: None,
-                last_send_timestamp: None,
-                valid: None,
-                confirmations: None,
                 mined_height: Some(Some(mined_height as i64)),
+                mined_in_block: Some(Some(mined_in_block)),
+                ..Default::default()
             },
             conn,
         )?;
@@ -1594,6 +1548,7 @@ impl TryFrom<CompletedTransaction> for CompletedTransactionSql {
             valid: c.valid as i32,
             confirmations: c.confirmations.map(|ic| ic as i64),
             mined_height: c.mined_height.map(|ic| ic as i64),
+            mined_in_block: c.mined_in_block,
         })
     }
 }
@@ -1622,24 +1577,12 @@ impl TryFrom<CompletedTransactionSql> for CompletedTransaction {
             valid: c.valid != 0,
             confirmations: c.confirmations.map(|ic| ic as u64),
             mined_height: c.mined_height.map(|ic| ic as u64),
+            mined_in_block: c.mined_in_block,
         })
     }
 }
 
-/// These are the fields that can be updated for a Completed Transaction
-pub struct UpdateCompletedTransaction {
-    status: Option<TransactionStatus>,
-    timestamp: Option<NaiveDateTime>,
-    cancelled: Option<bool>,
-    direction: Option<TransactionDirection>,
-    send_count: Option<u32>,
-    last_send_timestamp: Option<Option<NaiveDateTime>>,
-    valid: Option<bool>,
-    confirmations: Option<Option<u64>>,
-    mined_height: Option<Option<u64>>,
-}
-
-#[derive(AsChangeset)]
+#[derive(AsChangeset, Default)]
 #[table_name = "completed_transactions"]
 pub struct UpdateCompletedTransactionSql {
     status: Option<i32>,
@@ -1652,24 +1595,7 @@ pub struct UpdateCompletedTransactionSql {
     valid: Option<i32>,
     confirmations: Option<Option<i64>>,
     mined_height: Option<Option<i64>>,
-}
-
-/// Map a Rust friendly UpdateCompletedTransaction to the Sql data type form
-impl From<UpdateCompletedTransaction> for UpdateCompletedTransactionSql {
-    fn from(u: UpdateCompletedTransaction) -> Self {
-        Self {
-            status: u.status.map(|s| s as i32),
-            timestamp: u.timestamp,
-            cancelled: u.cancelled.map(|c| c as i32),
-            direction: u.direction.map(|d| d as i32),
-            transaction_protocol: None,
-            send_count: u.send_count.map(|c| c as i32),
-            last_send_timestamp: u.last_send_timestamp,
-            valid: u.valid.map(|c| c as i32),
-            confirmations: u.confirmations.map(|c| c.map(|ic| ic as i64)),
-            mined_height: u.mined_height.map(|c| c.map(|ic| ic as i64)),
-        }
-    }
+    mined_in_block: Option<Option<Vec<u8>>>,
 }
 
 #[cfg(test)]
