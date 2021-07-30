@@ -85,13 +85,8 @@ pub trait TransactionBackend: Send + Sync + Clone {
     ) -> Result<(), TransactionStorageError>;
     /// Indicated that a completed transaction has been broadcast to the mempools
     fn broadcast_completed_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
-    /// Indicated that a completed transaction has been detected as mined on a base node
-    fn mine_completed_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
     /// Indicated that a broadcast transaction has been detected as confirm on a base node
     fn confirm_broadcast_or_coinbase_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
-    /// Indicated that a mined transaction has been detected as unconfirmed on a base node, due to reorg or base node
-    /// switch
-    fn unconfirm_mined_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
     /// Set transaction's validity
     fn set_completed_transaction_validity(&self, tx_id: TxId, valid: bool) -> Result<(), TransactionStorageError>;
     /// Cancel Completed transaction, this will update the transaction status
@@ -135,6 +130,9 @@ pub trait TransactionBackend: Send + Sync + Clone {
         mined_height: u64,
         mined_in_block: BlockHash,
     ) -> Result<(), TransactionStorageError>;
+
+    /// Clears the mined block and height of a transaction
+    fn set_transaction_as_unmined(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -606,16 +604,6 @@ where T: TransactionBackend + 'static
             .and_then(|inner_result| inner_result)
     }
 
-    /// Indicated that the specified completed transaction has been detected as mined on the base layer
-    pub async fn mine_completed_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError> {
-        let db_clone = self.db.clone();
-
-        tokio::task::spawn_blocking(move || db_clone.mine_completed_transaction(tx_id))
-            .await
-            .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))
-            .and_then(|inner_result| inner_result)
-    }
-
     pub async fn add_utxo_import_transaction(
         &self,
         tx_id: TxId,
@@ -714,9 +702,9 @@ where T: TransactionBackend + 'static
         Ok(())
     }
 
-    pub async fn unconfirm_mined_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError> {
+    pub async fn set_transaction_as_unmined(&self, tx_id: TxId) -> Result<(), TransactionStorageError> {
         let db_clone = self.db.clone();
-        tokio::task::spawn_blocking(move || db_clone.unconfirm_mined_transaction(tx_id))
+        tokio::task::spawn_blocking(move || db_clone.set_transaction_as_unmined(tx_id))
             .await
             .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(())

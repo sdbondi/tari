@@ -68,7 +68,6 @@ use tari_comms_dht::outbound::OutboundMessageRequester;
 #[cfg(feature = "test_harness")]
 use tari_core::transactions::{tari_amount::uT, types::BlindingFactor};
 use tari_core::{
-    base_node::sync::rpc::BaseNodeSyncRpcClient,
     crypto::keys::SecretKey,
     proto::base_node as base_node_proto,
     transactions::{
@@ -1512,6 +1511,7 @@ where
                     pk,
                     self.resources.connectivity_manager.clone(),
                     self.resources.config.clone(),
+                    self.event_publisher.clone(),
                 );
 
                 let join_handle = tokio::spawn(protocol.execute());
@@ -2087,21 +2087,22 @@ where
             )
             .await?;
 
-        self.db.mine_completed_transaction(tx_id).await?;
+        unimplemented!()
+        // self.db.mine_completed_transaction(tx_id).await?;
 
-        let _ = self
-            .event_publisher
-            .send(Arc::new(TransactionEvent::TransactionMined(tx_id)))
-            .map_err(|e| {
-                trace!(
-                    target: LOG_TARGET,
-                    "Error sending event, usually because there are no subscribers: {:?}",
-                    e
-                );
-                e
-            });
-
-        Ok(())
+        // let _ = self
+        //     .event_publisher
+        //     .send(Arc::new(TransactionEvent::TransactionMined(tx_id)))
+        //     .map_err(|e| {
+        //         trace!(
+        //             target: LOG_TARGET,
+        //             "Error sending event, usually because there are no subscribers: {:?}",
+        //             e
+        //         );
+        //         e
+        //     });
+        //
+        // Ok(())
     }
 
     /// This function is only available for testing by the client of LibWallet. This function simulates an external

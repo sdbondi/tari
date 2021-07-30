@@ -551,27 +551,28 @@ where TBackend: TransactionBackend + 'static
                 )
                 .await
                 .for_protocol(self.tx_id)?;
-            self.resources
-                .db
-                .mine_completed_transaction(self.tx_id)
-                .await
-                .for_protocol(self.tx_id)?;
+            // self.resources
+            //     .db
+            //     .mine_completed_transaction(self.tx_id)
+            //     .await
+            //     .for_protocol(self.tx_id)?;
+            unimplemented!("Need to update for transaction validation");
 
-            let _ = self
-                .resources
-                .event_publisher
-                .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed(
-                    self.tx_id,
-                    response.confirmations,
-                )))
-                .map_err(|e| {
-                    trace!(
-                        target: LOG_TARGET,
-                        "Error sending event because there are no subscribers: {:?}",
-                        e
-                    );
-                    e
-                });
+            // let _ = self
+            //     .resources
+            //     .event_publisher
+            //     .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed(
+            //         self.tx_id,
+            //         response.confirmations,
+            //     )))
+            //     .map_err(|e| {
+            //         trace!(
+            //             target: LOG_TARGET,
+            //             "Error sending event because there are no subscribers: {:?}",
+            //             e
+            //         );
+            //         e
+            //     });
         } else if response.location == TxLocation::InMempool {
             debug!(
                 target: LOG_TARGET,

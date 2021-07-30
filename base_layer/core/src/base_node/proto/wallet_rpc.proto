@@ -43,6 +43,7 @@ message TxQueryBatchResponse {
     TxLocation location = 2;
     google.protobuf.BytesValue block_hash = 3;
     uint64 confirmations = 4;
+    uint64 block_height = 5;
 }
 
 message TxQueryBatchResponses {

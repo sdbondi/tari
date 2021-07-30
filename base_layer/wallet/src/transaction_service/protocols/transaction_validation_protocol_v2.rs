@@ -23,16 +23,34 @@
 use crate::transaction_service::{
     config::TransactionServiceConfig,
     error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolWrapper},
+    handle::{TransactionEvent, TransactionEventSender},
     storage::{
         database::{TransactionBackend, TransactionDatabase},
         models::CompletedTransaction,
     },
 };
 use log::*;
-use std::convert::TryInto;
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+};
 use tari_common_types::types::BlockHash;
-use tari_comms::{connectivity::ConnectivityRequester, types::CommsPublicKey, PeerConnection};
-use tari_core::{base_node::sync::rpc::BaseNodeSyncRpcClient, blocks::BlockHeader};
+use tari_comms::{
+    connectivity::ConnectivityRequester,
+    protocol::rpc::{RpcError::RequestFailed, RpcStatusCode::NotFound},
+    types::CommsPublicKey,
+};
+use tari_core::{
+    base_node::{
+        proto::wallet_rpc::{TxLocation, TxQueryBatchResponse},
+        rpc::BaseNodeWalletRpcClient,
+        sync::rpc::BaseNodeSyncRpcClient,
+    },
+    blocks::BlockHeader,
+    proto::{base_node::Signatures as SignaturesProto, types::Signature as SignatureProto},
+    transactions::types::Signature,
+};
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 
 const LOG_TARGET: &str = "wallet::transaction_service::protocols::validation_protocol_v2";
@@ -44,6 +62,7 @@ pub struct TransactionValidationProtocolV2<TTransactionBackend: TransactionBacke
     batch_size: usize,
     connectivity_requester: ConnectivityRequester,
     config: TransactionServiceConfig,
+    event_publisher: TransactionEventSender,
 }
 
 #[allow(unused_variables)]
@@ -53,6 +72,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         base_node_pk: CommsPublicKey,
         connectivity_requester: ConnectivityRequester,
         config: TransactionServiceConfig,
+        event_publisher: TransactionEventSender,
     ) -> Self {
         Self {
             operation_id: 122, // Get a real tx id
@@ -61,6 +81,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             base_node_pk,
             connectivity_requester,
             config,
+            event_publisher,
         }
     }
 
@@ -77,6 +98,13 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             .await
             .for_protocol(self.operation_id)?;
 
+        let mut base_node_wallet_client = base_node_connection
+            .connect_rpc_using_builder(
+                BaseNodeWalletRpcClient::builder().with_deadline(self.config.chain_monitoring_timeout),
+            )
+            .await
+            .for_protocol(self.operation_id)?;
+
         self.check_for_reorgs(&mut client).await?;
         info!(
             target: LOG_TARGET,
@@ -86,33 +114,49 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             .db
             .fetch_unmined_transactions()
             .await
-            .for_protocol(self.operation_id)?;
+            .for_protocol(self.operation_id)
+            .unwrap();
         for batch in unmined_transactions.chunks(self.batch_size) {
             info!(
                 target: LOG_TARGET,
                 "Asking base node for location of {} transactions by excess",
                 batch.len()
             );
-            let (mined, unmined) = self.query_base_node_for_transactions(batch).await?;
+            let (mined, unmined) = self
+                .query_base_node_for_transactions(batch, &mut base_node_wallet_client)
+                .await
+                .for_protocol(self.operation_id)?;
             info!(
                 target: LOG_TARGET,
                 "Base node returned {} as mined and {} as unmined",
                 mined.len(),
                 unmined.len()
             );
-            for tx in &mined {
+            for (tx, mined_height, mined_in_block) in &mined {
                 info!(target: LOG_TARGET, "Updating transaction {} as mined", tx.tx_id);
-                let mined_in_block = tx.mined_in_block.as_ref().unwrap(); // TODO: sort out this wrap
-                let mined_height = tx.mined_height.unwrap();
-                self.update_transaction_as_mined(tx, mined_in_block, mined_height)
+                self.update_transaction_as_mined(tx, mined_in_block, *mined_height)
                     .await?;
+                self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
             }
-            for tx in &unmined_transactions {
+            for tx in &unmined {
                 info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
                 self.update_transaction_as_unmined(&tx).await?;
             }
         }
+        self.publish_event(TransactionEvent::TransactionValidationSuccess(self.operation_id));
         Ok(self.operation_id)
+    }
+
+    fn publish_event(&self, event: TransactionEvent) {
+        match self.event_publisher.send(Arc::new(event)) {
+            Err(e) => {
+                debug!(
+                    target: LOG_TARGET,
+                    "Error sending event because there are no subscribers: {:?}", e
+                );
+            },
+            _ => (),
+        }
     }
 
     async fn check_for_reorgs(
@@ -133,8 +177,11 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             {
                 let mined_height = last_mined_transaction.mined_height.unwrap(); // TODO: fix unwrap
                 let mined_in_block_hash = last_mined_transaction.mined_in_block.clone().unwrap(); // TODO: fix unwrap.
-                let block_at_height = self.get_base_node_block_at_height(mined_height, client).await?;
-                if block_at_height != mined_in_block_hash {
+                let block_at_height = self
+                    .get_base_node_block_at_height(mined_height, client)
+                    .await
+                    .for_protocol(self.operation_id)?;
+                if block_at_height.is_none() || block_at_height.unwrap() != mined_in_block_hash {
                     // Chain has reorged since we last
                     warn!(
                         target: LOG_TARGET,
@@ -167,19 +214,72 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
     async fn query_base_node_for_transactions(
         &self,
         batch: &[CompletedTransaction],
-    ) -> Result<(Vec<CompletedTransaction>, Vec<CompletedTransaction>), TransactionServiceProtocolError> {
-        unimplemented!()
+        base_node_client: &mut BaseNodeWalletRpcClient,
+    ) -> Result<(Vec<(CompletedTransaction, u64, BlockHash)>, Vec<CompletedTransaction>), TransactionServiceError> {
+        let mut batch_signatures = HashMap::new();
+        for tx in batch.iter() {
+            let signature = tx
+                .transaction
+                .first_kernel_excess_sig()
+                .ok_or(TransactionServiceError::InvalidTransaction)?;
+
+            batch_signatures.insert(signature.clone(), tx);
+        }
+
+        let batch_response = base_node_client
+            .transaction_batch_query(SignaturesProto {
+                sigs: batch_signatures
+                    .keys()
+                    .map(|s| SignatureProto::from(s.clone()))
+                    .collect(),
+            })
+            .await?;
+
+        let mut mined = vec![];
+        let mut unmined = vec![];
+        for response_proto in batch_response.responses {
+            let response = TxQueryBatchResponse::try_from(response_proto)
+                .map_err(TransactionServiceError::ProtobufConversionError)?;
+            let sig = Signature::try_from(response.signature).unwrap();
+            if let Some(completed_tx) = batch_signatures.get(&sig) {
+                if response.location == TxLocation::Mined {
+                    mined.push((
+                        (*completed_tx).clone(),
+                        response.block_height,
+                        response.block_hash.unwrap(),
+                    ));
+                } else {
+                    unmined.push((*completed_tx).clone());
+                }
+            }
+        }
+
+        Ok((mined, unmined))
     }
 
     async fn get_base_node_block_at_height(
         &mut self,
         height: u64,
         client: &mut BaseNodeSyncRpcClient,
-    ) -> Result<BlockHash, TransactionServiceProtocolError> {
-        let result = client
-            .get_header_by_height(height)
-            .await
-            .for_protocol(self.operation_id)?;
+    ) -> Result<Option<BlockHash>, TransactionServiceError> {
+        let result = match client.get_header_by_height(height).await {
+            Ok(r) => r,
+            Err(rpc_error) => {
+                warn!(target: LOG_TARGET, "Error asking base node for header:{}", rpc_error);
+                match &rpc_error {
+                    RequestFailed(status) => {
+                        if status.status_code() == NotFound {
+                            return Ok(None);
+                        } else {
+                            return Err(rpc_error.into());
+                        }
+                    },
+                    _ => {
+                        return Err(rpc_error.into());
+                    },
+                }
+            },
+        };
 
         let block_header: BlockHeader = result.try_into().map_err(|s| {
             TransactionServiceProtocolError::new(
@@ -187,7 +287,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                 TransactionServiceError::InvalidMessageError(format!("Could not convert block header: {}", s)),
             )
         })?;
-        Ok(block_header.hash())
+        Ok(Some(block_header.hash()))
     }
 
     async fn update_transaction_as_mined(
@@ -196,13 +296,19 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         mined_in_block: &BlockHash,
         mined_height: u64,
     ) -> Result<(), TransactionServiceProtocolError> {
-        unimplemented!()
+        self.db
+            .set_transaction_mined_height(tx.tx_id, mined_height, mined_in_block.clone())
+            .await
+            .for_protocol(self.operation_id)
     }
 
     async fn update_transaction_as_unmined(
         &self,
         tx: &CompletedTransaction,
     ) -> Result<(), TransactionServiceProtocolError> {
-        unimplemented!()
+        self.db
+            .set_transaction_as_unmined(tx.tx_id)
+            .await
+            .for_protocol(self.operation_id)
     }
 }

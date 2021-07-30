@@ -515,12 +515,13 @@ where TBackend: TransactionBackend + 'static
                              updated",
                             queried_tx.tx_id
                         );
-                        if let Err(e) = self.resources.db.unconfirm_mined_transaction(queried_tx.tx_id).await {
-                            warn!(
-                                target: LOG_TARGET,
-                                "Error unconfirming mined transaction (TxId: {}): {}", queried_tx.tx_id, e
-                            );
-                        }
+                        // if let Err(e) = self.resources.db.unconfirm_mined_transaction(queried_tx.tx_id).await {
+                        //     warn!(
+                        //         target: LOG_TARGET,
+                        //         "Error unconfirming mined transaction (TxId: {}): {}", queried_tx.tx_id, e
+                        //     );
+                        // }
+                        unimplemented!()
                     }
                 } else if queried_tx.valid {
                     info!(

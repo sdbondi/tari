@@ -267,6 +267,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
                 location: response.location,
                 block_hash: response.block_hash,
                 confirmations: response.confirmations,
+                block_height: response.height_of_longest_chain - response.confirmations,
             });
         }
         Ok(Response::new(TxQueryBatchResponses { responses, is_synced }))
