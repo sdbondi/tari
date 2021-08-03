@@ -21,5 +21,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod txo_validation_task;
+mod txo_validation_task_v2;
 
 pub use txo_validation_task::{TxoValidationTask, TxoValidationType};
+pub use txo_validation_task_v2::TxoValidationTaskV2;

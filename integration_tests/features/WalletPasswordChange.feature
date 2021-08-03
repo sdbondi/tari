@@ -1,3 +1,4 @@
+@wallet
 Feature: Wallet Password Change
 
     Scenario: As a user I want to change password

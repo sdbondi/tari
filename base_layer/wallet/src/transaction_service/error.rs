@@ -207,11 +207,11 @@ impl From<TransactionServiceProtocolError> for TransactionServiceError {
     }
 }
 
-pub trait TransactionServiceProtocolWrapper<TRes> {
+pub trait TransactionServiceProtocolErrorExt<TRes> {
     fn for_protocol(self, id: u64) -> Result<TRes, TransactionServiceProtocolError>;
 }
 
-impl<TRes, TErr: Into<TransactionServiceError>> TransactionServiceProtocolWrapper<TRes> for Result<TRes, TErr> {
+impl<TRes, TErr: Into<TransactionServiceError>> TransactionServiceProtocolErrorExt<TRes> for Result<TRes, TErr> {
     fn for_protocol(self, id: u64) -> Result<TRes, TransactionServiceProtocolError> {
         match self {
             Ok(r) => Ok(r),

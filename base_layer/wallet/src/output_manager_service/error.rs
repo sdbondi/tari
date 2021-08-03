@@ -178,3 +178,16 @@ impl From<OutputManagerProtocolError> for OutputManagerError {
         tspe.error
     }
 }
+
+pub trait OutputManagerProtocolErrorExt<TRes> {
+    fn for_protocol(self, id: u64) -> Result<TRes, OutputManagerProtocolError>;
+}
+
+impl<TRes, TErr: Into<OutputManagerError>> OutputManagerProtocolErrorExt<TRes> for Result<TRes, TErr> {
+    fn for_protocol(self, id: u64) -> Result<TRes, OutputManagerProtocolError> {
+        match self {
+            Ok(r) => Ok(r),
+            Err(e) => Err(OutputManagerProtocolError::new(id, e.into())),
+        }
+    }
+}

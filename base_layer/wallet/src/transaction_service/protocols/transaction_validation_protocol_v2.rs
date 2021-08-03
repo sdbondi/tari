@@ -22,7 +22,7 @@
 
 use crate::transaction_service::{
     config::TransactionServiceConfig,
-    error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolWrapper},
+    error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolErrorExt},
     handle::{TransactionEvent, TransactionEventSender},
     storage::{
         database::{TransactionBackend, TransactionDatabase},

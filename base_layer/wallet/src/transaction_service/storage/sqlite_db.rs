@@ -869,7 +869,7 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
 
     fn fetch_last_mined_transaction(&self) -> Result<Option<CompletedTransaction>, TransactionStorageError> {
         let conn = self.database_connection.acquire_lock();
-        let mut tx = completed_transactions::table
+        let tx = completed_transactions::table
             .filter(completed_transactions::mined_height.is_not_null())
             .order_by(completed_transactions::mined_height.desc())
             .first::<CompletedTransactionSql>(&*conn)
@@ -885,7 +885,7 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
 
     fn fetch_unmined_transactions(&self) -> Result<Vec<CompletedTransaction>, TransactionStorageError> {
         let conn = self.database_connection.acquire_lock();
-        let mut txs = completed_transactions::table
+        let txs = completed_transactions::table
             .filter(completed_transactions::mined_height.is_null())
             .order_by(completed_transactions::tx_id)
             .load::<CompletedTransactionSql>(&*conn)?;
@@ -1401,20 +1401,6 @@ impl CompletedTransactionSql {
         self.update(
             UpdateCompletedTransactionSql {
                 status: Some(TransactionStatus::MinedConfirmed as i32),
-                ..Default::default()
-            },
-            conn,
-        )?;
-
-        Ok(())
-    }
-
-    pub fn unconfirm(&self, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
-        self.update(
-            UpdateCompletedTransactionSql {
-                status: Some(TransactionStatus::MinedUnconfirmed as i32),
-                mined_in_block: Some(None),
-                mined_height: Some(None),
                 ..Default::default()
             },
             conn,

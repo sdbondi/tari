@@ -23,7 +23,7 @@
 use crate::{
     output_manager_service::TxId,
     transaction_service::{
-        error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolWrapper},
+        error::{TransactionServiceError, TransactionServiceProtocolError, TransactionServiceProtocolErrorExt},
         handle::TransactionEvent,
         service::TransactionServiceResources,
         storage::{database::TransactionBackend, models::CompletedTransaction},
@@ -446,7 +446,7 @@ where TBackend: TransactionBackend + 'static
     async fn query_coinbase_transaction(
         &mut self,
         signature: Signature,
-        completed_tx: CompletedTransaction,
+        _completed_tx: CompletedTransaction,
         client: &mut BaseNodeWalletRpcClient,
     ) -> Result<(bool, Option<u64>), TransactionServiceProtocolError> {
         trace!(
@@ -477,56 +477,56 @@ where TBackend: TransactionBackend + 'static
             },
         };
 
-        if !(response.is_synced ||
-            response.location == TxLocation::Mined &&
-                response.confirmations >= self.resources.config.num_confirmations_required)
-        {
-            info!(
-                target: LOG_TARGET,
-                "Base Node reports not being synced, coinbase monitoring will be retried."
-            );
-            return Ok((false, Some(response.height_of_longest_chain)));
-        }
+        // if !(response.is_synced ||
+        //     response.location == TxLocation::Mined &&
+        //         response.confirmations >= self.resources.config.num_confirmations_required)
+        // {
+        //     info!(
+        //         target: LOG_TARGET,
+        //         "Base Node reports not being synced, coinbase monitoring will be retried."
+        //     );
+        //     return Ok((false, Some(response.height_of_longest_chain)));
+        // }
 
         // Mined?
         if response.location == TxLocation::Mined {
-            if response.confirmations >= self.resources.config.num_confirmations_required {
-                info!(
-                    target: LOG_TARGET,
-                    "Coinbase transaction (TxId: {}) detected as mined and CONFIRMED with {} confirmations",
-                    self.tx_id,
-                    response.confirmations
-                );
-                self.resources
-                    .output_manager_service
-                    .confirm_transaction(
-                        self.tx_id,
-                        completed_tx.transaction.body.inputs().clone(),
-                        completed_tx.transaction.body.outputs().clone(),
-                    )
-                    .await
-                    .for_protocol(self.tx_id)?;
-
-                self.resources
-                    .db
-                    .confirm_broadcast_or_coinbase_transaction(self.tx_id)
-                    .await
-                    .for_protocol(self.tx_id)?;
-
-                let _ = self
-                    .resources
-                    .event_publisher
-                    .send(Arc::new(TransactionEvent::TransactionMined(self.tx_id)))
-                    .map_err(|e| {
-                        trace!(
-                            target: LOG_TARGET,
-                            "Error sending event because there are no subscribers: {:?}",
-                            e
-                        );
-                        e
-                    });
-                return Ok((true, Some(response.height_of_longest_chain)));
-            }
+            // if response.confirmations >= self.resources.config.num_confirmations_required {
+            //     info!(
+            //         target: LOG_TARGET,
+            //         "Coinbase transaction (TxId: {}) detected as mined and CONFIRMED with {} confirmations",
+            //         self.tx_id,
+            //         response.confirmations
+            //     );
+            //     self.resources
+            //         .output_manager_service
+            //         .confirm_transaction(
+            //             self.tx_id,
+            //             completed_tx.transaction.body.inputs().clone(),
+            //             completed_tx.transaction.body.outputs().clone(),
+            //         )
+            //         .await
+            //         .for_protocol(self.tx_id)?;
+            //
+            //     self.resources
+            //         .db
+            //         .confirm_broadcast_or_coinbase_transaction(self.tx_id)
+            //         .await
+            //         .for_protocol(self.tx_id)?;
+            //
+            //     let _ = self
+            //         .resources
+            //         .event_publisher
+            //         .send(Arc::new(TransactionEvent::TransactionMined(self.tx_id)))
+            //         .map_err(|e| {
+            //             trace!(
+            //                 target: LOG_TARGET,
+            //                 "Error sending event because there are no subscribers: {:?}",
+            //                 e
+            //             );
+            //             e
+            //         });
+            //     return Ok((true, Some(response.height_of_longest_chain)));
+            // }
             info!(
                 target: LOG_TARGET,
                 "Coinbase transaction (TxId: {}) detected as mined but UNCONFIRMED with {} confirmations",
@@ -551,28 +551,24 @@ where TBackend: TransactionBackend + 'static
                 )
                 .await
                 .for_protocol(self.tx_id)?;
-            // self.resources
-            //     .db
-            //     .mine_completed_transaction(self.tx_id)
-            //     .await
-            //     .for_protocol(self.tx_id)?;
-            unimplemented!("Need to update for transaction validation");
 
-            // let _ = self
-            //     .resources
-            //     .event_publisher
-            //     .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed(
-            //         self.tx_id,
-            //         response.confirmations,
-            //     )))
-            //     .map_err(|e| {
-            //         trace!(
-            //             target: LOG_TARGET,
-            //             "Error sending event because there are no subscribers: {:?}",
-            //             e
-            //         );
-            //         e
-            //     });
+            let _ = self
+                .resources
+                .event_publisher
+                .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed(
+                    self.tx_id,
+                    response.confirmations,
+                )))
+                .map_err(|e| {
+                    trace!(
+                        target: LOG_TARGET,
+                        "Error sending event because there are no subscribers: {:?}",
+                        e
+                    );
+                    e
+                });
+
+            return Ok((true, Some(response.height_of_longest_chain)));
         } else if response.location == TxLocation::InMempool {
             debug!(
                 target: LOG_TARGET,

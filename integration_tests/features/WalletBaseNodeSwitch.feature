@@ -1,3 +1,4 @@
+@wallet
 Feature: Wallet Base Node Switch
 
     Scenario: As a user I want to change base node for a wallet
