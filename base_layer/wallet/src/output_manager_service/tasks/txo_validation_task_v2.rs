@@ -104,7 +104,7 @@ where TBackend: OutputManagerBackend + 'static
         loop {
             if let Some(last_mined_output) = self
                 .db
-                .get_last_mined_output(self.validation_type)
+                .get_last_mined_output()
                 .await
                 .for_protocol(self.operation_id)
                 .unwrap()
