@@ -21,6 +21,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::output_manager_service::{
+    config::OutputManagerServiceConfig,
     error::{OutputManagerProtocolError, OutputManagerProtocolErrorExt},
     handle::OutputManagerEventSender,
     storage::database::{OutputManagerBackend, OutputManagerDatabase},
@@ -28,6 +29,7 @@ use crate::output_manager_service::{
 };
 use log::*;
 use tari_comms::{connectivity::ConnectivityRequester, types::CommsPublicKey};
+use tari_core::base_node::sync::rpc::BaseNodeSyncRpcClient;
 use tari_shutdown::ShutdownSignal;
 
 const LOG_TARGET: &str = "wallet::output_service::txo_validation_task_v2";
@@ -40,6 +42,7 @@ pub struct TxoValidationTaskV2<TBackend: OutputManagerBackend + 'static> {
     connectivity_requester: ConnectivityRequester,
     event_publisher: OutputManagerEventSender,
     validation_type: TxoValidationType,
+    config: OutputManagerServiceConfig,
 }
 
 impl<TBackend> TxoValidationTaskV2<TBackend>
@@ -52,6 +55,7 @@ where TBackend: OutputManagerBackend + 'static
         connectivity_requester: ConnectivityRequester,
         event_publisher: OutputManagerEventSender,
         validation_type: TxoValidationType,
+        config: OutputManagerServiceConfig,
     ) -> Self {
         Self {
             base_node_pk,
@@ -60,21 +64,23 @@ where TBackend: OutputManagerBackend + 'static
             connectivity_requester,
             event_publisher,
             validation_type,
+            config,
         }
     }
 
     pub async fn execute(mut self, shutdown: ShutdownSignal) -> Result<(), OutputManagerProtocolError> {
-        let base_node_client = self.create_base_node_client();
+        let mut base_node_client = self.create_base_node_client().await?;
 
         info!(
             target: LOG_TARGET,
-            "Starting TXO validation protocol V2 (Id: {}) for {}", self.id, self.validation_type,
+            "Starting TXO validation protocol V2 (Id: {}) for {}", self.operation_id, self.validation_type,
         );
 
-        self.check_for_reorgs(&mut client).await?;
+        self.check_for_reorgs(&mut base_node_client).await?;
+        unimplemented!()
     }
 
-    async fn create_base_node_client(&self) -> Result<BaseNodeSyncRpcClient, OutputManagerProtocolError> {
+    async fn create_base_node_client(&mut self) -> Result<BaseNodeSyncRpcClient, OutputManagerProtocolError> {
         let mut base_node_connection = self
             .connectivity_requester
             .dial_peer(self.base_node_pk.clone().into())
@@ -82,7 +88,7 @@ where TBackend: OutputManagerBackend + 'static
             .for_protocol(self.operation_id)?;
         let mut client = base_node_connection
             .connect_rpc_using_builder(
-                BaseNodeSyncRpcClient::builder().with_deadline(self.config.chain_monitoring_timeout),
+                BaseNodeSyncRpcClient::builder().with_deadline(self.config.base_node_query_timeout),
             )
             .await
             .for_protocol(self.operation_id)?;

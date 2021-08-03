@@ -538,6 +538,10 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         Ok(())
     }
 
+    fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+    }
+
     fn cancel_pending_transaction(&self, tx_id: u64) -> Result<(), OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
 
@@ -976,6 +980,14 @@ impl OutputSql {
             .filter(outputs::status.eq(OutputStatus::Unspent as i32))
             .filter(outputs::maturity.gt(tip as i64))
             .load(conn)?)
+    }
+
+    pub fn first_by_mined_height_desc(conn: &SqliteConnection) -> Result<Option<OutputSql>, OutputManagerStorageError> {
+        Ok(outputs::table
+            .filter(outputs::mined_height.not().is_null())
+            .order(outputs::mined_height.desc())
+            .first(conn)
+            .optional()?)
     }
 
     /// Find a particular Output, if it exists

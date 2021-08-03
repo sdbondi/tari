@@ -87,7 +87,7 @@ table! {
 
 table! {
     outputs (id) {
-        id -> Integer,
+        id -> BigInt,
         commitment -> Nullable<Binary>,
         spending_key -> Binary,
         value -> BigInt,
@@ -103,6 +103,9 @@ table! {
         metadata_signature_nonce -> Binary,
         metadata_signature_u_key -> Binary,
         metadata_signature_v_key -> Binary,
+        mined_height -> Nullable<BigInt>,
+        mined_in_block -> Nullable<Binary>,
+        mined_mmr_position -> Nullable<BigInt>,
     }
 }
 

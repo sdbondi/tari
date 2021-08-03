@@ -22,7 +22,7 @@
 
 use crate::base_node_service::error::BaseNodeServiceError;
 use diesel::result::Error as DieselError;
-use tari_comms::{peer_manager::node_id::NodeIdError, protocol::rpc::RpcError};
+use tari_comms::{connectivity::ConnectivityError, peer_manager::node_id::NodeIdError, protocol::rpc::RpcError};
 use tari_comms_dht::outbound::DhtOutboundError;
 use tari_core::transactions::{
     transaction::TransactionError,
@@ -109,6 +109,11 @@ pub enum OutputManagerError {
     MasterSecretKeyMismatch,
     #[error("Private Key is not found in the current Key Chain")]
     KeyNotFoundInKeyChain,
+    #[error("Connectivity error: {source}")]
+    ConnectivityError {
+        #[from]
+        source: ConnectivityError,
+    },
 }
 
 #[derive(Debug, Error, PartialEq)]

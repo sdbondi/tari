@@ -23,3 +23,11 @@
 alter table completed_transactions
 add mined_in_block blob null;
 
+alter table outputs
+add mined_height bigint null;
+
+alter table outputs
+add mined_in_block blob null;
+
+alter table outputs
+add mined_mmr_position bigint null;

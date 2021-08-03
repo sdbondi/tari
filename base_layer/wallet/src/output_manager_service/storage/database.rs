@@ -102,6 +102,9 @@ pub trait OutputManagerBackend: Send + Sync + Clone {
         &self,
         commitment: &Commitment,
     ) -> Result<DbUnblindedOutput, OutputManagerStorageError>;
+
+    /// Get the output that was most recently mined, ordered descending by mined height
+    fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError>;
 }
 
 /// Holds the outputs that have been selected for a given pending transaction waiting for confirmation
@@ -678,6 +681,10 @@ where T: OutputManagerBackend + 'static
         .await
         .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(scripts)
+    }
+
+    pub async fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
+        self.db.get_last_mined_output()
     }
 
     pub async fn add_known_script(
