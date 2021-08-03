@@ -22,14 +22,21 @@
 
 use crate::output_manager_service::{
     config::OutputManagerServiceConfig,
-    error::{OutputManagerProtocolError, OutputManagerProtocolErrorExt},
+    error::{OutputManagerError, OutputManagerProtocolError, OutputManagerProtocolErrorExt},
     handle::OutputManagerEventSender,
     storage::database::{OutputManagerBackend, OutputManagerDatabase},
     TxoValidationType,
 };
 use log::*;
-use tari_comms::{connectivity::ConnectivityRequester, types::CommsPublicKey};
-use tari_core::base_node::sync::rpc::BaseNodeSyncRpcClient;
+use std::convert::TryInto;
+use tari_common_types::types::BlockHash;
+use tari_comms::{
+    connectivity::ConnectivityRequester,
+    protocol::rpc::{RpcError::RequestFailed, RpcStatusCode::NotFound},
+    types::CommsPublicKey,
+};
+use tari_core::{base_node::sync::rpc::BaseNodeSyncRpcClient, blocks::BlockHeader};
+use tari_crypto::tari_utilities::Hashable;
 use tari_shutdown::ShutdownSignal;
 
 const LOG_TARGET: &str = "wallet::output_service::txo_validation_task_v2";
@@ -52,6 +59,7 @@ where TBackend: OutputManagerBackend + 'static
         base_node_pk: CommsPublicKey,
         operation_id: u64,
         batch_size: usize,
+        db: OutputManagerDatabase<TBackend>,
         connectivity_requester: ConnectivityRequester,
         event_publisher: OutputManagerEventSender,
         validation_type: TxoValidationType,
@@ -61,6 +69,7 @@ where TBackend: OutputManagerBackend + 'static
             base_node_pk,
             operation_id,
             batch_size,
+            db,
             connectivity_requester,
             event_publisher,
             validation_type,
@@ -136,5 +145,37 @@ where TBackend: OutputManagerBackend + 'static
             }
         }
         Ok(())
+    }
+
+    // TODO: remove this duplicated code from transaction validation protocol
+
+    async fn get_base_node_block_at_height(
+        &mut self,
+        height: u64,
+        client: &mut BaseNodeSyncRpcClient,
+    ) -> Result<Option<BlockHash>, OutputManagerError> {
+        let result = match client.get_header_by_height(height).await {
+            Ok(r) => r,
+            Err(rpc_error) => {
+                warn!(target: LOG_TARGET, "Error asking base node for header:{}", rpc_error);
+                match &rpc_error {
+                    RequestFailed(status) => {
+                        if status.status_code() == NotFound {
+                            return Ok(None);
+                        } else {
+                            return Err(rpc_error.into());
+                        }
+                    },
+                    _ => {
+                        return Err(rpc_error.into());
+                    },
+                }
+            },
+        };
+
+        let block_header: BlockHeader = result
+            .try_into()
+            .map_err(|s| OutputManagerError::InvalidMessageError(format!("Could not convert block header: {}", s)))?;
+        Ok(Some(block_header.hash()))
     }
 }

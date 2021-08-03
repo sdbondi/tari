@@ -114,6 +114,8 @@ pub enum OutputManagerError {
         #[from]
         source: ConnectivityError,
     },
+    #[error("Invalid message received:{0}")]
+    InvalidMessageError(String),
 }
 
 #[derive(Debug, Error, PartialEq)]

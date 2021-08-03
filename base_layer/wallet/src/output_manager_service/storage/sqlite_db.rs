@@ -39,7 +39,10 @@ use crate::{
     },
     schema::{key_manager_states, known_one_sided_payment_scripts, outputs, pending_transaction_outputs},
     storage::sqlite_utilities::WalletDbConnection,
-    util::encryption::{decrypt_bytes_integral_nonce, encrypt_bytes_integral_nonce, Encryptable},
+    util::{
+        diesel_ext::ExpectedRowsExtension,
+        encryption::{decrypt_bytes_integral_nonce, encrypt_bytes_integral_nonce, Encryptable},
+    },
 };
 use aes_gcm::{aead::Error as AeadError, Aes256Gcm, Error};
 use chrono::{Duration as ChronoDuration, NaiveDateTime, Utc};
@@ -47,7 +50,7 @@ use diesel::{prelude::*, result::Error as DieselError, SqliteConnection};
 use log::*;
 use std::{
     collections::HashMap,
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     str::from_utf8,
     sync::{Arc, RwLock},
     time::Duration,
@@ -540,6 +543,15 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
 
     fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
+
+        let output = OutputSql::first_by_mined_height_desc(&(*conn))?;
+        match output {
+            Some(mut o) => {
+                self.decrypt_if_necessary(&mut o)?;
+                Ok(Some(o.try_into()?))
+            },
+            None => Ok(None),
+        }
     }
 
     fn cancel_pending_transaction(&self, tx_id: u64) -> Result<(), OutputManagerStorageError> {
@@ -878,7 +890,7 @@ impl TryFrom<i32> for OutputStatus {
 struct NewOutputSql {
     commitment: Option<Vec<u8>>,
     spending_key: Vec<u8>,
-    value: i64,
+    value: u64,
     flags: i32,
     maturity: i64,
     status: i32,
@@ -958,6 +970,9 @@ struct OutputSql {
     metadata_signature_nonce: Vec<u8>,
     metadata_signature_u_key: Vec<u8>,
     metadata_signature_v_key: Vec<u8>,
+    mined_height: Option<i64>,
+    mined_in_block: Option<Vec<u8>>,
+    mined_mmr_position: Option<i64>,
 }
 
 impl OutputSql {
@@ -984,7 +999,7 @@ impl OutputSql {
 
     pub fn first_by_mined_height_desc(conn: &SqliteConnection) -> Result<Option<OutputSql>, OutputManagerStorageError> {
         Ok(outputs::table
-            .filter(outputs::mined_height.not().is_null())
+            .filter(outputs::mined_height.is_not_null())
             .order(outputs::mined_height.desc())
             .first(conn)
             .optional()?)
@@ -1066,15 +1081,10 @@ impl OutputSql {
         updated_output: UpdateOutput,
         conn: &SqliteConnection,
     ) -> Result<OutputSql, OutputManagerStorageError> {
-        let num_updated = diesel::update(outputs::table.filter(outputs::id.eq(&self.id)))
+        diesel::update(outputs::table.filter(outputs::id.eq(&self.id)))
             .set(UpdateOutputSql::from(updated_output))
-            .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(OutputManagerStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
 
         OutputSql::find(&self.spending_key, conn)
     }
@@ -1085,15 +1095,10 @@ impl OutputSql {
         updated_null: NullOutputSql,
         conn: &SqliteConnection,
     ) -> Result<OutputSql, OutputManagerStorageError> {
-        let num_updated = diesel::update(outputs::table.filter(outputs::spending_key.eq(&self.spending_key)))
+        diesel::update(outputs::table.filter(outputs::spending_key.eq(&self.spending_key)))
             .set(updated_null)
-            .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(OutputManagerStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
 
         OutputSql::find(&self.spending_key, conn)
     }
@@ -1195,6 +1200,9 @@ impl TryFrom<OutputSql> for DbUnblindedOutput {
             commitment,
             unblinded_output,
             hash,
+            mined_height: o.mined_height.map(|mh| mh as u64),
+            mined_in_block: o.mined_in_block,
+            mined_mmr_position: o.mined_mmr_position.map(|mp| mp as u64),
         })
     }
 }
@@ -1374,17 +1382,10 @@ impl PendingTransactionOutputSql {
         &self,
         conn: &SqliteConnection,
     ) -> Result<PendingTransactionOutputSql, OutputManagerStorageError> {
-        let num_updated = diesel::update(
-            pending_transaction_outputs::table.filter(pending_transaction_outputs::tx_id.eq(&self.tx_id)),
-        )
-        .set(UpdatePendingTransactionOutputSql { short_term: Some(0i32) })
-        .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(OutputManagerStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
+        diesel::update(pending_transaction_outputs::table.filter(pending_transaction_outputs::tx_id.eq(&self.tx_id)))
+            .set(UpdatePendingTransactionOutputSql { short_term: Some(0i32) })
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
 
         PendingTransactionOutputSql::find(self.tx_id as u64, conn)
     }
@@ -1453,14 +1454,10 @@ impl KeyManagerStateSql {
                     primary_key_index: Some(self.primary_key_index),
                 };
 
-                let num_updated = diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
+                diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
                     .set(update)
-                    .execute(conn)?;
-                if num_updated == 0 {
-                    return Err(OutputManagerStorageError::UnexpectedResult(
-                        "Database update error".to_string(),
-                    ));
-                }
+                    .execute(conn)
+                    .num_rows_affected_or_not_found(1)?;
             },
             Err(_) => self.commit(conn)?,
         }
@@ -1476,14 +1473,10 @@ impl KeyManagerStateSql {
                     branch_seed: None,
                     primary_key_index: Some(current_index),
                 };
-                let num_updated = diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
+                diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
                     .set(update)
-                    .execute(conn)?;
-                if num_updated == 0 {
-                    return Err(OutputManagerStorageError::UnexpectedResult(
-                        "Database update error".to_string(),
-                    ));
-                }
+                    .execute(conn)
+                    .num_rows_affected_or_not_found(1)?;
                 current_index
             },
             Err(_) => return Err(OutputManagerStorageError::KeyManagerNotInitialized),
@@ -1498,14 +1491,10 @@ impl KeyManagerStateSql {
                     branch_seed: None,
                     primary_key_index: Some(index as i64),
                 };
-                let num_updated = diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
+                diesel::update(key_manager_states::table.filter(key_manager_states::id.eq(&km.id)))
                     .set(update)
-                    .execute(conn)?;
-                if num_updated == 0 {
-                    return Err(OutputManagerStorageError::UnexpectedResult(
-                        "Database update error".to_string(),
-                    ));
-                }
+                    .execute(conn)
+                    .num_rows_affected_or_not_found(1)?;
                 Ok(())
             },
             Err(_) => Err(OutputManagerStorageError::KeyManagerNotInitialized),
@@ -1606,18 +1595,13 @@ impl KnownOneSidedPaymentScriptSql {
         updated_known_script: UpdateKnownOneSidedPaymentScript,
         conn: &SqliteConnection,
     ) -> Result<KnownOneSidedPaymentScriptSql, OutputManagerStorageError> {
-        let num_updated = diesel::update(
+        diesel::update(
             known_one_sided_payment_scripts::table
                 .filter(known_one_sided_payment_scripts::script_hash.eq(&self.script_hash)),
         )
         .set(updated_known_script)
-        .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(OutputManagerStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
+        .execute(conn)
+        .num_rows_affected_or_not_found(1)?;
 
         KnownOneSidedPaymentScriptSql::find(&self.script_hash, conn)
     }

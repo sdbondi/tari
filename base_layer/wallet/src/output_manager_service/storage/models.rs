@@ -22,6 +22,7 @@
 
 use crate::output_manager_service::error::OutputManagerStorageError;
 use std::cmp::Ordering;
+use tari_common_types::types::BlockHash;
 use tari_core::{
     tari_utilities::hash::Hashable,
     transactions::{
@@ -37,6 +38,9 @@ pub struct DbUnblindedOutput {
     pub commitment: Commitment,
     pub unblinded_output: UnblindedOutput,
     pub hash: HashOutput,
+    pub mined_height: Option<u64>,
+    pub mined_in_block: Option<BlockHash>,
+    pub mined_mmr_position: Option<u64>,
 }
 
 impl DbUnblindedOutput {
@@ -49,6 +53,9 @@ impl DbUnblindedOutput {
             hash: tx_out.hash(),
             commitment: tx_out.commitment,
             unblinded_output: output,
+            mined_height: None,
+            mined_in_block: None,
+            mined_mmr_position: None,
         })
     }
 
@@ -62,6 +69,9 @@ impl DbUnblindedOutput {
             hash: tx_out.hash(),
             commitment: tx_out.commitment,
             unblinded_output: output,
+            mined_height: None,
+            mined_in_block: None,
+            mined_mmr_position: None,
         })
     }
 }

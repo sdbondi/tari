@@ -282,10 +282,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         };
 
         let block_header: BlockHeader = result.try_into().map_err(|s| {
-            TransactionServiceProtocolError::new(
-                self.operation_id,
-                TransactionServiceError::InvalidMessageError(format!("Could not convert block header: {}", s)),
-            )
+            TransactionServiceError::InvalidMessageError(format!("Could not convert block header: {}", s))
         })?;
         Ok(Some(block_header.hash()))
     }

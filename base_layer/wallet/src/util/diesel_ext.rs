@@ -1,4 +1,4 @@
-// Copyright 2019. The Tari Project
+// Copyright 2021. The Tari Project
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 // following conditions are met:
@@ -20,7 +20,50 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-pub mod diesel_ext;
-pub mod emoji;
-pub mod encryption;
-pub mod luhn;
+use diesel::{result::Error as DieselError, QueryResult};
+
+pub trait ExpectedRowsExtension {
+    fn num_rows_affected_or_not_found(self, num_rows: usize) -> Result<usize, DieselError>;
+}
+
+impl ExpectedRowsExtension for QueryResult<usize> {
+    fn num_rows_affected_or_not_found(self, num_rows: usize) -> Result<usize, DieselError> {
+        match self {
+            Ok(s) => {
+                if s == num_rows {
+                    Ok(s)
+                } else {
+                    Err(DieselError::NotFound)
+                }
+            },
+            Err(e) => Err(e),
+        }
+    }
+}
+
+pub mod exports {
+    use diesel::{
+        deserialize,
+        deserialize::FromSql,
+        serialize,
+        serialize::{Output, ToSql},
+        sql_types::BigInt,
+        sqlite::Sqlite,
+    };
+    use std::io::Write;
+
+    pub struct UnsignedBigInt;
+
+    impl ToSql<UnsignedBigInt, Sqlite> for u64 {
+        fn to_sql<W: Write>(&self, out: &mut Output<W, Sqlite>) -> serialize::Result {
+            ToSql::<BigInt, Sqlite>::to_sql(&(*self as i64), out)
+        }
+    }
+
+    impl FromSql<UnsignedBigInt, Sqlite> for u64 {
+        fn from_sql(value: Option<&SqliteValue>) -> deserialize::Result<Self> {
+            let signed: i64 = FromSql::<BigInt, Sqlite>::from_sql(value)?;
+            Ok(signed as u64)
+        }
+    }
+}

@@ -38,7 +38,10 @@ use crate::{
             },
         },
     },
-    util::encryption::{decrypt_bytes_integral_nonce, encrypt_bytes_integral_nonce, Encryptable},
+    util::{
+        diesel_ext::ExpectedRowsExtension,
+        encryption::{decrypt_bytes_integral_nonce, encrypt_bytes_integral_nonce, Encryptable},
+    },
 };
 use aes_gcm::{self, aead::Error as AeadError, Aes256Gcm};
 use chrono::{NaiveDateTime, Utc};
@@ -993,7 +996,7 @@ impl InboundTransactionSql {
 
         if num_updated == 0 {
             return Err(TransactionStorageError::UnexpectedResult(
-                "Database update error".to_string(),
+                "Updating inbound transactions failed. No rows were affected".to_string(),
             ));
         }
 
@@ -1153,14 +1156,9 @@ impl OutboundTransactionSql {
     }
 
     pub fn delete(&self, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
-        let num_deleted =
-            diesel::delete(outbound_transactions::table.filter(outbound_transactions::tx_id.eq(&self.tx_id)))
-                .execute(conn)?;
-
-        if num_deleted == 0 {
-            return Err(TransactionStorageError::ValuesNotFound);
-        }
-
+        diesel::delete(outbound_transactions::table.filter(outbound_transactions::tx_id.eq(&self.tx_id)))
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
         Ok(())
     }
 
@@ -1169,16 +1167,10 @@ impl OutboundTransactionSql {
         update: UpdateOutboundTransactionSql,
         conn: &SqliteConnection,
     ) -> Result<(), TransactionStorageError> {
-        let num_updated =
-            diesel::update(outbound_transactions::table.filter(outbound_transactions::tx_id.eq(&self.tx_id)))
-                .set(update)
-                .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(TransactionStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
+        diesel::update(outbound_transactions::table.filter(outbound_transactions::tx_id.eq(&self.tx_id)))
+            .set(update)
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
 
         Ok(())
     }
@@ -1371,17 +1363,10 @@ impl CompletedTransactionSql {
         updated_tx: UpdateCompletedTransactionSql,
         conn: &SqliteConnection,
     ) -> Result<(), TransactionStorageError> {
-        let num_updated =
-            diesel::update(completed_transactions::table.filter(completed_transactions::tx_id.eq(&self.tx_id)))
-                .set(updated_tx)
-                .execute(conn)?;
-
-        if num_updated == 0 {
-            return Err(TransactionStorageError::UnexpectedResult(
-                "Database update error".to_string(),
-            ));
-        }
-
+        diesel::update(completed_transactions::table.filter(completed_transactions::tx_id.eq(&self.tx_id)))
+            .set(updated_tx)
+            .execute(conn)
+            .num_rows_affected_or_not_found(1)?;
         Ok(())
     }
 
