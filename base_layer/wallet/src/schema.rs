@@ -52,7 +52,7 @@ table! {
 
 table! {
     key_manager_states (id) {
-        id -> Nullable<BigInt>,
+        id -> Integer,
         master_key -> Binary,
         branch_seed -> Text,
         primary_key_index -> BigInt,
@@ -87,7 +87,7 @@ table! {
 
 table! {
     outputs (id) {
-        id -> BigInt,
+        id -> Integer,
         commitment -> Nullable<Binary>,
         spending_key -> Binary,
         value -> BigInt,

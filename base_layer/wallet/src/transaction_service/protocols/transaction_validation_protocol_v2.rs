@@ -132,9 +132,9 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                 mined.len(),
                 unmined.len()
             );
-            for (tx, mined_height, mined_in_block) in &mined {
+            for (tx, mined_height, mined_in_block, num_confirmations) in &mined {
                 info!(target: LOG_TARGET, "Updating transaction {} as mined", tx.tx_id);
-                self.update_transaction_as_mined(tx, mined_in_block, *mined_height)
+                self.update_transaction_as_mined(tx, mined_in_block, *mined_height, *num_confirmations)
                     .await?;
                 self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
             }
@@ -215,7 +215,13 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         &self,
         batch: &[CompletedTransaction],
         base_node_client: &mut BaseNodeWalletRpcClient,
-    ) -> Result<(Vec<(CompletedTransaction, u64, BlockHash)>, Vec<CompletedTransaction>), TransactionServiceError> {
+    ) -> Result<
+        (
+            Vec<(CompletedTransaction, u64, BlockHash, u64)>,
+            Vec<CompletedTransaction>,
+        ),
+        TransactionServiceError,
+    > {
         let mut batch_signatures = HashMap::new();
         for tx in batch.iter() {
             let signature = tx
@@ -247,6 +253,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                         (*completed_tx).clone(),
                         response.block_height,
                         response.block_hash.unwrap(),
+                        response.confirmations,
                     ));
                 } else {
                     unmined.push((*completed_tx).clone());
@@ -292,11 +299,31 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         tx: &CompletedTransaction,
         mined_in_block: &BlockHash,
         mined_height: u64,
+        num_confirmations: u64,
     ) -> Result<(), TransactionServiceProtocolError> {
+        // TODO: I don't think the confirmations should be saved to the database as it makes it harder
+        // to determine reorgs, but will work with it for now
         self.db
-            .set_transaction_mined_height(tx.tx_id, mined_height, mined_in_block.clone())
+            .set_transaction_mined_height(
+                tx.tx_id,
+                mined_height,
+                mined_in_block.clone(),
+                num_confirmations,
+                num_confirmations >= self.config.num_confirmations_required,
+            )
             .await
-            .for_protocol(self.operation_id)
+            .for_protocol(self.operation_id)?;
+
+        if num_confirmations >= self.config.num_confirmations_required {
+            self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
+        } else {
+            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
+                tx.tx_id,
+                num_confirmations,
+            ))
+        }
+
+        Ok(())
     }
 
     async fn update_transaction_as_unmined(
@@ -306,6 +333,9 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         self.db
             .set_transaction_as_unmined(tx.tx_id)
             .await
-            .for_protocol(self.operation_id)
+            .for_protocol(self.operation_id)?;
+
+        self.publish_event(TransactionEvent::TransactionBroadcast(tx.tx_id));
+        Ok(())
     }
 }

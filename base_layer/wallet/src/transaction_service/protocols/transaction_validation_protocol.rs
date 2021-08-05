@@ -91,6 +91,8 @@ where TBackend: TransactionBackend + 'static
 
     /// The task that defines the execution of the protocol.
     pub async fn execute(mut self) -> Result<u64, TransactionServiceProtocolError> {
+        unimplemented!();
+
         let mut timeout_update_receiver = self
             .timeout_update_receiver
             .take()

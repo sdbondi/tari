@@ -3,7 +3,7 @@ PRAGMA foreign_keys=off;
 ALTER TABLE key_manager_states RENAME TO key_manager_states_old;
 
 CREATE TABLE key_manager_states (
-                                    id BIGINT PRIMARY KEY,
+                                    id INTEGER PRIMARY KEY NOT NULL,
                                     master_key BLOB NOT NULL,
                                     branch_seed TEXT NOT NULL,
                                     primary_key_index BIGINT NOT NULL,

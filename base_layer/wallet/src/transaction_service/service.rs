@@ -87,7 +87,7 @@ use tari_crypto::{keys::DiffieHellmanSharedSecret, script, tari_utilities::ByteA
 use tari_p2p::domain_message::DomainMessage;
 use tari_service_framework::{reply_channel, reply_channel::Receiver};
 use tari_shutdown::ShutdownSignal;
-use tokio::{sync::broadcast, task::JoinHandle};
+use tokio::{sync::broadcast, task::JoinHandle, time::interval_at};
 
 const LOG_TARGET: &str = "wallet::transaction_service::service";
 
@@ -276,9 +276,22 @@ where
             JoinHandle<Result<u64, TransactionServiceProtocolError>>,
         > = FuturesUnordered::new();
 
+        // Should probably be block time or at least configurable
+        // Start a bit later so that the wallet can start up
+        let mut tx_validation_interval = interval_at(
+            (Instant::now() + Duration::from_secs(30)).into(),
+            Duration::from_secs(30),
+        )
+        .fuse();
+
         info!(target: LOG_TARGET, "Transaction Service started");
         loop {
             futures::select! {
+                // tx validation timer
+               _ = tx_validation_interval.select_next_some() => {
+                    self.start_transaction_validation_protocol(ValidationRetryStrategy::Limited(0),  &mut transaction_validation_protocol_handles).await?;
+                    },
+
                 //Incoming request
                 request_context = request_stream.select_next_some() => {
                     // TODO: Remove time measurements; this is to aid in system testing only

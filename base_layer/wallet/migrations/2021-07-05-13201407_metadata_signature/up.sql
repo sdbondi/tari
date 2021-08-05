@@ -4,7 +4,7 @@
 PRAGMA foreign_keys=off;
 DROP TABLE outputs;
 CREATE TABLE outputs (
-    id BIGINT NOT NULL PRIMARY KEY,
+    id INTEGER NOT NULL PRIMARY KEY,  --auto inc,
     commitment BLOB NULL,
     spending_key BLOB NOT NULL,
     value BIGINT NOT NULL,

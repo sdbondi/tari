@@ -242,6 +242,10 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                 Some(mut km) => {
                     self.decrypt_if_necessary(&mut km)?;
 
+                    // TODO: This is a problem because the keymanager state does not have an index
+                    // meaning that update round trips to the database can't be found again.
+                    // I would suggest changing this to a different pattern for retrieval, perhaps
+                    // only returning the columns that are needed.
                     Some(DbValue::KeyManagerState(KeyManagerState::try_from(km)?))
                 },
             },
@@ -331,9 +335,9 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     }
                 },
                 DbKeyValuePair::KeyManagerState(km) => {
-                    let mut km_sql = KeyManagerStateSql::from(km);
+                    let mut km_sql = NewKeyManagerStateSql::from(km);
                     self.encrypt_if_necessary(&mut km_sql)?;
-                    km_sql.set_state(&(*conn))?
+                    km_sql.commit(&(*conn))?
                 },
                 DbKeyValuePair::KnownOneSidedPaymentScripts(script) => {
                     let mut script_sql = KnownOneSidedPaymentScriptSql::from(script);
@@ -890,7 +894,7 @@ impl TryFrom<i32> for OutputStatus {
 struct NewOutputSql {
     commitment: Option<Vec<u8>>,
     spending_key: Vec<u8>,
-    value: u64,
+    value: i64,
     flags: i32,
     maturity: i64,
     status: i32,
@@ -954,7 +958,7 @@ impl Encryptable<Aes256Gcm> for NewOutputSql {
 #[derive(Clone, Debug, Queryable, Identifiable, PartialEq)]
 #[table_name = "outputs"]
 struct OutputSql {
-    id: i32,
+    id: i32, // Auto inc primary key
     commitment: Option<Vec<u8>>,
     spending_key: Vec<u8>,
     value: i64,
@@ -1397,20 +1401,28 @@ pub struct UpdatePendingTransactionOutputSql {
     short_term: Option<i32>,
 }
 
-#[derive(Clone, Debug, Queryable, Insertable)]
+#[derive(Clone, Debug, Queryable, Identifiable)]
 #[table_name = "key_manager_states"]
 struct KeyManagerStateSql {
-    id: Option<i64>,
+    id: i32,
     master_key: Vec<u8>,
     branch_seed: String,
     primary_key_index: i64,
     timestamp: NaiveDateTime,
 }
 
-impl From<KeyManagerState> for KeyManagerStateSql {
+#[derive(Clone, Debug, Insertable)]
+#[table_name = "key_manager_states"]
+struct NewKeyManagerStateSql {
+    master_key: Vec<u8>,
+    branch_seed: String,
+    primary_key_index: i64,
+    timestamp: NaiveDateTime,
+}
+
+impl From<KeyManagerState> for NewKeyManagerStateSql {
     fn from(km: KeyManagerState) -> Self {
         Self {
-            id: None,
             master_key: km.master_key.to_vec(),
             branch_seed: km.branch_seed,
             primary_key_index: km.primary_key_index as i64,
@@ -1418,7 +1430,6 @@ impl From<KeyManagerState> for KeyManagerStateSql {
         }
     }
 }
-
 impl TryFrom<KeyManagerStateSql> for KeyManagerState {
     type Error = OutputManagerStorageError;
 
@@ -1431,14 +1442,16 @@ impl TryFrom<KeyManagerStateSql> for KeyManagerState {
     }
 }
 
-impl KeyManagerStateSql {
+impl NewKeyManagerStateSql {
     fn commit(&self, conn: &SqliteConnection) -> Result<(), OutputManagerStorageError> {
         diesel::insert_into(key_manager_states::table)
             .values(self.clone())
             .execute(conn)?;
         Ok(())
     }
+}
 
+impl KeyManagerStateSql {
     pub fn get_state(conn: &SqliteConnection) -> Result<KeyManagerStateSql, OutputManagerStorageError> {
         key_manager_states::table
             .first::<KeyManagerStateSql>(conn)
@@ -1459,7 +1472,15 @@ impl KeyManagerStateSql {
                     .execute(conn)
                     .num_rows_affected_or_not_found(1)?;
             },
-            Err(_) => self.commit(conn)?,
+            Err(_) => {
+                let inserter = NewKeyManagerStateSql {
+                    master_key: self.master_key.clone(),
+                    branch_seed: self.branch_seed.clone(),
+                    primary_key_index: self.primary_key_index,
+                    timestamp: self.timestamp,
+                };
+                inserter.commit(conn)?;
+            },
         }
         Ok(())
     }
@@ -1529,6 +1550,29 @@ impl Encryptable<Aes256Gcm> for KeyManagerStateSql {
             .map_err(|_| Error)?
             .to_string();
         Ok(())
+    }
+}
+
+impl Encryptable<Aes256Gcm> for NewKeyManagerStateSql {
+    fn encrypt(&mut self, cipher: &Aes256Gcm) -> Result<(), Error> {
+        let encrypted_master_key = encrypt_bytes_integral_nonce(&cipher, self.master_key.clone())?;
+        let encrypted_branch_seed =
+            encrypt_bytes_integral_nonce(&cipher, self.branch_seed.clone().as_bytes().to_vec())?;
+        self.master_key = encrypted_master_key;
+        self.branch_seed = encrypted_branch_seed.to_hex();
+        Ok(())
+    }
+
+    fn decrypt(&mut self, cipher: &Aes256Gcm) -> Result<(), Error> {
+        unimplemented!("Not supported")
+        // let decrypted_master_key = decrypt_bytes_integral_nonce(&cipher, self.master_key.clone())?;
+        // let decrypted_branch_seed =
+        //     decrypt_bytes_integral_nonce(&cipher, from_hex(self.branch_seed.as_str()).map_err(|_| Error)?)?;
+        // self.master_key = decrypted_master_key;
+        // self.branch_seed = from_utf8(decrypted_branch_seed.as_slice())
+        //     .map_err(|_| Error)?
+        //     .to_string();
+        // Ok(())
     }
 }
 

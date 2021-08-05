@@ -275,35 +275,35 @@ where TBackend: TransactionBackend + 'static
                             },
                             TxBroadcastMode::TransactionQuery => {
                                 if result? {
-                                    // We are done!
-                                    self.resources
-                                        .output_manager_service
-                                        .confirm_transaction(
-                                            completed_tx.tx_id,
-                                            completed_tx.transaction.body.inputs().clone(),
-                                            completed_tx.transaction.body.outputs().clone(),
-                                        )
-                                        .await
-                                        .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
-
-                                    self.resources
-                                        .db
-                                        .confirm_broadcast_or_coinbase_transaction(completed_tx.tx_id)
-                                        .await
-                                        .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
-
-                                   let _ = self
-                                        .resources
-                                        .event_publisher
-                                        .send(Arc::new(TransactionEvent::TransactionMined(self.tx_id)))
-                                        .map_err(|e| {
-                                            trace!(
-                                                target: LOG_TARGET,
-                                                "Error sending event because there are no subscribers: {:?}",
-                                                e
-                                            );
-                                            e
-                                        });
+                                    debug!(target: LOG_TARGET, "Transaction already mined, transaction validation protocol will continue from here ");
+                                   //  self.resources
+                                   //      .output_manager_service
+                                   //      .confirm_transaction(
+                                   //          completed_tx.tx_id,
+                                   //          completed_tx.transaction.body.inputs().clone(),
+                                   //          completed_tx.transaction.body.outputs().clone(),
+                                   //      )
+                                   //      .await
+                                   //      .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                                   //
+                                   //  self.resources
+                                   //      .db
+                                   //      .confirm_broadcast_or_coinbase_transaction(completed_tx.tx_id)
+                                   //      .await
+                                   //      .map_err(|e| TransactionServiceProtocolError::new(self.tx_id, TransactionServiceError::from(e)))?;
+                                   //
+                                   // let _ = self
+                                   //      .resources
+                                   //      .event_publisher
+                                   //      .send(Arc::new(TransactionEvent::TransactionMined(self.tx_id)))
+                                   //      .map_err(|e| {
+                                   //          trace!(
+                                   //              target: LOG_TARGET,
+                                   //              "Error sending event because there are no subscribers: {:?}",
+                                   //              e
+                                   //          );
+                                   //          e
+                                   //      });
 
                                     return Ok(self.tx_id)
                                 }

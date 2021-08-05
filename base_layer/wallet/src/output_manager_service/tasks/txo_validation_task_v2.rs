@@ -95,7 +95,7 @@ where TBackend: OutputManagerBackend + 'static
             .dial_peer(self.base_node_pk.clone().into())
             .await
             .for_protocol(self.operation_id)?;
-        let mut client = base_node_connection
+        let client = base_node_connection
             .connect_rpc_using_builder(
                 BaseNodeSyncRpcClient::builder().with_deadline(self.config.base_node_query_timeout),
             )

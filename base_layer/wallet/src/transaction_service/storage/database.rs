@@ -129,6 +129,8 @@ pub trait TransactionBackend: Send + Sync + Clone {
         tx_id: TxId,
         mined_height: u64,
         mined_in_block: BlockHash,
+        num_confirmations: u64,
+        is_confirmed: bool,
     ) -> Result<(), TransactionStorageError>;
 
     /// Clears the mined block and height of a transaction
@@ -739,11 +741,15 @@ where T: TransactionBackend + 'static
         tx_id: TxId,
         mined_height: u64,
         mined_in_block: BlockHash,
+        num_confirmations: u64,
+        is_confirmed: bool,
     ) -> Result<(), TransactionStorageError> {
         let db_clone = self.db.clone();
-        tokio::task::spawn_blocking(move || db_clone.update_mined_height(tx_id, mined_height, mined_in_block))
-            .await
-            .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
+        tokio::task::spawn_blocking(move || {
+            db_clone.update_mined_height(tx_id, mined_height, mined_in_block, num_confirmations, is_confirmed)
+        })
+        .await
+        .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(())
     }
 }

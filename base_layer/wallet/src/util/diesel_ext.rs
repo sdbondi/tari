@@ -40,30 +40,3 @@ impl ExpectedRowsExtension for QueryResult<usize> {
         }
     }
 }
-
-pub mod exports {
-    use diesel::{
-        deserialize,
-        deserialize::FromSql,
-        serialize,
-        serialize::{Output, ToSql},
-        sql_types::BigInt,
-        sqlite::Sqlite,
-    };
-    use std::io::Write;
-
-    pub struct UnsignedBigInt;
-
-    impl ToSql<UnsignedBigInt, Sqlite> for u64 {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Sqlite>) -> serialize::Result {
-            ToSql::<BigInt, Sqlite>::to_sql(&(*self as i64), out)
-        }
-    }
-
-    impl FromSql<UnsignedBigInt, Sqlite> for u64 {
-        fn from_sql(value: Option<&SqliteValue>) -> deserialize::Result<Self> {
-            let signed: i64 = FromSql::<BigInt, Sqlite>::from_sql(value)?;
-            Ok(signed as u64)
-        }
-    }
-}
