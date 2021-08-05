@@ -280,6 +280,19 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         Ok(result)
     }
 
+    fn fetch_unmined_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        let mut outputs = OutputSql::index_unmined(&(*conn))?;
+        for output in outputs.iter_mut() {
+            self.decrypt_if_necessary(output)?;
+        }
+
+        outputs
+            .into_iter()
+            .map(|o| DbUnblindedOutput::try_from(o))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     fn write(&self, op: WriteOperation) -> Result<Option<DbValue>, OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
 
@@ -998,6 +1011,13 @@ impl OutputSql {
         Ok(outputs::table
             .filter(outputs::status.eq(OutputStatus::Unspent as i32))
             .filter(outputs::maturity.gt(tip as i64))
+            .load(conn)?)
+    }
+
+    pub fn index_unmined(conn: &SqliteConnection) -> Result<Vec<OutputSql>, OutputManagerStorageError> {
+        Ok(outputs::table
+            .filter(outputs::mined_in_block.is_null())
+            .order(outputs::id.asc())
             .load(conn)?)
     }
 

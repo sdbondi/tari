@@ -50,6 +50,8 @@ const LOG_TARGET: &str = "wallet::output_manager_service::database";
 pub trait OutputManagerBackend: Send + Sync + Clone {
     /// Retrieve the record associated with the provided DbKey
     fn fetch(&self, key: &DbKey) -> Result<Option<DbValue>, OutputManagerStorageError>;
+    /// Retrieve outputs that have not been found in the block chain
+    fn fetch_unmined_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError>;
     /// Modify the state the of the backend with a write operation
     fn write(&self, op: WriteOperation) -> Result<Option<DbValue>, OutputManagerStorageError>;
     /// This method is called when a pending transaction is to be confirmed. It must move the `outputs_to_be_spent` and
@@ -505,6 +507,14 @@ where T: OutputManagerBackend + 'static
         .await
         .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(uo)
+    }
+
+    pub async fn fetch_unmined_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError> {
+        let db_clone = self.db.clone();
+        let utxos = tokio::task::spawn_blocking(move || db_clone.fetch_unmined_outputs())
+            .await
+            .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
+        Ok(utxos)
     }
 
     pub async fn fetch_all_pending_transaction_outputs(

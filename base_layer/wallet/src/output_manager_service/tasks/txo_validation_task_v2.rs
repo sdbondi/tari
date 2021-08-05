@@ -77,7 +77,7 @@ where TBackend: OutputManagerBackend + 'static
         }
     }
 
-    pub async fn execute(mut self, shutdown: ShutdownSignal) -> Result<(), OutputManagerProtocolError> {
+    pub async fn execute(mut self, shutdown: ShutdownSignal) -> Result<u64, OutputManagerProtocolError> {
         let mut base_node_client = self.create_base_node_client().await?;
 
         info!(
@@ -86,7 +86,15 @@ where TBackend: OutputManagerBackend + 'static
         );
 
         self.check_for_reorgs(&mut base_node_client).await?;
-        unimplemented!()
+
+        let unmined_outputs = self
+            .db
+            .fetch_unmined_outputs()
+            .await
+            .for_protocol(self.operation_id)
+            .unwrap();
+
+        Ok(self.operation_id)
     }
 
     async fn create_base_node_client(&mut self) -> Result<BaseNodeSyncRpcClient, OutputManagerProtocolError> {

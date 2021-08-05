@@ -32,7 +32,7 @@ use crate::{
             database::{OutputManagerBackend, OutputManagerDatabase, PendingTransactionOutputs},
             models::{DbUnblindedOutput, KnownOneSidedPaymentScript},
         },
-        tasks::{TxoValidationTask, TxoValidationType},
+        tasks::{TxoValidationTask, TxoValidationTaskV2, TxoValidationType},
         MasterKeyManager,
         TxId,
     },
@@ -355,18 +355,47 @@ where TBackend: OutputManagerBackend + 'static
             None => Err(OutputManagerError::NoBaseNodeKeysProvided),
             Some(pk) => {
                 let id = OsRng.next_u64();
+                // let utxo_validation_task = TxoValidationTask::new(
+                //     id,
+                //     validation_type,
+                //     retry_strategy,
+                //     self.resources.clone(),
+                //     pk.clone(),
+                //     self.base_node_update_publisher.subscribe(),
+                // );
+                //
+                // tokio::spawn(async move {
+                //     match utxo_validation_task.execute().await {
+                //         Ok(id) => {
+                //             info!(
+                //                 target: LOG_TARGET,
+                //                 "UTXO Validation Protocol (Id: {}) completed successfully", id
+                //             );
+                //         },
+                //         Err(OutputManagerProtocolError { id, error }) => {
+                //             warn!(
+                //                 target: LOG_TARGET,
+                //                 "Error completing UTXO Validation Protocol (Id: {}): {:?}", id, error
+                //             );
+                //         },
+                //     }
+                // });
 
-                let utxo_validation_task = TxoValidationTask::new(
-                    id,
-                    validation_type,
-                    retry_strategy,
-                    self.resources.clone(),
+                let utxo_validation = TxoValidationTaskV2::new(
                     pk.clone(),
-                    self.base_node_update_publisher.subscribe(),
+                    id,
+                    100,
+                    self.resources.db.clone(),
+                    self.resources.connectivity_manager.clone(),
+                    self.resources.event_publisher.clone(),
+                    validation_type,
+                    self.resources.config.clone(),
                 );
 
+                let shutdown = self.resources.shutdown_signal.clone();
+
                 tokio::spawn(async move {
-                    match utxo_validation_task.execute().await {
+                    match utxo_validation.execute(shutdown).await {
                         Ok(id) => {
                             info!(
                                 target: LOG_TARGET,
@@ -381,7 +410,6 @@ where TBackend: OutputManagerBackend + 'static
                         },
                     }
                 });
-
                 Ok(id)
             },
         }
