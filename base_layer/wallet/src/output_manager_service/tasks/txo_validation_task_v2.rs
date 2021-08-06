@@ -46,7 +46,7 @@ use tari_core::{
     proto::base_node::{FetchMatchingUtxos, UtxoQueryRequest},
     transactions::transaction::TransactionOutput,
 };
-use tari_crypto::tari_utilities::Hashable;
+use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_shutdown::ShutdownSignal;
 
 const LOG_TARGET: &str = "wallet::output_service::txo_validation_task_v2";
@@ -121,10 +121,15 @@ where TBackend: OutputManagerBackend + 'static
                 unmined.len()
             );
             for (tx, mined_height, mined_in_block, mmr_position) in &mined {
-                info!(target: LOG_TARGET, "Updating output {} as mined", tx.tx_id);
-                self.update_output_as_mined(tx, mined_in_block, *mined_height, *mmr_position)
+                info!(
+                    target: LOG_TARGET,
+                    "Updating output comm:{}: hash{} as mined",
+                    tx.commitment.to_hex(),
+                    tx.hash.to_hex()
+                );
+                self.update_output_as_mined(&tx, mined_in_block, *mined_height, *mmr_position)
                     .await?;
-                self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
+                // self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
             }
         }
 
@@ -275,18 +280,18 @@ where TBackend: OutputManagerBackend + 'static
         mmr_position: u64,
     ) -> Result<(), OutputManagerProtocolError> {
         self.db
-            .set_output_mined_height(tx.tx_id, mined_height, mined_in_block.clone(), mmr_position)
+            .set_output_mined_height(tx.hash.clone(), mined_height, mined_in_block.clone(), mmr_position)
             .await
             .for_protocol(self.operation_id)?;
 
-        if num_confirmations >= self.config.num_confirmations_required {
-            self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
-        } else {
-            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
-                tx.tx_id,
-                num_confirmations,
-            ))
-        }
+        // if num_confirmations >= self.config.num_confirmations_required {
+        //     self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
+        // } else {
+        //     self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
+        //         tx.tx_id,
+        //         num_confirmations,
+        //     ))
+        // }
 
         Ok(())
     }

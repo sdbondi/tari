@@ -38,7 +38,7 @@ use std::{
 use tari_core::transactions::{
     tari_amount::MicroTari,
     transaction::TransactionOutput,
-    types::{BlindingFactor, Commitment, PrivateKey},
+    types::{BlindingFactor, Commitment, HashOutput, PrivateKey},
 };
 
 const LOG_TARGET: &str = "wallet::output_manager_service::database";
@@ -54,10 +54,19 @@ pub trait OutputManagerBackend: Send + Sync + Clone {
     fn fetch_unmined_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError>;
     /// Modify the state the of the backend with a write operation
     fn write(&self, op: WriteOperation) -> Result<Option<DbValue>, OutputManagerStorageError>;
+
+    fn set_output_mined_height(
+        &self,
+        hash: Vec<u8>,
+        mined_height: u64,
+        mined_in_block: Vec<u8>,
+        mmr_position: u64,
+    ) -> Result<(), OutputManagerStorageError>;
+
     /// This method is called when a pending transaction is to be confirmed. It must move the `outputs_to_be_spent` and
     /// `outputs_to_be_received` from a `PendingTransactionOutputs` record into the `unspent_outputs` and
     /// `spent_outputs` collections.
-    fn confirm_transaction(&self, tx_id: TxId) -> Result<(), OutputManagerStorageError>;
+    fn confirm_transaction_encumberance(&self, tx_id: TxId) -> Result<(), OutputManagerStorageError>;
     /// This method encumbers the specified outputs into a `PendingTransactionOutputs` record. This is a short term
     /// encumberance in case the app is closed or crashes before transaction neogtiation is complete. These will be
     /// cleared on startup of the service.
@@ -382,7 +391,7 @@ where T: OutputManagerBackend + 'static
     /// `spent_outputs` collections.
     pub async fn confirm_pending_transaction_outputs(&self, tx_id: TxId) -> Result<(), OutputManagerStorageError> {
         let db_clone = self.db.clone();
-        tokio::task::spawn_blocking(move || db_clone.confirm_transaction(tx_id))
+        tokio::task::spawn_blocking(move || db_clone.confirm_transaction_encumberance(tx_id))
             .await
             .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))
             .and_then(|inner_result| inner_result)
@@ -725,6 +734,22 @@ where T: OutputManagerBackend + 'static
                 Ok(Some(other)) => unexpected_result(DbKey::AnyOutputByCommitment(commitment.clone()), other),
                 Err(e) => log_error(DbKey::AnyOutputByCommitment(commitment), e),
             }
+        })
+        .await
+        .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
+        Ok(())
+    }
+
+    pub async fn set_output_mined_height(
+        &self,
+        hash: HashOutput,
+        mined_height: u64,
+        mined_in_block: HashOutput,
+        mmr_position: u64,
+    ) -> Result<(), OutputManagerStorageError> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            db.set_output_mined_height(hash, mined_height, mined_in_block, mmr_position)
         })
         .await
         .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;

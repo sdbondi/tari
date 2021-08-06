@@ -360,8 +360,9 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                 },
             },
             WriteOperation::Remove(k) => match k {
-                DbKey::SpentOutput(s) => match OutputSql::find_status(&s.to_vec(), OutputStatus::Spent, &(*conn)) {
-                    unimplemented!("Deprecated");
+                DbKey::SpentOutput(s) => {
+                    // match OutputSql::find_status(&s.to_vec(), OutputStatus::Spent, &(*conn)) {
+                    unimplemented!("Deprecated")
                     // Ok(o) => {
                     //     o.delete(&(*conn))?;
                     //     return Ok(Some(DbValue::SpentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
@@ -373,8 +374,9 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     //     };
                     // },
                 },
-                DbKey::UnspentOutput(k) => match OutputSql::find_status(&k.to_vec(), OutputStatus::Unspent, &(*conn)) {
-                    unimplemented!("Deprecated");
+                DbKey::UnspentOutput(k) => {
+                    // match OutputSql::find_status(&k.to_vec(), OutputStatus::Unspent, &(*conn)) {
+                    unimplemented!("Deprecated")
                     // Ok(o) => {
                     //     o.delete(&(*conn))?;
                     //     return Ok(Some(DbValue::UnspentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
@@ -401,7 +403,8 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     //     },
                     // }
                 },
-                DbKey::PendingTransactionOutputs(tx_id) => match PendingTransactionOutputSql::find(tx_id, &(*conn)) {
+                DbKey::PendingTransactionOutputs(tx_id) => {
+                    // match PendingTransactionOutputSql::find(tx_id, &(*conn)) {
                     unimplemented!("Deprecated");
                     // Ok(p) => {
                     //     let mut outputs = OutputSql::find_by_tx_id_and_encumbered(p.tx_id as u64, &(*conn))?;
@@ -440,7 +443,27 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         Ok(None)
     }
 
-    fn confirm_transaction(&self, tx_id: u64) -> Result<(), OutputManagerStorageError> {
+    fn set_output_mined_height(
+        &self,
+        hash: Vec<u8>,
+        mined_height: u64,
+        mined_in_block: Vec<u8>,
+        mmr_position: u64,
+    ) -> Result<(), OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        diesel::update(outputs::table.filter(outputs::hash.eq(hash)))
+            .set((
+                outputs::mined_height.eq(mined_height as i64),
+                outputs::mined_in_block.eq(mined_in_block),
+                outputs::mined_mmr_position.eq(mmr_position as i64),
+            ))
+            .execute(&(*conn))
+            .num_rows_affected_or_not_found(1)?;
+
+        Ok(())
+    }
+
+    fn confirm_transaction_encumberance(&self, tx_id: u64) -> Result<(), OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
 
         match PendingTransactionOutputSql::find(tx_id, &(*conn)) {
