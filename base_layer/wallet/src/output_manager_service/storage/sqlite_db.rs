@@ -599,6 +599,19 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         }
     }
 
+    fn get_last_spent_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+
+        let output = OutputSql::first_by_marked_deleted_height_desc(&(*conn))?;
+        match output {
+            Some(mut o) => {
+                self.decrypt_if_necessary(&mut o)?;
+                Ok(Some(o.try_into()?))
+            },
+            None => Ok(None),
+        }
+    }
+
     fn cancel_pending_transaction(&self, tx_id: u64) -> Result<(), OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
 
@@ -1018,6 +1031,8 @@ struct OutputSql {
     mined_height: Option<i64>,
     mined_in_block: Option<Vec<u8>>,
     mined_mmr_position: Option<i64>,
+    marked_deleted_at_height: Option<i64>,
+    marked_deleted_in_block: Option<Vec<u8>>,
 }
 
 impl OutputSql {
@@ -1053,6 +1068,16 @@ impl OutputSql {
         Ok(outputs::table
             .filter(outputs::mined_height.is_not_null())
             .order(outputs::mined_height.desc())
+            .first(conn)
+            .optional()?)
+    }
+
+    pub fn first_by_marked_deleted_height_desc(
+        conn: &SqliteConnection,
+    ) -> Result<Option<OutputSql>, OutputManagerStorageError> {
+        Ok(outputs::table
+            .filter(outputs::marked_deleted_at_height.is_not_null())
+            .order(outputs::marked_deleted_at_height.desc())
             .first(conn)
             .optional()?)
     }
@@ -1255,6 +1280,8 @@ impl TryFrom<OutputSql> for DbUnblindedOutput {
             mined_height: o.mined_height.map(|mh| mh as u64),
             mined_in_block: o.mined_in_block,
             mined_mmr_position: o.mined_mmr_position.map(|mp| mp as u64),
+            marked_deleted_at_height: o.marked_deleted_at_height.map(|d| d as u64),
+            marked_deleted_in_block: o.marked_deleted_in_block,
         })
     }
 }

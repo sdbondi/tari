@@ -67,7 +67,9 @@ message UtxoQueryRequest{
 
 message UtxoQueryResponses {
     repeated UtxoQueryResponse responses =1;
-//    uint64 height = 2;
+    bytes deleted_bitmap = 2;
+    bytes best_block = 3;
+    uint64 height_of_longest_chain = 4;
 }
 
 message UtxoQueryResponse {

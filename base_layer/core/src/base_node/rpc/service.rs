@@ -324,7 +324,22 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
             res.push((output, mmr_position, height, header_hash));
         }
 
+        let metadata = self
+            .db
+            .get_chain_metadata()
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?;
+
+        let deleted = self
+            .db
+            .fetch_complete_deleted_bitmap_at(metadata.best_block().clone())
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?
+            .into_bytes();
         Ok(Response::new(UtxoQueryResponses {
+            height_of_longest_chain: metadata.height_of_longest_chain(),
+            best_block: metadata.best_block().clone(),
+            deleted_bitmap: deleted,
             responses: res
                 .into_iter()
                 .map(

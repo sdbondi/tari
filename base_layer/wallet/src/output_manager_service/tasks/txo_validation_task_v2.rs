@@ -196,7 +196,43 @@ where TBackend: OutputManagerBackend + 'static
                     break;
                 }
             } else {
-                // No more transactions
+                // No more outputs
+                break;
+            }
+        }
+
+        loop {
+            if let Some(last_spent_output) = self
+                .db
+                .get_last_spent_output()
+                .await
+                .for_protocol(self.operation_id)
+                .unwrap()
+            {
+                let mined_height = last_spent_output.marked_deleted_at_height.unwrap(); // TODO: fix unwrap
+                let mined_in_block_hash = last_spent_output.marked_deleted_in_block.clone().unwrap(); // TODO: fix unwrap.
+                let block_at_height = self
+                    .get_base_node_block_at_height(mined_height, client)
+                    .await
+                    .for_protocol(self.operation_id)?;
+                if block_at_height.is_none() || block_at_height.unwrap() != mined_in_block_hash {
+                    // Chain has reorged since we last
+                    warn!(
+                        target: LOG_TARGET,
+                        "The block that output (commitment) was spent in has been reorged out, will try to find this \
+                         output again, but these funds have potentially been re-orged out of the chain",
+                    );
+                    unimplemented!("todo");
+                    // self.update_transaction_as_unmined(&last_mined_transaction).await?;
+                } else {
+                    info!(
+                        target: LOG_TARGET,
+                        "Last mined transaction is still in the block chain according to base node."
+                    );
+                    break;
+                }
+            } else {
+                // No more outputs
                 break;
             }
         }

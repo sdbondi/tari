@@ -106,6 +106,8 @@ table! {
         mined_height -> Nullable<BigInt>,
         mined_in_block -> Nullable<Binary>,
         mined_mmr_position -> Nullable<BigInt>,
+        marked_deleted_at_height -> Nullable<BigInt>,
+        marked_deleted_in_block -> Nullable<Binary>,
     }
 }
 

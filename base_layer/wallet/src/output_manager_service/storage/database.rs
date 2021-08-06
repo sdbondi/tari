@@ -116,6 +116,8 @@ pub trait OutputManagerBackend: Send + Sync + Clone {
 
     /// Get the output that was most recently mined, ordered descending by mined height
     fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError>;
+    /// Get the output that was most recently spent, ordered descending by mined height
+    fn get_last_spent_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError>;
 }
 
 /// Holds the outputs that have been selected for a given pending transaction waiting for confirmation
@@ -704,6 +706,10 @@ where T: OutputManagerBackend + 'static
 
     pub async fn get_last_mined_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
         self.db.get_last_mined_output()
+    }
+
+    pub async fn get_last_spent_output(&self) -> Result<Option<DbUnblindedOutput>, OutputManagerStorageError> {
+        self.db.get_last_spent_output()
     }
 
     pub async fn add_known_script(

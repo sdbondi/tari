@@ -41,6 +41,8 @@ pub struct DbUnblindedOutput {
     pub mined_height: Option<u64>,
     pub mined_in_block: Option<BlockHash>,
     pub mined_mmr_position: Option<u64>,
+    pub marked_deleted_at_height: Option<u64>,
+    pub marked_deleted_in_block: Option<BlockHash>,
 }
 
 impl DbUnblindedOutput {
@@ -56,6 +58,8 @@ impl DbUnblindedOutput {
             mined_height: None,
             mined_in_block: None,
             mined_mmr_position: None,
+            marked_deleted_at_height: None,
+            marked_deleted_in_block: None,
         })
     }
 
@@ -72,6 +76,8 @@ impl DbUnblindedOutput {
             mined_height: None,
             mined_in_block: None,
             mined_mmr_position: None,
+            marked_deleted_at_height: None,
+            marked_deleted_in_block: None,
         })
     }
 }
