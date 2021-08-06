@@ -60,7 +60,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tari_common::configuration::Network;
-use tari_common_types::chain_metadata::ChainMetadata;
+use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_storage::lmdb_store::LMDBConfig;
 use tari_test_utils::paths::create_temporary_data_path;
 
@@ -247,7 +247,7 @@ impl BlockchainBackend for TempDatabase {
     fn fetch_output(
         &self,
         output_hash: &HashOutput,
-    ) -> Result<Option<(TransactionOutput, u32, u64)>, ChainStorageError> {
+    ) -> Result<Option<(TransactionOutput, u32, u64, BlockHash)>, ChainStorageError> {
         self.db.fetch_output(output_hash)
     }
 

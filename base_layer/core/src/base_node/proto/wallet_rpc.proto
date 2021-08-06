@@ -61,6 +61,24 @@ message FetchUtxosResponse {
     bool is_synced = 2;
 }
 
+message UtxoQueryRequest{
+    repeated bytes output_hashes =1;
+}
+
+message UtxoQueryResponses {
+    repeated UtxoQueryResponse responses =1;
+//    uint64 height = 2;
+}
+
+message UtxoQueryResponse {
+    tari.types.TransactionOutput output = 1;
+    uint64 mmr_position = 2;
+    uint64 mined_height =3;
+    bytes mined_in_block = 4;
+    bytes output_hash = 5;
+
+}
+
 message TipInfoResponse {
     ChainMetadata metadata = 1;
     bool is_synced = 2;

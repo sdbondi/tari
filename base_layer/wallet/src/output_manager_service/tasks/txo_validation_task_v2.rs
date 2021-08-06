@@ -19,23 +19,33 @@
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 use crate::output_manager_service::{
     config::OutputManagerServiceConfig,
     error::{OutputManagerError, OutputManagerProtocolError, OutputManagerProtocolErrorExt},
     handle::OutputManagerEventSender,
-    storage::database::{OutputManagerBackend, OutputManagerDatabase},
+    storage::{
+        database::{OutputManagerBackend, OutputManagerDatabase},
+        models::DbUnblindedOutput,
+    },
     TxoValidationType,
 };
 use log::*;
-use std::convert::TryInto;
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+};
 use tari_common_types::types::BlockHash;
 use tari_comms::{
     connectivity::ConnectivityRequester,
     protocol::rpc::{RpcError::RequestFailed, RpcStatusCode::NotFound},
     types::CommsPublicKey,
 };
-use tari_core::{base_node::sync::rpc::BaseNodeSyncRpcClient, blocks::BlockHeader};
+use tari_core::{
+    base_node::{rpc::BaseNodeWalletRpcClient, sync::rpc::BaseNodeSyncRpcClient},
+    blocks::BlockHeader,
+    proto::base_node::{FetchMatchingUtxos, UtxoQueryRequest},
+    transactions::transaction::TransactionOutput,
+};
 use tari_crypto::tari_utilities::Hashable;
 use tari_shutdown::ShutdownSignal;
 
@@ -78,14 +88,14 @@ where TBackend: OutputManagerBackend + 'static
     }
 
     pub async fn execute(mut self, shutdown: ShutdownSignal) -> Result<u64, OutputManagerProtocolError> {
-        let mut base_node_client = self.create_base_node_client().await?;
+        let (mut sync_client, mut wallet_client) = self.create_base_node_clients().await?;
 
         info!(
             target: LOG_TARGET,
             "Starting TXO validation protocol V2 (Id: {}) for {}", self.operation_id, self.validation_type,
         );
 
-        self.check_for_reorgs(&mut base_node_client).await?;
+        self.check_for_reorgs(&mut sync_client).await?;
 
         let unmined_outputs = self
             .db
@@ -94,23 +104,49 @@ where TBackend: OutputManagerBackend + 'static
             .for_protocol(self.operation_id)
             .unwrap();
 
+        for batch in unmined_outputs.chunks(self.batch_size) {
+            info!(
+                target: LOG_TARGET,
+                "Asking base node for location of {} outputs by hash",
+                batch.len()
+            );
+            let (mined, unmined) = self
+                .query_base_node_for_outputs(batch, &mut wallet_client)
+                .await
+                .for_protocol(self.operation_id)?;
+            info!(
+                target: LOG_TARGET,
+                "Base node returned {} as mined and {} as unmined",
+                mined.len(),
+                unmined.len()
+            );
+        }
+
         Ok(self.operation_id)
     }
 
-    async fn create_base_node_client(&mut self) -> Result<BaseNodeSyncRpcClient, OutputManagerProtocolError> {
+    async fn create_base_node_clients(
+        &mut self,
+    ) -> Result<(BaseNodeSyncRpcClient, BaseNodeWalletRpcClient), OutputManagerProtocolError> {
         let mut base_node_connection = self
             .connectivity_requester
             .dial_peer(self.base_node_pk.clone().into())
             .await
             .for_protocol(self.operation_id)?;
-        let client = base_node_connection
+        let sync_client = base_node_connection
             .connect_rpc_using_builder(
                 BaseNodeSyncRpcClient::builder().with_deadline(self.config.base_node_query_timeout),
             )
             .await
             .for_protocol(self.operation_id)?;
+        let wallet_client = base_node_connection
+            .connect_rpc_using_builder(
+                BaseNodeWalletRpcClient::builder().with_deadline(self.config.base_node_query_timeout),
+            )
+            .await
+            .for_protocol(self.operation_id)?;
 
-        Ok(client)
+        Ok((sync_client, wallet_client))
     }
 
     async fn check_for_reorgs(&mut self, client: &mut BaseNodeSyncRpcClient) -> Result<(), OutputManagerProtocolError> {
@@ -185,5 +221,42 @@ where TBackend: OutputManagerBackend + 'static
             .try_into()
             .map_err(|s| OutputManagerError::InvalidMessageError(format!("Could not convert block header: {}", s)))?;
         Ok(Some(block_header.hash()))
+    }
+
+    async fn query_base_node_for_outputs(
+        &self,
+        batch: &[DbUnblindedOutput],
+        base_node_client: &mut BaseNodeWalletRpcClient,
+    ) -> Result<(Vec<(DbUnblindedOutput, u64, BlockHash, u64)>, Vec<DbUnblindedOutput>), OutputManagerError> {
+        let mut batch_hashes = batch.iter().map(|o| o.hash.clone()).collect();
+
+        let batch_response = base_node_client
+            .utxo_query(UtxoQueryRequest {
+                output_hashes: batch_hashes,
+            })
+            .await?;
+
+        let mut mined = vec![];
+        let mut unmined = vec![];
+
+        let mut returned_outputs = HashMap::new();
+        for output_proto in batch_response.responses.iter() {
+            returned_outputs.insert(output_proto.output_hash.clone(), output_proto);
+        }
+
+        for output in batch {
+            if let Some(returned_output) = returned_outputs.get(&output.hash) {
+                mined.push((
+                    output.clone(),
+                    returned_output.mined_height,
+                    returned_output.mined_in_block.clone(),
+                    returned_output.mmr_position,
+                ))
+            } else {
+                unmined.push(output.clone());
+            }
+        }
+
+        Ok((mined, unmined))
     }
 }

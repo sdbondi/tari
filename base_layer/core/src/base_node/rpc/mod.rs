@@ -44,6 +44,7 @@ use crate::{
 #[cfg(feature = "base_node")]
 pub use service::BaseNodeWalletRpcService;
 
+use crate::proto::base_node::{UtxoQueryRequest, UtxoQueryResponses};
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus};
 use tari_comms_rpc_macros::tari_rpc;
 
@@ -72,6 +73,9 @@ pub trait BaseNodeWalletService: Send + Sync + 'static {
 
     #[rpc(method = 5)]
     async fn get_tip_info(&self, request: Request<()>) -> Result<Response<TipInfoResponse>, RpcStatus>;
+
+    #[rpc(method = 6)]
+    async fn utxo_query(&self, request: Request<UtxoQueryRequest>) -> Result<Response<UtxoQueryResponses>, RpcStatus>;
 }
 
 #[cfg(feature = "base_node")]

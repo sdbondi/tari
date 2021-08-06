@@ -19,7 +19,6 @@
 //  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 use crate::{
     base_node::{rpc::BaseNodeWalletService, state_machine_service::states::StateInfo, StateMachineHandle},
     chain_storage::{async_db::AsyncBlockchainDb, BlockchainBackend},
@@ -36,6 +35,9 @@ use crate::{
             TxQueryResponse,
             TxSubmissionRejectionReason,
             TxSubmissionResponse,
+            UtxoQueryRequest,
+            UtxoQueryResponse,
+            UtxoQueryResponses,
         },
         types::{Signature as SignatureProto, Transaction as TransactionProto},
     },
@@ -43,6 +45,7 @@ use crate::{
 };
 use std::convert::TryFrom;
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus};
+use tari_crypto::tari_utilities::Hashable;
 
 const LOG_TARGET: &str = "c::base_node::rpc";
 
@@ -304,6 +307,36 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
         Ok(Response::new(FetchUtxosResponse {
             outputs: res.into_iter().map(Into::into).collect(),
             is_synced,
+        }))
+    }
+
+    async fn utxo_query(&self, request: Request<UtxoQueryRequest>) -> Result<Response<UtxoQueryResponses>, RpcStatus> {
+        let message = request.into_message();
+        let db = self.db();
+        let mut res = Vec::with_capacity(message.output_hashes.len());
+        for (output, mmr_position, height, header_hash) in (db
+            .fetch_utxos_and_mined_info(message.output_hashes)
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?)
+        .into_iter()
+        .flatten()
+        {
+            res.push((output, mmr_position, height, header_hash));
+        }
+
+        Ok(Response::new(UtxoQueryResponses {
+            responses: res
+                .into_iter()
+                .map(
+                    |(output, mmr_position, mined_height, mined_in_block)| UtxoQueryResponse {
+                        mmr_position: mmr_position.into(),
+                        mined_height,
+                        mined_in_block,
+                        output_hash: output.hash(),
+                        output: Some(output.into()),
+                    },
+                )
+                .collect(),
         }))
     }
 

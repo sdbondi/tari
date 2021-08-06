@@ -20,7 +20,7 @@ use crate::{
     },
 };
 use croaring::Bitmap;
-use tari_common_types::chain_metadata::ChainMetadata;
+use tari_common_types::{chain_metadata::ChainMetadata, types::BlockHash};
 use tari_mmr::Hash;
 
 /// Identify behaviour for Blockchain database backends. Implementations must support `Send` and `Sync` so that
@@ -106,7 +106,7 @@ pub trait BlockchainBackend: Send + Sync {
     fn fetch_output(
         &self,
         output_hash: &HashOutput,
-    ) -> Result<Option<(TransactionOutput, u32, u64)>, ChainStorageError>;
+    ) -> Result<Option<(TransactionOutput, u32, u64, BlockHash)>, ChainStorageError>;
 
     /// Fetch all outputs in a block
     fn fetch_outputs_in_block(&self, header_hash: &HashOutput) -> Result<Vec<PrunedOutput>, ChainStorageError>;

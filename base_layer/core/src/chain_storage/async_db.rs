@@ -143,6 +143,8 @@ impl<B: BlockchainBackend + 'static> AsyncBlockchainDb<B> {
 
     make_async_fn!(fetch_utxos(hashes: Vec<HashOutput>) -> Vec<Option<(TransactionOutput, bool)>>, "fetch_utxos");
 
+    make_async_fn!(fetch_utxos_and_mined_info(hashes: Vec<HashOutput>) -> Vec<Option<(TransactionOutput, u32, u64, BlockHash)>>, "fetch_utxos_and_mined_info");
+
     make_async_fn!(fetch_utxos_by_mmr_position(start: u64, end: u64, deleted: Arc<Bitmap>) -> (Vec<PrunedOutput>, Bitmap), "fetch_utxos_by_mmr_position");
 
     //---------------------------------- Kernel --------------------------------------------//

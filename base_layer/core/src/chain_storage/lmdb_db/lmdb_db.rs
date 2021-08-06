@@ -1619,7 +1619,7 @@ impl BlockchainBackend for LMDBDatabase {
     fn fetch_output(
         &self,
         output_hash: &HashOutput,
-    ) -> Result<Option<(TransactionOutput, u32, u64)>, ChainStorageError> {
+    ) -> Result<Option<(TransactionOutput, u32, u64, BlockHash)>, ChainStorageError> {
         debug!(target: LOG_TARGET, "Fetch output: {}", output_hash.to_hex());
         let txn = self.read_transaction()?;
         if let Some((index, key)) =
@@ -1643,7 +1643,12 @@ impl BlockchainBackend for LMDBDatabase {
                     );
                     unimplemented!("Output has been pruned");
                 }
-                Ok(Some((output.output.unwrap(), output.mmr_position, output.mined_height)))
+                Ok(Some((
+                    output.output.unwrap(),
+                    output.mmr_position,
+                    output.mined_height,
+                    output.header_hash,
+                )))
             } else {
                 Ok(None)
             }

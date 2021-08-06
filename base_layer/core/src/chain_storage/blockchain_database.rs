@@ -286,7 +286,7 @@ where B: BlockchainBackend
     // Fetch the utxo
     pub fn fetch_utxo(&self, hash: HashOutput) -> Result<Option<TransactionOutput>, ChainStorageError> {
         let db = self.db_read_access()?;
-        Ok(db.fetch_output(&hash)?.map(|(out, _index, _)| out))
+        Ok(db.fetch_output(&hash)?.map(|(out, _index, _, _)| out))
     }
 
     /// Return a list of matching utxos, with each being `None` if not found. If found, the transaction
@@ -302,7 +302,22 @@ where B: BlockchainBackend
         let mut result = Vec::with_capacity(hashes.len());
         for hash in hashes {
             let output = db.fetch_output(&hash)?;
-            result.push(output.map(|(out, mmr_index, _)| (out, deleted.bitmap().contains(mmr_index))));
+            result.push(output.map(|(out, mmr_index, _, _)| (out, deleted.bitmap().contains(mmr_index))));
+        }
+        Ok(result)
+    }
+
+    pub fn fetch_utxos_and_mined_info(
+        &self,
+        hashes: Vec<HashOutput>,
+    ) -> Result<Vec<Option<(TransactionOutput, u32, u64, BlockHash)>>, ChainStorageError> {
+        let db = self.db_read_access()?;
+        let deleted = db.fetch_deleted_bitmap()?;
+
+        let mut result = Vec::with_capacity(hashes.len());
+        for hash in hashes {
+            let output = db.fetch_output(&hash)?;
+            result.push(output);
         }
         Ok(result)
     }
@@ -1258,19 +1273,10 @@ fn fetch_block_with_utxo<T: BlockchainBackend>(
     db: &T,
     commitment: Commitment,
 ) -> Result<Option<HistoricalBlock>, ChainStorageError> {
-    match db.fetch_output(&commitment.to_vec()) {
-        Ok(output) => match output {
-            Some((_output, leaf, _height)) => {
-                let header = db.fetch_header_containing_utxo_mmr(leaf as u64)?;
-                fetch_block_by_hash(db, header.hash().to_owned())
-            },
-            None => Ok(None),
-        },
-        Err(_) => Err(ChainStorageError::ValueNotFound {
-            entity: "Output".to_string(),
-            field: "Commitment".to_string(),
-            value: commitment.to_hex(),
-        }),
+    let output = db.fetch_output(&commitment.to_vec())?;
+    match output {
+        Some((_output, _leaf, _height, header_hash)) => fetch_block_by_hash(db, header_hash),
+        None => Ok(None),
     }
 }
 

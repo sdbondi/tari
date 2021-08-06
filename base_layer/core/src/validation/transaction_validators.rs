@@ -121,7 +121,7 @@ fn verify_not_stxos<B: BlockchainBackend>(tx: &Transaction, db: &B) -> Result<()
     let deleted = db.fetch_deleted_bitmap()?;
     let mut not_found_input = Vec::new();
     for input in tx.body.inputs() {
-        if let Some((_, index, _height)) = db.fetch_output(&input.output_hash())? {
+        if let Some((_, index, _height, _)) = db.fetch_output(&input.output_hash())? {
             if deleted.bitmap().contains(index) {
                 warn!(
                     target: LOG_TARGET,

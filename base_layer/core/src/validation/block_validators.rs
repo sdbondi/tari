@@ -183,7 +183,7 @@ fn check_inputs_are_utxos<B: BlockchainBackend>(
     deleted: &DeletedBitmap,
 ) -> Result<(), ValidationError> {
     for input in block.body.inputs() {
-        if let Some((_, index, _height)) = db.fetch_output(&input.output_hash())? {
+        if let Some((_, index, _height, _)) = db.fetch_output(&input.output_hash())? {
             if deleted.bitmap().contains(index) {
                 warn!(
                     target: LOG_TARGET,
