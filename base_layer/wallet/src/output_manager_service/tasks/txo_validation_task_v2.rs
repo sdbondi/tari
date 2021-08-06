@@ -120,6 +120,12 @@ where TBackend: OutputManagerBackend + 'static
                 mined.len(),
                 unmined.len()
             );
+            for (tx, mined_height, mined_in_block, mmr_position) in &mined {
+                info!(target: LOG_TARGET, "Updating output {} as mined", tx.tx_id);
+                self.update_output_as_mined(tx, mined_in_block, *mined_height, *mmr_position)
+                    .await?;
+                self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
+            }
         }
 
         Ok(self.operation_id)
@@ -175,6 +181,7 @@ where TBackend: OutputManagerBackend + 'static
                         "The block that output (commitment) was in has been reorged out, will try to find this output \
                          again, but these funds have potentially been re-orged out of the chain",
                     );
+                    unimplemented!("todo");
                     // self.update_transaction_as_unmined(&last_mined_transaction).await?;
                 } else {
                     info!(
@@ -258,5 +265,29 @@ where TBackend: OutputManagerBackend + 'static
         }
 
         Ok((mined, unmined))
+    }
+
+    async fn update_output_as_mined(
+        &self,
+        tx: &DbUnblindedOutput,
+        mined_in_block: &BlockHash,
+        mined_height: u64,
+        mmr_position: u64,
+    ) -> Result<(), OutputManagerProtocolError> {
+        self.db
+            .set_output_mined_height(tx.tx_id, mined_height, mined_in_block.clone(), mmr_position)
+            .await
+            .for_protocol(self.operation_id)?;
+
+        if num_confirmations >= self.config.num_confirmations_required {
+            self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
+        } else {
+            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
+                tx.tx_id,
+                num_confirmations,
+            ))
+        }
+
+        Ok(())
     }
 }

@@ -299,14 +299,15 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         match op {
             WriteOperation::Insert(kvp) => match kvp {
                 DbKeyValuePair::SpentOutput(c, o) => {
-                    if OutputSql::find_by_commitment_and_cancelled(&c.to_vec(), false, &(*conn)).is_ok() {
-                        return Err(OutputManagerStorageError::DuplicateOutput);
-                    }
-                    let mut new_output = NewOutputSql::new(*o, OutputStatus::Spent, None)?;
-
-                    self.encrypt_if_necessary(&mut new_output)?;
-
-                    new_output.commit(&(*conn))?
+                    unimplemented!("Deprecated")
+                    // if OutputSql::find_by_commitment_and_cancelled(&c.to_vec(), false, &(*conn)).is_ok() {
+                    //     return Err(OutputManagerStorageError::DuplicateOutput);
+                    // }
+                    // let mut new_output = NewOutputSql::new(*o, OutputStatus::Spent, None)?;
+                    //
+                    // self.encrypt_if_necessary(&mut new_output)?;
+                    //
+                    // new_output.commit(&(*conn))?
                 },
                 DbKeyValuePair::UnspentOutput(c, o) => {
                     if OutputSql::find_by_commitment_and_cancelled(&c.to_vec(), false, &(*conn)).is_ok() {
@@ -360,67 +361,71 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
             },
             WriteOperation::Remove(k) => match k {
                 DbKey::SpentOutput(s) => match OutputSql::find_status(&s.to_vec(), OutputStatus::Spent, &(*conn)) {
-                    Ok(o) => {
-                        o.delete(&(*conn))?;
-                        return Ok(Some(DbValue::SpentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
-                    },
-                    Err(e) => {
-                        match e {
-                            OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
-                            e => return Err(e),
-                        };
-                    },
+                    unimplemented!("Deprecated");
+                    // Ok(o) => {
+                    //     o.delete(&(*conn))?;
+                    //     return Ok(Some(DbValue::SpentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
+                    // },
+                    // Err(e) => {
+                    //     match e {
+                    //         OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
+                    //         e => return Err(e),
+                    //     };
+                    // },
                 },
                 DbKey::UnspentOutput(k) => match OutputSql::find_status(&k.to_vec(), OutputStatus::Unspent, &(*conn)) {
-                    Ok(o) => {
-                        o.delete(&(*conn))?;
-                        return Ok(Some(DbValue::UnspentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
-                    },
-                    Err(e) => {
-                        match e {
-                            OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
-                            e => return Err(e),
-                        };
-                    },
+                    unimplemented!("Deprecated");
+                    // Ok(o) => {
+                    //     o.delete(&(*conn))?;
+                    //     return Ok(Some(DbValue::UnspentOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
+                    // },
+                    // Err(e) => {
+                    //     match e {
+                    //         OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
+                    //         e => return Err(e),
+                    //     };
+                    // },
                 },
                 DbKey::AnyOutputByCommitment(commitment) => {
-                    match OutputSql::find_by_commitment(&commitment.to_vec(), &(*conn)) {
-                        Ok(o) => {
-                            o.delete(&(*conn))?;
-                            return Ok(Some(DbValue::AnyOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
-                        },
-                        Err(e) => {
-                            match e {
-                                OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
-                                e => return Err(e),
-                            };
-                        },
-                    }
+                    unimplemented!("Deprecated");
+                    // match OutputSql::find_by_commitment(&commitment.to_vec(), &(*conn)) {
+                    //     Ok(o) => {
+                    //         o.delete(&(*conn))?;
+                    //         return Ok(Some(DbValue::AnyOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
+                    //     },
+                    //     Err(e) => {
+                    //         match e {
+                    //             OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
+                    //             e => return Err(e),
+                    //         };
+                    //     },
+                    // }
                 },
                 DbKey::PendingTransactionOutputs(tx_id) => match PendingTransactionOutputSql::find(tx_id, &(*conn)) {
-                    Ok(p) => {
-                        let mut outputs = OutputSql::find_by_tx_id_and_encumbered(p.tx_id as u64, &(*conn))?;
-
-                        for o in outputs.iter_mut() {
-                            self.decrypt_if_necessary(o)?;
-                        }
-
-                        p.delete(&(*conn))?;
-                        return Ok(Some(DbValue::PendingTransactionOutputs(Box::new(
-                            pending_transaction_outputs_from_sql_outputs(
-                                p.tx_id as u64,
-                                &p.timestamp,
-                                outputs,
-                                p.coinbase_block_height.map(|h| h as u64),
-                            )?,
-                        ))));
-                    },
-                    Err(e) => {
-                        match e {
-                            OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
-                            e => return Err(e),
-                        };
-                    },
+                    unimplemented!("Deprecated");
+                    // Ok(p) => {
+                    //     let mut outputs = OutputSql::find_by_tx_id_and_encumbered(p.tx_id as u64, &(*conn))?;
+                    //
+                    //     for o in outputs.iter_mut() {
+                    //         self.decrypt_if_necessary(o)?;
+                    //     }
+                    //
+                    //     p.delete(&(*conn))?;
+                    //     return Ok(Some(DbValue::PendingTransactionOutputs(Box::new(
+                    //         pending_transaction_outputs_from_sql_outputs(
+                    //             p.tx_id as u64,
+                    //             &p.timestamp,
+                    //             outputs,
+                    //             p.coinbase_block_height.map(|h| h as u64),
+                    //         )?,
+                    //     ))));
+                    // },
+                    // Err(e) => {
+                    //     match e {
+                    //         OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
+                    //         e => return Err(e),
+                    //     };
+                    // },
                 },
                 DbKey::UnspentOutputs => return Err(OutputManagerStorageError::OperationNotSupported),
                 DbKey::SpentOutputs => return Err(OutputManagerStorageError::OperationNotSupported),
