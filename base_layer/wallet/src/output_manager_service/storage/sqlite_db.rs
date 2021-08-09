@@ -338,7 +338,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                         p.coinbase_block_height.map(|h| h as i64),
                     )
                     .commit(&(*conn))?;
-                    for o in p.outputs_to_be_spent {
+                    for _o in p.outputs_to_be_spent {
                         // let mut new_output = NewOutputSql::new(o, OutputStatus::EncumberedToBeSpent, Some(p.tx_id))?;
                         // self.encrypt_if_necessary(&mut new_output)?;
                         // new_output.commit(&(*conn))?;

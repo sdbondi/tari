@@ -78,6 +78,8 @@ pub enum TransactionServiceError {
     DiscoveryProcessFailed(TxId),
     #[error("Invalid Completed Transaction provided")]
     InvalidCompletedTransaction,
+    #[error("Attempted to broadcast a coinbase transaction. TxId `{0}`")]
+    AttemptedToBroadcastCoinbaseTransaction(TxId),
     #[error("No Base Node public keys are provided for Base chain broadcast and monitoring")]
     NoBaseNodeKeysProvided,
     #[error("Error sending data to Protocol via register channels")]

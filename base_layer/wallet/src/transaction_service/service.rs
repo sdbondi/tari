@@ -28,7 +28,6 @@ use crate::{
         handle::{TransactionEvent, TransactionEventSender, TransactionServiceRequest, TransactionServiceResponse},
         protocols::{
             transaction_broadcast_protocol::TransactionBroadcastProtocol,
-            transaction_coinbase_monitoring_protocol::TransactionCoinbaseMonitoringProtocol,
             transaction_receive_protocol::{TransactionReceiveProtocol, TransactionReceiveProtocolStage},
             transaction_send_protocol::{TransactionSendProtocol, TransactionSendProtocolStage},
             transaction_validation_protocol_v2::TransactionValidationProtocolV2,
@@ -1611,6 +1610,12 @@ where
         {
             return Err(TransactionServiceError::InvalidCompletedTransaction);
         }
+        if completed_tx.is_coinbase_transaction() {
+            return Err(TransactionServiceError::AttemptedToBroadcastCoinbaseTransaction(
+                completed_tx.tx_id,
+            ));
+        }
+
         let timeout = match self.power_mode {
             PowerMode::Normal => self.config.broadcast_monitoring_timeout,
             PowerMode::Low => self.config.low_power_polling_timeout,
@@ -1654,7 +1659,8 @@ where
             if completed_tx.valid &&
                 (completed_tx.status == TransactionStatus::Completed ||
                     completed_tx.status == TransactionStatus::Broadcast ||
-                    completed_tx.status == TransactionStatus::MinedUnconfirmed)
+                    completed_tx.status == TransactionStatus::MinedUnconfirmed) &&
+                !completed_tx.is_coinbase_transaction()
             {
                 self.broadcast_completed_transaction(completed_tx, join_handles).await?;
             }
@@ -1923,7 +1929,7 @@ where
     async fn start_coinbase_transaction_monitoring_protocol(
         &mut self,
         tx_id: TxId,
-        join_handles: &mut FuturesUnordered<JoinHandle<Result<u64, TransactionServiceProtocolError>>>,
+        _join_handles: &mut FuturesUnordered<JoinHandle<Result<u64, TransactionServiceProtocolError>>>,
     ) -> Result<(), TransactionServiceError> {
         let completed_tx = self.db.get_completed_transaction(tx_id).await?;
 
@@ -1931,31 +1937,35 @@ where
             return Err(TransactionServiceError::InvalidCompletedTransaction);
         }
 
-        let block_height = if let Some(bh) = completed_tx.coinbase_block_height {
+        let _block_height = if let Some(bh) = completed_tx.coinbase_block_height {
             bh
         } else {
             0
         };
 
-        let timeout = match self.power_mode {
+        let _timeout = match self.power_mode {
             PowerMode::Normal => self.config.broadcast_monitoring_timeout,
             PowerMode::Low => self.config.low_power_polling_timeout,
         };
         match self.base_node_public_key.clone() {
             None => return Err(TransactionServiceError::NoBaseNodeKeysProvided),
-            Some(pk) => {
+            Some(_pk) => {
                 if self.active_coinbase_monitoring_protocols.insert(tx_id) {
-                    let protocol = TransactionCoinbaseMonitoringProtocol::new(
-                        completed_tx.tx_id,
-                        block_height,
-                        self.resources.clone(),
-                        timeout,
-                        pk,
-                        self.base_node_update_publisher.subscribe(),
-                        self.timeout_update_publisher.subscribe(),
+                    // let protocol = TransactionCoinbaseMonitoringProtocol::new(
+                    //     completed_tx.tx_id,
+                    //     block_height,
+                    //     self.resources.clone(),
+                    //     timeout,
+                    //     pk,
+                    //     self.base_node_update_publisher.subscribe(),
+                    //     self.timeout_update_publisher.subscribe(),
+                    // );
+                    // let join_handle = tokio::spawn(protocol.execute());
+                    // join_handles.push(join_handle);
+                    warn!(
+                        target: LOG_TARGET,
+                        "Not running coinbase protocol, it will be handled by tx validation protocol"
                     );
-                    let join_handle = tokio::spawn(protocol.execute());
-                    join_handles.push(join_handle);
                 } else {
                     debug!(
                         target: LOG_TARGET,

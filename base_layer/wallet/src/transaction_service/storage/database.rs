@@ -42,6 +42,7 @@ use log::*;
 use crate::transaction_service::storage::models::WalletTransaction;
 use std::{
     collections::HashMap,
+    fmt,
     fmt::{Display, Error, Formatter},
     sync::Arc,
 };
@@ -137,7 +138,7 @@ pub trait TransactionBackend: Send + Sync + Clone {
     fn set_transaction_as_unmined(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum DbKey {
     PendingOutboundTransaction(TxId),
     PendingInboundTransaction(TxId),
@@ -151,6 +152,59 @@ pub enum DbKey {
     CancelledPendingOutboundTransaction(TxId),
     CancelledPendingInboundTransaction(TxId),
     AnyTransaction(TxId),
+}
+
+impl fmt::Debug for DbKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DbKey::*;
+        // Add in i64 representatives for easy debugging in sqlite. This should probably be removed at some point
+        match self {
+            PendingOutboundTransaction(tx_id) => {
+                write!(f, "PendingOutboundTransaction ({}u64, {}i64)", tx_id, *tx_id as i64)
+            },
+            PendingInboundTransaction(tx_id) => {
+                write!(f, "PendingInboundTransaction ({}u64, {}i64)", tx_id, *tx_id as i64)
+            },
+            CompletedTransaction(tx_id) => {
+                write!(f, "CompletedTransaction ({}u64, {}i64)", tx_id, *tx_id as i64)
+            },
+            PendingOutboundTransactions => {
+                write!(f, "PendingOutboundTransactions ")
+            },
+            PendingInboundTransactions => {
+                write!(f, "PendingInboundTransactions")
+            },
+            CompletedTransactions => {
+                write!(f, "CompletedTransactions ")
+            },
+            CancelledPendingOutboundTransactions => {
+                write!(f, "CancelledPendingOutboundTransactions ")
+            },
+            CancelledPendingInboundTransactions => {
+                write!(f, "CancelledPendingInboundTransactions")
+            },
+            CancelledCompletedTransactions => {
+                write!(f, "CancelledCompletedTransactions")
+            },
+            CancelledPendingOutboundTransaction(tx_id) => {
+                write!(
+                    f,
+                    "CancelledPendingOutboundTransaction ({}u64, {}i64)",
+                    tx_id, *tx_id as i64
+                )
+            },
+            CancelledPendingInboundTransaction(tx_id) => {
+                write!(
+                    f,
+                    "CancelledPendingInboundTransaction ({}u64, {}i64)",
+                    tx_id, *tx_id as i64
+                )
+            },
+            AnyTransaction(tx_id) => {
+                write!(f, "AnyTransaction ({}u64, {}i64)", tx_id, *tx_id as i64)
+            },
+        }
+    }
 }
 
 #[derive(Debug)]

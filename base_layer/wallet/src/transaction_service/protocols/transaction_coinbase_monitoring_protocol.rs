@@ -549,7 +549,8 @@ where TBackend: TransactionBackend + 'static
                         })
                         .for_protocol(self.tx_id)?,
                     response.confirmations,
-                    response.confirmations >= self.resources.config.num_confirmations_required,
+                    false // Will be picked up in
+                    // response.confirmations >= self.resources.config.num_confirmations_required,
                 )
                 .await
                 .for_protocol(self.tx_id)?;

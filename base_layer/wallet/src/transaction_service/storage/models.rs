@@ -241,6 +241,10 @@ impl CompletedTransaction {
             mined_in_block: None,
         }
     }
+
+    pub fn is_coinbase_transaction(&self) -> bool {
+        self.coinbase_block_height.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
