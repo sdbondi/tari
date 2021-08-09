@@ -298,7 +298,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
 
         match op {
             WriteOperation::Insert(kvp) => match kvp {
-                DbKeyValuePair::SpentOutput(c, o) => {
+                DbKeyValuePair::SpentOutput(_c, _o) => {
                     unimplemented!("Deprecated")
                     // if OutputSql::find_by_commitment_and_cancelled(&c.to_vec(), false, &(*conn)).is_ok() {
                     //     return Err(OutputManagerStorageError::DuplicateOutput);
@@ -326,6 +326,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     new_output.commit(&(*conn))?
                 },
                 DbKeyValuePair::PendingTransactionOutputs(tx_id, p) => {
+                    // TODO: Used only by coinbases, so should be renamed
                     if PendingTransactionOutputSql::find(tx_id, &(*conn)).is_ok() {
                         return Err(OutputManagerStorageError::DuplicateTransaction);
                     }
@@ -338,9 +339,10 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     )
                     .commit(&(*conn))?;
                     for o in p.outputs_to_be_spent {
-                        let mut new_output = NewOutputSql::new(o, OutputStatus::EncumberedToBeSpent, Some(p.tx_id))?;
-                        self.encrypt_if_necessary(&mut new_output)?;
-                        new_output.commit(&(*conn))?;
+                        // let mut new_output = NewOutputSql::new(o, OutputStatus::EncumberedToBeSpent, Some(p.tx_id))?;
+                        // self.encrypt_if_necessary(&mut new_output)?;
+                        // new_output.commit(&(*conn))?;
+                        unimplemented!("Should not be any spent outputs")
                     }
                     for o in p.outputs_to_be_received {
                         let mut new_output = NewOutputSql::new(o, OutputStatus::EncumberedToBeReceived, Some(p.tx_id))?;
@@ -360,7 +362,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                 },
             },
             WriteOperation::Remove(k) => match k {
-                DbKey::SpentOutput(s) => {
+                DbKey::SpentOutput(_s) => {
                     // match OutputSql::find_status(&s.to_vec(), OutputStatus::Spent, &(*conn)) {
                     unimplemented!("Deprecated")
                     // Ok(o) => {
@@ -374,7 +376,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     //     };
                     // },
                 },
-                DbKey::UnspentOutput(k) => {
+                DbKey::UnspentOutput(_k) => {
                     // match OutputSql::find_status(&k.to_vec(), OutputStatus::Unspent, &(*conn)) {
                     unimplemented!("Deprecated")
                     // Ok(o) => {
@@ -389,21 +391,22 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                     // },
                 },
                 DbKey::AnyOutputByCommitment(commitment) => {
-                    unimplemented!("Deprecated");
-                    // match OutputSql::find_by_commitment(&commitment.to_vec(), &(*conn)) {
-                    //     Ok(o) => {
-                    //         o.delete(&(*conn))?;
-                    //         return Ok(Some(DbValue::AnyOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
-                    //     },
-                    //     Err(e) => {
-                    //         match e {
-                    //             OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
-                    //             e => return Err(e),
-                    //         };
-                    //     },
-                    // }
+                    // Used by coinbase when mining.
+
+                    match OutputSql::find_by_commitment(&commitment.to_vec(), &(*conn)) {
+                        Ok(o) => {
+                            o.delete(&(*conn))?;
+                            return Ok(Some(DbValue::AnyOutput(Box::new(DbUnblindedOutput::try_from(o)?))));
+                        },
+                        Err(e) => {
+                            match e {
+                                OutputManagerStorageError::DieselError(DieselError::NotFound) => (),
+                                e => return Err(e),
+                            };
+                        },
+                    }
                 },
-                DbKey::PendingTransactionOutputs(tx_id) => {
+                DbKey::PendingTransactionOutputs(_tx_id) => {
                     // match PendingTransactionOutputSql::find(tx_id, &(*conn)) {
                     unimplemented!("Deprecated");
                     // Ok(p) => {
@@ -475,11 +478,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                         o.update(
                             UpdateOutput {
                                 status: Some(OutputStatus::Unspent),
-                                tx_id: None,
-                                spending_key: None,
-                                script_private_key: None,
-                                metadata_signature_nonce: None,
-                                metadata_signature_u_key: None,
+                                ..Default::default()
                             },
                             &(*conn),
                         )?;
@@ -487,11 +486,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                         o.update(
                             UpdateOutput {
                                 status: Some(OutputStatus::Spent),
-                                tx_id: None,
-                                spending_key: None,
-                                script_private_key: None,
-                                metadata_signature_nonce: None,
-                                metadata_signature_u_key: None,
+                                ..Default::default()
                             },
                             &(*conn),
                         )?;
@@ -534,11 +529,8 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
             o.update(
                 UpdateOutput {
                     status: Some(OutputStatus::EncumberedToBeSpent),
-                    tx_id: Some(tx_id),
-                    spending_key: None,
-                    script_private_key: None,
-                    metadata_signature_nonce: None,
-                    metadata_signature_u_key: None,
+                    spent_in_tx_id: Some(Some(tx_id)),
+                    ..Default::default()
                 },
                 &(*conn),
             )?;
@@ -624,11 +616,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                         o.update(
                             UpdateOutput {
                                 status: Some(OutputStatus::CancelledInbound),
-                                tx_id: None,
-                                spending_key: None,
-                                script_private_key: None,
-                                metadata_signature_nonce: None,
-                                metadata_signature_u_key: None,
+                                ..Default::default()
                             },
                             &(*conn),
                         )?;
@@ -636,11 +624,8 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
                         o.update(
                             UpdateOutput {
                                 status: Some(OutputStatus::Unspent),
-                                tx_id: None,
-                                spending_key: None,
-                                script_private_key: None,
-                                metadata_signature_nonce: None,
-                                metadata_signature_u_key: None,
+                                spent_in_tx_id: Some(None),
+                                ..Default::default()
                             },
                             &(*conn),
                         )?;
@@ -700,11 +685,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         output.update(
             UpdateOutput {
                 status: Some(OutputStatus::Invalid),
-                tx_id: None,
-                spending_key: None,
-                script_private_key: None,
-                metadata_signature_nonce: None,
-                metadata_signature_u_key: None,
+                ..Default::default()
             },
             &(*conn),
         )?;
@@ -717,12 +698,9 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         let db_output = OutputSql::find_by_commitment_and_cancelled(&output.commitment.to_vec(), false, &conn)?;
         db_output.update(
             UpdateOutput {
-                status: None,
-                tx_id: None,
-                spending_key: None,
-                script_private_key: None,
                 metadata_signature_nonce: Some(output.metadata_signature.public_nonce().to_vec()),
                 metadata_signature_u_key: Some(output.metadata_signature.u().to_vec()),
+                ..Default::default()
             },
             &(*conn),
         )?;
@@ -740,11 +718,7 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         output.update(
             UpdateOutput {
                 status: Some(OutputStatus::Unspent),
-                tx_id: None,
-                spending_key: None,
-                script_private_key: None,
-                metadata_signature_nonce: None,
-                metadata_signature_u_key: None,
+                ..Default::default()
             },
             &(*conn),
         )?;
@@ -765,11 +739,8 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         let mut o = output.update(
             UpdateOutput {
                 status: Some(OutputStatus::Unspent),
-                tx_id: None,
-                spending_key: None,
-                script_private_key: None,
-                metadata_signature_nonce: None,
-                metadata_signature_u_key: None,
+                spent_in_tx_id: Some(None),
+                ..Default::default()
             },
             &(*conn),
         )?;
@@ -952,6 +923,7 @@ struct NewOutputSql {
     flags: i32,
     maturity: i64,
     status: i32,
+    // Deprecated
     tx_id: Option<i64>,
     hash: Option<Vec<u8>>,
     script: Vec<u8>,
@@ -961,13 +933,14 @@ struct NewOutputSql {
     metadata_signature_nonce: Vec<u8>,
     metadata_signature_u_key: Vec<u8>,
     metadata_signature_v_key: Vec<u8>,
+    received_in_tx_id: Option<i64>,
 }
 
 impl NewOutputSql {
     pub fn new(
         output: DbUnblindedOutput,
         status: OutputStatus,
-        tx_id: Option<TxId>,
+        received_in_tx_id: Option<TxId>,
     ) -> Result<Self, OutputManagerStorageError> {
         Ok(Self {
             commitment: Some(output.commitment.to_vec()),
@@ -976,7 +949,8 @@ impl NewOutputSql {
             flags: output.unblinded_output.features.flags.bits() as i32,
             maturity: output.unblinded_output.features.maturity as i64,
             status: status as i32,
-            tx_id: tx_id.map(|i| i as i64),
+            tx_id: None,
+            received_in_tx_id: received_in_tx_id.map(|i| i as i64),
             hash: Some(output.hash),
             script: output.unblinded_output.script.as_bytes(),
             input_data: output.unblinded_output.input_data.as_bytes(),
@@ -1019,6 +993,7 @@ struct OutputSql {
     flags: i32,
     maturity: i64,
     status: i32,
+    #[deprecated]
     tx_id: Option<i64>,
     hash: Option<Vec<u8>>,
     script: Vec<u8>,
@@ -1033,6 +1008,8 @@ struct OutputSql {
     mined_mmr_position: Option<i64>,
     marked_deleted_at_height: Option<i64>,
     marked_deleted_in_block: Option<Vec<u8>>,
+    received_in_tx_id: Option<i64>,
+    spent_in_tx_id: Option<i64>,
 }
 
 impl OutputSql {
@@ -1184,12 +1161,9 @@ impl OutputSql {
     pub fn update_encryption(&self, conn: &SqliteConnection) -> Result<(), OutputManagerStorageError> {
         let _ = self.update(
             UpdateOutput {
-                status: None,
-                tx_id: None,
                 spending_key: Some(self.spending_key.clone()),
                 script_private_key: Some(self.script_private_key.clone()),
-                metadata_signature_nonce: None,
-                metadata_signature_u_key: None,
+                ..Default::default()
             },
             conn,
         )?;
@@ -1318,6 +1292,7 @@ impl From<OutputSql> for NewOutputSql {
             metadata_signature_nonce: o.metadata_signature_nonce,
             metadata_signature_u_key: o.metadata_signature_u_key,
             metadata_signature_v_key: o.metadata_signature_v_key,
+            received_in_tx_id: o.received_in_tx_id,
         }
     }
 }
@@ -1329,9 +1304,11 @@ impl PartialEq<NewOutputSql> for OutputSql {
 }
 
 /// These are the fields that can be updated for an Output
+#[derive(Default)]
 pub struct UpdateOutput {
     status: Option<OutputStatus>,
-    tx_id: Option<TxId>,
+    received_in_tx_id: Option<Option<TxId>>,
+    spent_in_tx_id: Option<Option<TxId>>,
     spending_key: Option<Vec<u8>>,
     script_private_key: Option<Vec<u8>>,
     metadata_signature_nonce: Option<Vec<u8>>,
@@ -1342,7 +1319,8 @@ pub struct UpdateOutput {
 #[table_name = "outputs"]
 pub struct UpdateOutputSql {
     status: Option<i32>,
-    tx_id: Option<i64>,
+    received_in_tx_id: Option<Option<i64>>,
+    spent_in_tx_id: Option<Option<i64>>,
     spending_key: Option<Vec<u8>>,
     script_private_key: Option<Vec<u8>>,
     metadata_signature_nonce: Option<Vec<u8>>,
@@ -1362,11 +1340,12 @@ impl From<UpdateOutput> for UpdateOutputSql {
     fn from(u: UpdateOutput) -> Self {
         Self {
             status: u.status.map(|t| t as i32),
-            tx_id: u.tx_id.map(|t| t as i64),
             spending_key: u.spending_key,
             script_private_key: u.script_private_key,
             metadata_signature_nonce: u.metadata_signature_nonce,
             metadata_signature_u_key: u.metadata_signature_u_key,
+            received_in_tx_id: u.received_in_tx_id.map(|o| o.map(|t| t as i64)),
+            spent_in_tx_id: u.spent_in_tx_id.map(|o| o.map(|t| t as i64)),
         }
     }
 }
@@ -1638,7 +1617,7 @@ impl Encryptable<Aes256Gcm> for NewKeyManagerStateSql {
         Ok(())
     }
 
-    fn decrypt(&mut self, cipher: &Aes256Gcm) -> Result<(), Error> {
+    fn decrypt(&mut self, _cipher: &Aes256Gcm) -> Result<(), Error> {
         unimplemented!("Not supported")
         // let decrypted_master_key = decrypt_bytes_integral_nonce(&cipher, self.master_key.clone())?;
         // let decrypted_branch_seed =

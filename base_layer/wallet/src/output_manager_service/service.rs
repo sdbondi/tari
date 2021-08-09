@@ -32,7 +32,7 @@ use crate::{
             database::{OutputManagerBackend, OutputManagerDatabase, PendingTransactionOutputs},
             models::{DbUnblindedOutput, KnownOneSidedPaymentScript},
         },
-        tasks::{TxoValidationTask, TxoValidationTaskV2, TxoValidationType},
+        tasks::{TxoValidationTaskV2, TxoValidationType},
         MasterKeyManager,
         TxId,
     },
@@ -349,7 +349,7 @@ where TBackend: OutputManagerBackend + 'static
     fn validate_outputs(
         &mut self,
         validation_type: TxoValidationType,
-        retry_strategy: ValidationRetryStrategy,
+        _retry_strategy: ValidationRetryStrategy,
     ) -> Result<u64, OutputManagerError> {
         match self.resources.base_node_public_key.as_ref() {
             None => Err(OutputManagerError::NoBaseNodeKeysProvided),

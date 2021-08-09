@@ -312,7 +312,6 @@ where B: BlockchainBackend
         hashes: Vec<HashOutput>,
     ) -> Result<Vec<Option<(TransactionOutput, u32, u64, BlockHash)>>, ChainStorageError> {
         let db = self.db_read_access()?;
-        let deleted = db.fetch_deleted_bitmap()?;
 
         let mut result = Vec::with_capacity(hashes.len());
         for hash in hashes {

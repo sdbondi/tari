@@ -22,3 +22,8 @@
 
 alter table outputs add marked_deleted_at_height BigInt;
 alter table outputs add marked_deleted_in_block blob;
+alter table outputs add received_in_tx_id bigint;
+alter table outputs add spent_in_tx_id bigint;
+update outputs set received_in_tx_id = tx_id;
+
+-- TODO: drop outputs tx_id column

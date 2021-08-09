@@ -22,7 +22,7 @@
 use crate::output_manager_service::{
     config::OutputManagerServiceConfig,
     error::{OutputManagerError, OutputManagerProtocolError, OutputManagerProtocolErrorExt},
-    handle::OutputManagerEventSender,
+    handle::{OutputManagerEvent, OutputManagerEventSender},
     storage::{
         database::{OutputManagerBackend, OutputManagerDatabase},
         models::DbUnblindedOutput,
@@ -30,10 +30,7 @@ use crate::output_manager_service::{
     TxoValidationType,
 };
 use log::*;
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-};
+use std::{collections::HashMap, convert::TryInto, sync::Arc};
 use tari_common_types::types::BlockHash;
 use tari_comms::{
     connectivity::ConnectivityRequester,
@@ -43,8 +40,7 @@ use tari_comms::{
 use tari_core::{
     base_node::{rpc::BaseNodeWalletRpcClient, sync::rpc::BaseNodeSyncRpcClient},
     blocks::BlockHeader,
-    proto::base_node::{FetchMatchingUtxos, UtxoQueryRequest},
-    transactions::transaction::TransactionOutput,
+    proto::base_node::UtxoQueryRequest,
 };
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_shutdown::ShutdownSignal;
@@ -87,7 +83,7 @@ where TBackend: OutputManagerBackend + 'static
         }
     }
 
-    pub async fn execute(mut self, shutdown: ShutdownSignal) -> Result<u64, OutputManagerProtocolError> {
+    pub async fn execute(mut self, _shutdown: ShutdownSignal) -> Result<u64, OutputManagerProtocolError> {
         let (mut sync_client, mut wallet_client) = self.create_base_node_clients().await?;
 
         info!(
@@ -129,10 +125,13 @@ where TBackend: OutputManagerBackend + 'static
                 );
                 self.update_output_as_mined(&tx, mined_in_block, *mined_height, *mmr_position)
                     .await?;
-                // self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
             }
         }
 
+        self.publish_event(OutputManagerEvent::TxoValidationSuccess(
+            self.operation_id,
+            self.validation_type,
+        ));
         Ok(self.operation_id)
     }
 
@@ -330,5 +329,17 @@ where TBackend: OutputManagerBackend + 'static
         // }
 
         Ok(())
+    }
+
+    fn publish_event(&self, event: OutputManagerEvent) {
+        match self.event_publisher.send(Arc::new(event)) {
+            Err(e) => {
+                debug!(
+                    target: LOG_TARGET,
+                    "Error sending event because there are no subscribers: {:?}", e
+                );
+            },
+            _ => (),
+        }
     }
 }
