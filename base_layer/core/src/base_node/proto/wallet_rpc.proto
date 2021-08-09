@@ -49,6 +49,8 @@ message TxQueryBatchResponse {
 message TxQueryBatchResponses {
     repeated TxQueryBatchResponse responses = 1;
     bool is_synced = 2;
+    google.protobuf.BytesValue tip_hash = 3;
+    uint64 height_of_longest_chain = 4;
 
 }
 

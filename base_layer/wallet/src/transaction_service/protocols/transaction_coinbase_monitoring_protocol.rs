@@ -538,6 +538,7 @@ where TBackend: TransactionBackend + 'static
                 .db
                 .set_transaction_mined_height(
                     self.tx_id,
+                    true,
                     self.block_height,
                     response
                         .block_hash
@@ -558,10 +559,11 @@ where TBackend: TransactionBackend + 'static
             let _ = self
                 .resources
                 .event_publisher
-                .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed(
-                    self.tx_id,
-                    response.confirmations,
-                )))
+                .send(Arc::new(TransactionEvent::TransactionMinedUnconfirmed {
+                    tx_id: self.tx_id,
+                    num_confirmations: response.confirmations,
+                    is_valid: true,
+                }))
                 .map_err(|e| {
                     trace!(
                         target: LOG_TARGET,

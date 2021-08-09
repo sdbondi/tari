@@ -460,17 +460,17 @@ where TBackend: TransactionBackend + 'static
                             "Transaction (TxId: {}) is VALID according to base node, status will be updated",
                             queried_tx.tx_id
                         );
-                        if let Err(e) = self
-                            .resources
-                            .db
-                            .set_completed_transaction_validity(queried_tx.tx_id, true)
-                            .await
-                        {
-                            warn!(
-                                target: LOG_TARGET,
-                                "Error setting transaction (TxId: {}) validity: {}", queried_tx.tx_id, e
-                            );
-                        }
+                        // if let Err(e) = self
+                        //     .resources
+                        //     .db
+                        //     .set_completed_transaction_validity(queried_tx.tx_id, true)
+                        //     .await
+                        // {
+                        //     warn!(
+                        //         target: LOG_TARGET,
+                        //         "Error setting transaction (TxId: {}) validity: {}", queried_tx.tx_id, e
+                        //     );
+                        // }
                     }
                     if response.confirmations >= self.resources.config.num_confirmations_required as u64 {
                         if queried_tx.status == TransactionStatus::MinedUnconfirmed {
@@ -531,17 +531,17 @@ where TBackend: TransactionBackend + 'static
                         "Transaction (TxId: {}) is INVALID according to base node, status will be updated",
                         queried_tx.tx_id
                     );
-                    if let Err(e) = self
-                        .resources
-                        .db
-                        .set_completed_transaction_validity(queried_tx.tx_id, false)
-                        .await
-                    {
-                        warn!(
-                            target: LOG_TARGET,
-                            "Error setting transaction (TxId: {}) validity: {}", queried_tx.tx_id, e
-                        );
-                    }
+                    // if let Err(e) = self
+                    //     .resources
+                    //     .db
+                    //     .set_completed_transaction_validity(queried_tx.tx_id, false)
+                    //     .await
+                    // {
+                    //     warn!(
+                    //         target: LOG_TARGET,
+                    //         "Error setting transaction (TxId: {}) validity: {}", queried_tx.tx_id, e
+                    //     );
+                    // }
                 }
             } else {
                 debug!(

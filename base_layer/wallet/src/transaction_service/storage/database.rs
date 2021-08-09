@@ -88,8 +88,6 @@ pub trait TransactionBackend: Send + Sync + Clone {
     fn broadcast_completed_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
     /// Indicated that a broadcast transaction has been detected as confirm on a base node
     fn confirm_broadcast_or_coinbase_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
-    /// Set transaction's validity
-    fn set_completed_transaction_validity(&self, tx_id: TxId, valid: bool) -> Result<(), TransactionStorageError>;
     /// Cancel Completed transaction, this will update the transaction status
     fn cancel_completed_transaction(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
     /// Cancel Completed transaction, this will update the transaction status
@@ -124,10 +122,15 @@ pub trait TransactionBackend: Send + Sync + Clone {
     fn increment_send_count(&self, tx_id: TxId) -> Result<(), TransactionStorageError>;
     /// Update a transactions number of confirmations
     fn update_confirmations(&self, tx_id: TxId, confirmations: u64) -> Result<(), TransactionStorageError>;
-    /// Update a transactions mined height
+    /// Update a transactions mined height. A transaction can either be mined as valid or mined as invalid
+    /// A normal transaction can only be mined with valid = true,
+    /// A coinbase transaction can either be mined as valid = true, meaning that it is the coinbase in that block
+    /// or valid =false, meaning that the coinbase has been awarded to another tx, but this has been confirmed by blocks
+    /// The mined height and block are used to determine reorgs
     fn update_mined_height(
         &self,
         tx_id: TxId,
+        is_valid: bool,
         mined_height: u64,
         mined_in_block: BlockHash,
         num_confirmations: u64,
@@ -766,18 +769,6 @@ where T: TransactionBackend + 'static
         Ok(())
     }
 
-    pub async fn set_completed_transaction_validity(
-        &self,
-        tx_id: TxId,
-        valid: bool,
-    ) -> Result<(), TransactionStorageError> {
-        let db_clone = self.db.clone();
-        tokio::task::spawn_blocking(move || db_clone.set_completed_transaction_validity(tx_id, valid))
-            .await
-            .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;
-        Ok(())
-    }
-
     pub async fn set_transaction_confirmations(
         &self,
         tx_id: TxId,
@@ -793,6 +784,7 @@ where T: TransactionBackend + 'static
     pub async fn set_transaction_mined_height(
         &self,
         tx_id: TxId,
+        is_valid: bool,
         mined_height: u64,
         mined_in_block: BlockHash,
         num_confirmations: u64,
@@ -800,7 +792,14 @@ where T: TransactionBackend + 'static
     ) -> Result<(), TransactionStorageError> {
         let db_clone = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            db_clone.update_mined_height(tx_id, mined_height, mined_in_block, num_confirmations, is_confirmed)
+            db_clone.update_mined_height(
+                tx_id,
+                is_valid,
+                mined_height,
+                mined_in_block,
+                num_confirmations,
+                is_confirmed,
+            )
         })
         .await
         .map_err(|err| TransactionStorageError::BlockingTaskSpawnError(err.to_string()))??;

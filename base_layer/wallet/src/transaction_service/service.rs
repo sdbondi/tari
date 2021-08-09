@@ -672,10 +672,10 @@ where
                 .start_transaction_validation_protocol(retry_strategy, transaction_validation_join_handles)
                 .await
                 .map(TransactionServiceResponse::ValidationStarted),
-            TransactionServiceRequest::SetCompletedTransactionValidity(tx_id, validity) => self
-                .set_completed_transaction_validity(tx_id, validity)
-                .await
-                .map(|_| TransactionServiceResponse::CompletedTransactionValidityChanged),
+            /* TransactionServiceRequest::SetCompletedTransactionValidity(tx_id, validity) => self
+             *     .set_completed_transaction_validity(tx_id, validity)
+             *     .await
+             *     .map(|_| TransactionServiceResponse::CompletedTransactionValidityChanged), */
         }
     }
 
@@ -1120,18 +1120,18 @@ where
         Ok(())
     }
 
-    async fn set_completed_transaction_validity(
-        &mut self,
-        tx_id: TxId,
-        valid: bool,
-    ) -> Result<(), TransactionServiceError> {
-        self.resources
-            .db
-            .set_completed_transaction_validity(tx_id, valid)
-            .await?;
-
-        Ok(())
-    }
+    // async fn set_completed_transaction_validity(
+    //     &mut self,
+    //     tx_id: TxId,
+    //     valid: bool,
+    // ) -> Result<(), TransactionServiceError> {
+    //     self.resources
+    //         .db
+    //         .set_completed_transaction_validity(tx_id, valid)
+    //         .await?;
+    //
+    //     Ok(())
+    // }
 
     /// Handle a Transaction Cancelled message received from the Comms layer
     pub async fn handle_transaction_cancelled_message(

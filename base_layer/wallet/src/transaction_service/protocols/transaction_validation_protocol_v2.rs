@@ -122,7 +122,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                 "Asking base node for location of {} transactions by excess",
                 batch.len()
             );
-            let (mined, unmined) = self
+            let (mined, unmined, tip_height, tip_block) = self
                 .query_base_node_for_transactions(batch, &mut base_node_wallet_client)
                 .await
                 .for_protocol(self.operation_id)?;
@@ -136,11 +136,22 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                 info!(target: LOG_TARGET, "Updating transaction {} as mined", tx.tx_id);
                 self.update_transaction_as_mined(tx, mined_in_block, *mined_height, *num_confirmations)
                     .await?;
-                self.publish_event(TransactionEvent::TransactionMined(tx.tx_id));
             }
             for tx in &unmined {
-                info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
-                self.update_transaction_as_unmined(&tx).await?;
+                // Treat coinbases separately
+                if tx.is_coinbase_transaction() {
+                    info!(target: LOG_TARGET, "Updated coinbase {} as mined invalid", tx.tx_id);
+                    self.update_coinbase_as_lost(
+                        tx,
+                        &tip_block,
+                        tip_height,
+                        tip_height.saturating_sub(tx.coinbase_block_height.unwrap_or_default()),
+                    )
+                    .await?;
+                } else {
+                    info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
+                    self.update_transaction_as_unmined(&tx).await?;
+                }
             }
         }
         self.publish_event(TransactionEvent::TransactionValidationSuccess(self.operation_id));
@@ -219,6 +230,8 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         (
             Vec<(CompletedTransaction, u64, BlockHash, u64)>,
             Vec<CompletedTransaction>,
+            u64,
+            BlockHash,
         ),
         TransactionServiceError,
     > {
@@ -261,7 +274,14 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             }
         }
 
-        Ok((mined, unmined))
+        Ok((
+            mined,
+            unmined,
+            batch_response.height_of_longest_chain,
+            batch_response.tip_hash.ok_or_else(|| {
+                TransactionServiceError::ProtobufConversionError("Missing `tip_hash` field".to_string())
+            })?,
+        ))
     }
 
     async fn get_base_node_block_at_height(
@@ -306,6 +326,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         self.db
             .set_transaction_mined_height(
                 tx.tx_id,
+                true,
                 mined_height,
                 mined_in_block.clone(),
                 num_confirmations,
@@ -315,12 +336,51 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             .for_protocol(self.operation_id)?;
 
         if num_confirmations >= self.config.num_confirmations_required {
-            self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
+            self.publish_event(TransactionEvent::TransactionMined {
+                tx_id: tx.tx_id,
+                is_valid: true,
+            })
         } else {
-            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
-                tx.tx_id,
+            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed {
+                tx_id: tx.tx_id,
                 num_confirmations,
-            ))
+                is_valid: true,
+            })
+        }
+
+        Ok(())
+    }
+
+    async fn update_coinbase_as_lost(
+        &self,
+        tx: &CompletedTransaction,
+        mined_in_block: &BlockHash,
+        mined_height: u64,
+        num_confirmations: u64,
+    ) -> Result<(), TransactionServiceProtocolError> {
+        self.db
+            .set_transaction_mined_height(
+                tx.tx_id,
+                false,
+                mined_height,
+                mined_in_block.clone(),
+                num_confirmations,
+                num_confirmations >= self.config.num_confirmations_required,
+            )
+            .await
+            .for_protocol(self.operation_id)?;
+
+        if num_confirmations >= self.config.num_confirmations_required {
+            self.publish_event(TransactionEvent::TransactionMined {
+                tx_id: tx.tx_id,
+                is_valid: false,
+            })
+        } else {
+            self.publish_event(TransactionEvent::TransactionMinedUnconfirmed {
+                tx_id: tx.tx_id,
+                num_confirmations,
+                is_valid: false,
+            })
         }
 
         Ok(())

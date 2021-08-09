@@ -262,6 +262,12 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
 
         let mut responses: Vec<TxQueryBatchResponse> = Vec::new();
 
+        let metadata = self
+            .db
+            .get_chain_metadata()
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?;
+
         for sig in message.sigs {
             let signature = Signature::try_from(sig).map_err(|_| RpcStatus::bad_request("Signature was invalid"))?;
             let response: TxQueryResponse = self.fetch_kernel(signature.clone()).await?;
@@ -273,7 +279,12 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
                 block_height: response.height_of_longest_chain - response.confirmations,
             });
         }
-        Ok(Response::new(TxQueryBatchResponses { responses, is_synced }))
+        Ok(Response::new(TxQueryBatchResponses {
+            responses,
+            is_synced,
+            tip_hash: Some(metadata.best_block().clone()),
+            height_of_longest_chain: metadata.height_of_longest_chain(),
+        }))
     }
 
     async fn fetch_matching_utxos(

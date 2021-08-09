@@ -818,21 +818,21 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
         // Ok(())
     }
 
-    fn set_completed_transaction_validity(&self, tx_id: u64, valid: bool) -> Result<(), TransactionStorageError> {
-        let conn = self.database_connection.acquire_lock();
-        match CompletedTransactionSql::find_by_cancelled(tx_id, false, &(*conn)) {
-            Ok(v) => {
-                v.set_validity(valid, &(*conn))?;
-            },
-            Err(TransactionStorageError::DieselError(DieselError::NotFound)) => {
-                return Err(TransactionStorageError::ValueNotFound(DbKey::CompletedTransaction(
-                    tx_id,
-                )));
-            },
-            Err(e) => return Err(e),
-        };
-        Ok(())
-    }
+    // fn set_completed_transaction_validity(&self, tx_id: u64, valid: bool) -> Result<(), TransactionStorageError> {
+    //     let conn = self.database_connection.acquire_lock();
+    //     match CompletedTransactionSql::find_by_cancelled(tx_id, false, &(*conn)) {
+    //         Ok(v) => {
+    //             v.set_validity(valid, &(*conn))?;
+    //         },
+    //         Err(TransactionStorageError::DieselError(DieselError::NotFound)) => {
+    //             return Err(TransactionStorageError::ValueNotFound(DbKey::CompletedTransaction(
+    //                 tx_id,
+    //             )));
+    //         },
+    //         Err(e) => return Err(e),
+    //     };
+    //     Ok(())
+    // }
 
     fn update_confirmations(&self, _tx_id: u64, _confirmations: u64) -> Result<(), TransactionStorageError> {
         unimplemented!("obsolete");
@@ -854,6 +854,7 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
     fn update_mined_height(
         &self,
         tx_id: u64,
+        is_valid: bool,
         mined_height: u64,
         mined_in_block: BlockHash,
         num_confirmations: u64,
@@ -862,7 +863,14 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
         let conn = self.database_connection.acquire_lock();
         match CompletedTransactionSql::find(tx_id, &(*conn)) {
             Ok(v) => {
-                v.update_mined_height(mined_height, mined_in_block, num_confirmations, is_confirmed, &(*conn))?;
+                v.update_mined_height(
+                    is_valid,
+                    mined_height,
+                    mined_in_block,
+                    num_confirmations,
+                    is_confirmed,
+                    &(*conn),
+                )?;
             },
             Err(TransactionStorageError::DieselError(DieselError::NotFound)) => {
                 return Err(TransactionStorageError::ValueNotFound(DbKey::CompletedTransaction(
@@ -1396,18 +1404,9 @@ impl CompletedTransactionSql {
                 status: Some(TransactionStatus::Completed as i32),
                 mined_in_block: Some(None),
                 mined_height: Some(None),
-                ..Default::default()
-            },
-            conn,
-        )?;
-
-        Ok(())
-    }
-
-    pub fn set_validity(&self, valid: bool, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
-        self.update(
-            UpdateCompletedTransactionSql {
-                valid: Some(valid as i32),
+                confirmations: Some(None),
+                // Resets to valid
+                valid: Some(1),
                 ..Default::default()
             },
             conn,
@@ -1430,6 +1429,7 @@ impl CompletedTransactionSql {
 
     pub fn update_mined_height(
         &self,
+        is_valid: bool,
         mined_height: u64,
         mined_in_block: BlockHash,
         num_confirmations: u64,
@@ -1446,6 +1446,7 @@ impl CompletedTransactionSql {
                 }),
                 mined_height: Some(Some(mined_height as i64)),
                 mined_in_block: Some(Some(mined_in_block)),
+                valid: Some(if is_valid { 1 } else { 0 }),
                 // If the tx is mined, then it can't be cancelled
                 cancelled: Some(0),
                 ..Default::default()
