@@ -140,14 +140,24 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             for tx in &unmined {
                 // Treat coinbases separately
                 if tx.is_coinbase_transaction() {
-                    info!(target: LOG_TARGET, "Updated coinbase {} as mined invalid", tx.tx_id);
-                    self.update_coinbase_as_lost(
-                        tx,
-                        &tip_block,
-                        tip_height,
-                        tip_height.saturating_sub(tx.coinbase_block_height.unwrap_or_default()),
-                    )
-                    .await?;
+                    if tx.coinbase_block_height.unwrap_or_default() <= tip_height {
+                        info!(target: LOG_TARGET, "Updated coinbase {} as mined invalid", tx.tx_id);
+                        self.update_coinbase_as_lost(
+                            tx,
+                            &tip_block,
+                            tip_height,
+                            tip_height.saturating_sub(tx.coinbase_block_height.unwrap_or_default()),
+                        )
+                        .await?;
+                    } else {
+                        info!(
+                            target: LOG_TARGET,
+                            "Coinbase not found, but it is for a block that is not yet in the chain. Coinbase height: \
+                             {}, tip height:{}",
+                            tx.coinbase_block_height.unwrap_or_default(),
+                            tip_height
+                        );
+                    }
                 } else {
                     info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
                     self.update_transaction_as_unmined(&tx).await?;
@@ -321,8 +331,6 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         mined_height: u64,
         num_confirmations: u64,
     ) -> Result<(), TransactionServiceProtocolError> {
-        // TODO: I don't think the confirmations should be saved to the database as it makes it harder
-        // to determine reorgs, but will work with it for now
         self.db
             .set_transaction_mined_height(
                 tx.tx_id,

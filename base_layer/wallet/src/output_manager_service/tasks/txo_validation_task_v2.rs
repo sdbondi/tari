@@ -185,7 +185,7 @@ where TBackend: OutputManagerBackend + 'static
                         "The block that output (commitment) was in has been reorged out, will try to find this output \
                          again, but these funds have potentially been re-orged out of the chain",
                     );
-                    unimplemented!("todo");
+                    // unimplemented!("todo");
                     // self.update_transaction_as_unmined(&last_mined_transaction).await?;
                 } else {
                     info!(

@@ -1401,6 +1401,7 @@ impl CompletedTransactionSql {
     pub fn set_as_unmined(&self, conn: &SqliteConnection) -> Result<(), TransactionStorageError> {
         self.update(
             UpdateCompletedTransactionSql {
+                // TODO: Coinbases should technically go back to 'Coinbase' instead of 'Completed'
                 status: Some(TransactionStatus::Completed as i32),
                 mined_in_block: Some(None),
                 mined_height: Some(None),
