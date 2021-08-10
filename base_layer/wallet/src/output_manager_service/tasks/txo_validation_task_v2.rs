@@ -40,7 +40,7 @@ use tari_comms::{
 use tari_core::{
     base_node::{rpc::BaseNodeWalletRpcClient, sync::rpc::BaseNodeSyncRpcClient},
     blocks::BlockHeader,
-    proto::base_node::UtxoQueryRequest,
+    proto::base_node::{QueryDeletedRequest, UtxoQueryRequest},
 };
 use tari_crypto::tari_utilities::{hex::Hex, Hashable};
 use tari_shutdown::ShutdownSignal;
@@ -91,11 +91,88 @@ where TBackend: OutputManagerBackend + 'static
             "Starting TXO validation protocol V2 (Id: {}) for {}", self.operation_id, self.validation_type,
         );
 
-        self.check_for_reorgs(&mut sync_client).await?;
+        let last_mined_header = self.check_for_reorgs(&mut sync_client).await?;
 
+        self.update_received_outputs(&mut wallet_client).await?;
+
+        self.update_spent_outputs(&mut wallet_client, last_mined_header).await?;
+        self.publish_event(OutputManagerEvent::TxoValidationSuccess(
+            self.operation_id,
+            self.validation_type,
+        ));
+        Ok(self.operation_id)
+    }
+
+    async fn update_spent_outputs(
+        &self,
+        wallet_client: &mut BaseNodeWalletRpcClient,
+        last_mined_header_hash: Option<BlockHash>,
+    ) -> Result<(), OutputManagerProtocolError> {
         let unmined_outputs = self
             .db
-            .fetch_unmined_outputs()
+            .fetch_unmined_spent_outputs()
+            .await
+            .for_protocol(self.operation_id)
+            .unwrap();
+
+        if unmined_outputs.is_empty() {
+            return Ok(());
+        }
+
+        for batch in unmined_outputs.chunks(self.batch_size) {
+            info!(
+                target: LOG_TARGET,
+                "Asking base node for status of {} mmr_positions",
+                batch.len()
+            );
+
+            // We have to send positions to the base node because if the base node cannot find the hash of the output
+            // we can't tell if the output ever existed, as opposed to existing and was spent.
+            // This assumes that the base node has not reorged since the last time we asked.
+            let deleted_bitmap_response = wallet_client
+                .query_deleted(QueryDeletedRequest {
+                    chain_must_include_header: last_mined_header_hash.clone(),
+                    mmr_positions: batch.iter().filter_map(|ub| ub.mined_mmr_position).collect(),
+                })
+                .await
+                .for_protocol(self.operation_id)?;
+
+            for output in batch {
+                if deleted_bitmap_response
+                    .deleted_positions
+                    .contains(&output.mined_mmr_position.unwrap())
+                {
+                    self.db
+                        .mark_output_as_spent(
+                            output.hash.clone(),
+                            deleted_bitmap_response.height_of_longest_chain,
+                            deleted_bitmap_response.best_block.clone(),
+                        )
+                        .await
+                        .for_protocol(self.operation_id)?;
+                }
+                if deleted_bitmap_response
+                    .not_deleted_positions
+                    .contains(&output.mined_mmr_position.unwrap()) &&
+                    output.marked_deleted_at_height.is_some()
+                {
+                    self.db
+                        .mark_output_as_unspent(output.hash.clone())
+                        .await
+                        .for_protocol(self.operation_id)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn update_received_outputs(
+        &self,
+        wallet_client: &mut BaseNodeWalletRpcClient,
+    ) -> Result<(), OutputManagerProtocolError> {
+        let unmined_outputs = self
+            .db
+            .fetch_unmined_received_outputs()
             .await
             .for_protocol(self.operation_id)
             .unwrap();
@@ -103,11 +180,11 @@ where TBackend: OutputManagerBackend + 'static
         for batch in unmined_outputs.chunks(self.batch_size) {
             info!(
                 target: LOG_TARGET,
-                "Asking base node for location of {} outputs by hash",
+                "Asking base node for location of {} mined outputs by hash",
                 batch.len()
             );
             let (mined, unmined) = self
-                .query_base_node_for_outputs(batch, &mut wallet_client)
+                .query_base_node_for_outputs(batch, wallet_client)
                 .await
                 .for_protocol(self.operation_id)?;
             info!(
@@ -128,11 +205,7 @@ where TBackend: OutputManagerBackend + 'static
             }
         }
 
-        self.publish_event(OutputManagerEvent::TxoValidationSuccess(
-            self.operation_id,
-            self.validation_type,
-        ));
-        Ok(self.operation_id)
+        Ok(())
     }
 
     async fn create_base_node_clients(
@@ -159,46 +232,16 @@ where TBackend: OutputManagerBackend + 'static
         Ok((sync_client, wallet_client))
     }
 
-    async fn check_for_reorgs(&mut self, client: &mut BaseNodeSyncRpcClient) -> Result<(), OutputManagerProtocolError> {
+    // returns the last header found still in the chain
+    async fn check_for_reorgs(
+        &mut self,
+        client: &mut BaseNodeSyncRpcClient,
+    ) -> Result<Option<BlockHash>, OutputManagerProtocolError> {
+        let mut last_mined_header_hash = None;
         info!(
             target: LOG_TARGET,
             "Checking last mined TXO to see if the base node has re-orged"
         );
-        loop {
-            if let Some(last_mined_output) = self
-                .db
-                .get_last_mined_output()
-                .await
-                .for_protocol(self.operation_id)
-                .unwrap()
-            {
-                let mined_height = last_mined_output.mined_height.unwrap(); // TODO: fix unwrap
-                let mined_in_block_hash = last_mined_output.mined_in_block.clone().unwrap(); // TODO: fix unwrap.
-                let block_at_height = self
-                    .get_base_node_block_at_height(mined_height, client)
-                    .await
-                    .for_protocol(self.operation_id)?;
-                if block_at_height.is_none() || block_at_height.unwrap() != mined_in_block_hash {
-                    // Chain has reorged since we last
-                    warn!(
-                        target: LOG_TARGET,
-                        "The block that output (commitment) was in has been reorged out, will try to find this output \
-                         again, but these funds have potentially been re-orged out of the chain",
-                    );
-                    // unimplemented!("todo");
-                    // self.update_transaction_as_unmined(&last_mined_transaction).await?;
-                } else {
-                    info!(
-                        target: LOG_TARGET,
-                        "Last mined transaction is still in the block chain according to base node."
-                    );
-                    break;
-                }
-            } else {
-                // No more outputs
-                break;
-            }
-        }
 
         loop {
             if let Some(last_spent_output) = self
@@ -235,7 +278,44 @@ where TBackend: OutputManagerBackend + 'static
                 break;
             }
         }
-        Ok(())
+
+        loop {
+            if let Some(last_mined_output) = self
+                .db
+                .get_last_mined_output()
+                .await
+                .for_protocol(self.operation_id)
+                .unwrap()
+            {
+                let mined_height = last_mined_output.mined_height.unwrap(); // TODO: fix unwrap
+                let mined_in_block_hash = last_mined_output.mined_in_block.clone().unwrap(); // TODO: fix unwrap.
+                let block_at_height = self
+                    .get_base_node_block_at_height(mined_height, client)
+                    .await
+                    .for_protocol(self.operation_id)?;
+                if block_at_height.is_none() || block_at_height.unwrap() != mined_in_block_hash {
+                    // Chain has reorged since we last
+                    warn!(
+                        target: LOG_TARGET,
+                        "The block that output (commitment) was in has been reorged out, will try to find this output \
+                         again, but these funds have potentially been re-orged out of the chain",
+                    );
+                    // unimplemented!("todo");
+                    // self.update_transaction_as_unmined(&last_mined_transaction).await?;
+                } else {
+                    info!(
+                        target: LOG_TARGET,
+                        "Last mined transaction is still in the block chain according to base node."
+                    );
+                    last_mined_header_hash = Some(mined_in_block_hash);
+                    break;
+                }
+            } else {
+                // No more outputs
+                break;
+            }
+        }
+        Ok(last_mined_header_hash)
     }
 
     // TODO: remove this duplicated code from transaction validation protocol
@@ -318,15 +398,6 @@ where TBackend: OutputManagerBackend + 'static
             .set_output_mined_height(tx.hash.clone(), mined_height, mined_in_block.clone(), mmr_position)
             .await
             .for_protocol(self.operation_id)?;
-
-        // if num_confirmations >= self.config.num_confirmations_required {
-        //     self.publish_event(TransactionEvent::TransactionMined(tx.tx_id))
-        // } else {
-        //     self.publish_event(TransactionEvent::TransactionMinedUnconfirmed(
-        //         tx.tx_id,
-        //         num_confirmations,
-        //     ))
-        // }
 
         Ok(())
     }

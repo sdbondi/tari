@@ -44,7 +44,7 @@ use crate::{
 #[cfg(feature = "base_node")]
 pub use service::BaseNodeWalletRpcService;
 
-use crate::proto::base_node::{UtxoQueryRequest, UtxoQueryResponses};
+use crate::proto::base_node::{QueryDeletedRequest, QueryDeletedResponse, UtxoQueryRequest, UtxoQueryResponses};
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus};
 use tari_comms_rpc_macros::tari_rpc;
 
@@ -76,6 +76,12 @@ pub trait BaseNodeWalletService: Send + Sync + 'static {
 
     #[rpc(method = 6)]
     async fn utxo_query(&self, request: Request<UtxoQueryRequest>) -> Result<Response<UtxoQueryResponses>, RpcStatus>;
+
+    #[rpc(method = 7)]
+    async fn query_deleted(
+        &self,
+        request: Request<QueryDeletedRequest>,
+    ) -> Result<Response<QueryDeletedResponse>, RpcStatus>;
 }
 
 #[cfg(feature = "base_node")]

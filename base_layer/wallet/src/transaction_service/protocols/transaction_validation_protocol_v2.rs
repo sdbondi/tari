@@ -117,12 +117,7 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             .for_protocol(self.operation_id)
             .unwrap();
         for batch in unmined_transactions.chunks(self.batch_size) {
-            info!(
-                target: LOG_TARGET,
-                "Asking base node for location of {} transactions by excess",
-                batch.len()
-            );
-            let (mined, unmined, tip_height, tip_block) = self
+            let (mined, unmined, tip_info) = self
                 .query_base_node_for_transactions(batch, &mut base_node_wallet_client)
                 .await
                 .for_protocol(self.operation_id)?;
@@ -137,30 +132,32 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
                 self.update_transaction_as_mined(tx, mined_in_block, *mined_height, *num_confirmations)
                     .await?;
             }
-            for tx in &unmined {
-                // Treat coinbases separately
-                if tx.is_coinbase_transaction() {
-                    if tx.coinbase_block_height.unwrap_or_default() <= tip_height {
-                        info!(target: LOG_TARGET, "Updated coinbase {} as mined invalid", tx.tx_id);
-                        self.update_coinbase_as_lost(
-                            tx,
-                            &tip_block,
-                            tip_height,
-                            tip_height.saturating_sub(tx.coinbase_block_height.unwrap_or_default()),
-                        )
-                        .await?;
+            if let Some((tip_height, tip_block)) = tip_info {
+                for tx in &unmined {
+                    // Treat coinbases separately
+                    if tx.is_coinbase_transaction() {
+                        if tx.coinbase_block_height.unwrap_or_default() <= tip_height {
+                            info!(target: LOG_TARGET, "Updated coinbase {} as mined invalid", tx.tx_id);
+                            self.update_coinbase_as_lost(
+                                tx,
+                                &tip_block,
+                                tip_height,
+                                tip_height.saturating_sub(tx.coinbase_block_height.unwrap_or_default()),
+                            )
+                            .await?;
+                        } else {
+                            info!(
+                                target: LOG_TARGET,
+                                "Coinbase not found, but it is for a block that is not yet in the chain. Coinbase \
+                                 height: {}, tip height:{}",
+                                tx.coinbase_block_height.unwrap_or_default(),
+                                tip_height
+                            );
+                        }
                     } else {
-                        info!(
-                            target: LOG_TARGET,
-                            "Coinbase not found, but it is for a block that is not yet in the chain. Coinbase height: \
-                             {}, tip height:{}",
-                            tx.coinbase_block_height.unwrap_or_default(),
-                            tip_height
-                        );
+                        info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
+                        self.update_transaction_as_unmined(&tx).await?;
                     }
-                } else {
-                    info!(target: LOG_TARGET, "Updated transaction {} as unmined", tx.tx_id);
-                    self.update_transaction_as_unmined(&tx).await?;
                 }
             }
         }
@@ -240,20 +237,31 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         (
             Vec<(CompletedTransaction, u64, BlockHash, u64)>,
             Vec<CompletedTransaction>,
-            u64,
-            BlockHash,
+            Option<(u64, BlockHash)>,
         ),
         TransactionServiceError,
     > {
+        let mut mined = vec![];
+        let mut unmined = vec![];
+
         let mut batch_signatures = HashMap::new();
         for tx in batch.iter() {
-            let signature = tx
-                .transaction
-                .first_kernel_excess_sig()
-                .ok_or(TransactionServiceError::InvalidTransaction)?;
-
-            batch_signatures.insert(signature.clone(), tx);
+            // Imported transactions do not have a signature
+            if let Some(sig) = tx.transaction.first_kernel_excess_sig() {
+                batch_signatures.insert(sig.clone(), tx);
+            }
         }
+
+        if batch_signatures.len() == 0 {
+            info!(target: LOG_TARGET, "No transactions needed to query with the base node");
+            return Ok((mined, unmined, None));
+        }
+
+        info!(
+            target: LOG_TARGET,
+            "Asking base node for location of {} transactions by excess",
+            batch.len()
+        );
 
         let batch_response = base_node_client
             .transaction_batch_query(SignaturesProto {
@@ -264,8 +272,6 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
             })
             .await?;
 
-        let mut mined = vec![];
-        let mut unmined = vec![];
         for response_proto in batch_response.responses {
             let response = TxQueryBatchResponse::try_from(response_proto)
                 .map_err(TransactionServiceError::ProtobufConversionError)?;
@@ -287,10 +293,12 @@ impl<TTransactionBackend: TransactionBackend + 'static> TransactionValidationPro
         Ok((
             mined,
             unmined,
-            batch_response.height_of_longest_chain,
-            batch_response.tip_hash.ok_or_else(|| {
-                TransactionServiceError::ProtobufConversionError("Missing `tip_hash` field".to_string())
-            })?,
+            Some((
+                batch_response.height_of_longest_chain,
+                batch_response.tip_hash.ok_or_else(|| {
+                    TransactionServiceError::ProtobufConversionError("Missing `tip_hash` field".to_string())
+                })?,
+            )),
         ))
     }
 

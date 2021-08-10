@@ -27,6 +27,8 @@ use crate::{
         base_node::{
             FetchMatchingUtxos,
             FetchUtxosResponse,
+            QueryDeletedRequest,
+            QueryDeletedResponse,
             Signatures as SignaturesProto,
             TipInfoResponse,
             TxLocation,
@@ -43,7 +45,7 @@ use crate::{
     },
     transactions::{transaction::Transaction, types::Signature},
 };
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus};
 use tari_crypto::tari_utilities::Hashable;
 
@@ -350,7 +352,6 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
         Ok(Response::new(UtxoQueryResponses {
             height_of_longest_chain: metadata.height_of_longest_chain(),
             best_block: metadata.best_block().clone(),
-            deleted_bitmap: deleted,
             responses: res
                 .into_iter()
                 .map(
@@ -363,6 +364,65 @@ impl<B: BlockchainBackend + 'static> BaseNodeWalletService for BaseNodeWalletRpc
                     },
                 )
                 .collect(),
+        }))
+    }
+
+    /// Currently the wallet cannot use the deleted bitmap because it can't compile croaring
+    /// at some point in the future, it might be better to send the wallet the actual bitmap so
+    /// it can check itself
+    async fn query_deleted(
+        &self,
+        request: Request<QueryDeletedRequest>,
+    ) -> Result<Response<QueryDeletedResponse>, RpcStatus> {
+        let message = request.into_message();
+        let db = self.db();
+
+        if let Some(chain_must_include_header) = message.chain_must_include_header {
+            if self
+                .db
+                .fetch_header_by_block_hash(chain_must_include_header)
+                .await
+                .map_err(RpcStatus::log_internal_error(LOG_TARGET))?
+                .is_none()
+            {
+                return Err(RpcStatus::not_found(
+                    "Chain does not include header. It might have been reorged out",
+                ));
+            }
+        }
+
+        let metadata = self
+            .db
+            .get_chain_metadata()
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?;
+
+        let deleted_bitmap = self
+            .db
+            .fetch_complete_deleted_bitmap_at(metadata.best_block().clone())
+            .await
+            .map_err(RpcStatus::log_internal_error(LOG_TARGET))?;
+
+        let mut deleted_positions = vec![];
+        let mut not_deleted_positions = vec![];
+
+        for position in message.mmr_positions {
+            if position > u32::MAX as u64 {
+                // TODO: in future, bitmap may support higher than u32
+                return Err(RpcStatus::bad_request("position must fit into a u32"));
+            }
+            let pos = position.try_into().unwrap();
+            if deleted_bitmap.bitmap().contains(pos) {
+                deleted_positions.push(position);
+            } else {
+                not_deleted_positions.push(position);
+            }
+        }
+        Ok(Response::new(QueryDeletedResponse {
+            height_of_longest_chain: metadata.height_of_longest_chain(),
+            best_block: metadata.best_block().clone(),
+            deleted_positions,
+            not_deleted_positions,
         }))
     }
 

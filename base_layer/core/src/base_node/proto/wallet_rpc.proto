@@ -63,13 +63,25 @@ message FetchUtxosResponse {
     bool is_synced = 2;
 }
 
+
+message QueryDeletedRequest{
+    repeated uint64 mmr_positions = 1;
+    google.protobuf.BytesValue chain_must_include_header = 2;
+}
+
+message QueryDeletedResponse {
+    repeated uint64 deleted_positions = 1;
+    repeated uint64 not_deleted_positions = 2;
+    bytes best_block = 3;
+    uint64 height_of_longest_chain = 4;
+}
+
 message UtxoQueryRequest{
     repeated bytes output_hashes =1;
 }
 
 message UtxoQueryResponses {
     repeated UtxoQueryResponse responses =1;
-    bytes deleted_bitmap = 2;
     bytes best_block = 3;
     uint64 height_of_longest_chain = 4;
 }

@@ -280,9 +280,22 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         Ok(result)
     }
 
-    fn fetch_unmined_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError> {
+    fn fetch_unmined_spent_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
-        let mut outputs = OutputSql::index_unmined(&(*conn))?;
+        let mut outputs = OutputSql::index_marked_deleted_in_block_is_null(&(*conn))?;
+        for output in outputs.iter_mut() {
+            self.decrypt_if_necessary(output)?;
+        }
+
+        outputs
+            .into_iter()
+            .map(|o| DbUnblindedOutput::try_from(o))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn fetch_unmined_received_outputs(&self) -> Result<Vec<DbUnblindedOutput>, OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        let mut outputs = OutputSql::index_mined_in_block_is_null(&(*conn))?;
         for output in outputs.iter_mut() {
             self.decrypt_if_necessary(output)?;
         }
@@ -454,14 +467,59 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         mmr_position: u64,
     ) -> Result<(), OutputManagerStorageError> {
         let conn = self.database_connection.acquire_lock();
-        diesel::update(outputs::table.filter(outputs::hash.eq(hash)))
+        // Only allow updating of non-deleted utxos
+        diesel::update(outputs::table.filter(outputs::hash.eq(hash).and(outputs::marked_deleted_at_height.is_null())))
             .set((
                 outputs::mined_height.eq(mined_height as i64),
                 outputs::mined_in_block.eq(mined_in_block),
                 outputs::mined_mmr_position.eq(mmr_position as i64),
+                outputs::status.eq(OutputStatus::Unspent as i32),
             ))
             .execute(&(*conn))
             .num_rows_affected_or_not_found(1)?;
+
+        Ok(())
+    }
+
+    fn mark_output_as_spent(
+        &self,
+        hash: Vec<u8>,
+        mark_deleted_at_height: u64,
+        mark_deleted_in_block: Vec<u8>,
+    ) -> Result<(), OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        // Only allow updating of non-deleted utxos
+        diesel::update(outputs::table.filter(outputs::hash.eq(hash).and(outputs::marked_deleted_at_height.is_null())))
+            .set((
+                outputs::marked_deleted_at_height.eq(mark_deleted_at_height as i64),
+                outputs::marked_deleted_in_block.eq(mark_deleted_in_block),
+                outputs::status.eq(OutputStatus::Spent as i32),
+            ))
+            .execute(&(*conn))
+            .num_rows_affected_or_not_found(1)?;
+
+        Ok(())
+    }
+
+    fn mark_output_as_unspent(&self, hash: Vec<u8>) -> Result<(), OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        // Only allow updating of non-deleted utxos
+        debug!(target: LOG_TARGET, "mark_output_as_unspent({})", hash.to_hex());
+        diesel::update(
+            outputs::table.filter(
+                outputs::hash
+                    .eq(hash)
+                    .and(outputs::marked_deleted_at_height.is_not_null())
+                    .and(outputs::mined_height.is_not_null()),
+            ),
+        )
+        .set((
+            outputs::marked_deleted_at_height.eq::<Option<i64>>(None),
+            outputs::marked_deleted_in_block.eq::<Option<Vec<u8>>>(None),
+            outputs::status.eq(OutputStatus::Unspent as i32),
+        ))
+        .execute(&(*conn))
+        .num_rows_affected_or_not_found(1)?;
 
         Ok(())
     }
@@ -1034,9 +1092,20 @@ impl OutputSql {
             .load(conn)?)
     }
 
-    pub fn index_unmined(conn: &SqliteConnection) -> Result<Vec<OutputSql>, OutputManagerStorageError> {
+    pub fn index_mined_in_block_is_null(conn: &SqliteConnection) -> Result<Vec<OutputSql>, OutputManagerStorageError> {
         Ok(outputs::table
             .filter(outputs::mined_in_block.is_null())
+            .order(outputs::id.asc())
+            .load(conn)?)
+    }
+
+    pub fn index_marked_deleted_in_block_is_null(
+        conn: &SqliteConnection,
+    ) -> Result<Vec<OutputSql>, OutputManagerStorageError> {
+        Ok(outputs::table
+            .filter(outputs::marked_deleted_in_block.is_null())
+            // Only return mined
+            .filter(outputs::mined_in_block.is_not_null())
             .order(outputs::id.asc())
             .load(conn)?)
     }

@@ -1413,6 +1413,9 @@ impl CompletedTransactionSql {
             conn,
         )?;
 
+        // Ideally the outputs should be marked unmined here as well, but because of the separation of classes,
+        // that will be done in the outputs service.
+
         Ok(())
     }
 
