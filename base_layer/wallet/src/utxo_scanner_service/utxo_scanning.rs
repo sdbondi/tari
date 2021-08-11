@@ -306,15 +306,19 @@ where TBackend: WalletBackend + 'static
                 return Ok((total_scanned, start_index, timer.elapsed()));
             }
 
-            let num_scanned = self.scan_utxos(&mut client, start_index, tip_header).await?;
-            debug!(
-                target: LOG_TARGET,
-                "Scanning round completed UTXO #{} in {:.2?} ({} scanned)",
-                output_mmr_size,
-                timer.elapsed(),
-                num_scanned
-            );
+            // TODO: uncomment
+            // let num_scanned = self.scan_utxos(&mut client, start_index, tip_header).await?;
+            // debug!(
+            //     target: LOG_TARGET,
+            //     "Scanning round completed UTXO #{} in {:.2?} ({} scanned)",
+            //     output_mmr_size,
+            //     timer.elapsed(),
+            //     num_scanned
+            // );
+
+            let num_scanned = 0;
             total_scanned += num_scanned;
+            return Ok((total_scanned, start_index, timer.elapsed()));
         }
     }
 

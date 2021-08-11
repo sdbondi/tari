@@ -409,7 +409,7 @@ where
 
     async fn run(&mut self) -> Result<(), RpcServerError> {
         let (mut sink, stream) = self.framed.take().unwrap().split();
-        let mut stream = stream.fuse().take_until(self.shutdown_signal.clone());
+        let mut stream = stream.take_until(self.shutdown_signal.clone());
 
         while let Some(result) = stream.next().await {
             let start = Instant::now();

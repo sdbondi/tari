@@ -264,8 +264,10 @@ where TBackend: OutputManagerBackend + 'static
                         "The block that output (commitment) was spent in has been reorged out, will try to find this \
                          output again, but these funds have potentially been re-orged out of the chain",
                     );
-                    unimplemented!("todo");
-                    // self.update_transaction_as_unmined(&last_mined_transaction).await?;
+                    self.db
+                        .mark_output_as_unspent(last_spent_output.hash.clone())
+                        .await
+                        .for_protocol(self.operation_id)?;
                 } else {
                     info!(
                         target: LOG_TARGET,
@@ -300,8 +302,10 @@ where TBackend: OutputManagerBackend + 'static
                         "The block that output (commitment) was in has been reorged out, will try to find this output \
                          again, but these funds have potentially been re-orged out of the chain",
                     );
-                    // unimplemented!("todo");
-                    // self.update_transaction_as_unmined(&last_mined_transaction).await?;
+                    self.db
+                        .set_output_as_unmined(last_mined_output.hash.clone())
+                        .await
+                        .for_protocol(self.operation_id)?;
                 } else {
                     info!(
                         target: LOG_TARGET,

@@ -459,6 +459,22 @@ impl OutputManagerBackend for OutputManagerSqliteDatabase {
         Ok(None)
     }
 
+    fn set_output_to_unmined(&self, hash: Vec<u8>) -> Result<(), OutputManagerStorageError> {
+        let conn = self.database_connection.acquire_lock();
+        // Only allow updating of non-deleted utxos
+        diesel::update(outputs::table.filter(outputs::hash.eq(hash).and(outputs::marked_deleted_at_height.is_null())))
+            .set((
+                outputs::mined_height.eq::<Option<i64>>(None),
+                outputs::mined_in_block.eq::<Option<Vec<u8>>>(None),
+                outputs::mined_mmr_position.eq::<Option<i64>>(None),
+                outputs::status.eq(OutputStatus::Invalid as i32),
+            ))
+            .execute(&(*conn))
+            .num_rows_affected_or_not_found(1)?;
+
+        Ok(())
+    }
+
     fn set_output_mined_height(
         &self,
         hash: Vec<u8>,

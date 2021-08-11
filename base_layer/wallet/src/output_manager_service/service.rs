@@ -49,7 +49,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tari_comms::{
     connectivity::ConnectivityRequester,
@@ -84,7 +84,7 @@ use tari_crypto::{
 };
 use tari_service_framework::reply_channel;
 use tari_shutdown::ShutdownSignal;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::interval_at};
 
 const LOG_TARGET: &str = "wallet::output_manager_service";
 const LOG_TARGET_STRESS: &str = "stress_test::output_manager_service";
@@ -161,10 +161,25 @@ where TBackend: OutputManagerBackend + 'static
         pin_mut!(request_stream);
 
         let mut shutdown = self.resources.shutdown_signal.clone();
-
+        // Should probably be block time or at least configurable
+        // Start a bit later so that the wallet can start up
+        let mut txo_validation_interval = interval_at(
+            (Instant::now() + Duration::from_secs(35)).into(),
+            Duration::from_secs(30),
+        )
+        .fuse();
         info!(target: LOG_TARGET, "Output Manager Service started");
         loop {
             futures::select! {
+                      // tx validation timer
+               _ = txo_validation_interval.select_next_some() => {
+                   let _ =self
+                        .validate_outputs(TxoValidationType::Unspent, ValidationRetryStrategy::Limited(0)).map_err(|e| {
+                        warn!(target: LOG_TARGET, "Error validating  txos: {:?}", e);
+                        e
+                    });
+                },
+
                 request_context = request_stream.select_next_some() => {
                 trace!(target: LOG_TARGET, "Handling Service API Request");
                     let (request, reply_tx) = request_context.split();

@@ -65,6 +65,8 @@ pub trait OutputManagerBackend: Send + Sync + Clone {
         mmr_position: u64,
     ) -> Result<(), OutputManagerStorageError>;
 
+    fn set_output_to_unmined(&self, hash: Vec<u8>) -> Result<(), OutputManagerStorageError>;
+
     fn mark_output_as_spent(
         &self,
         hash: Vec<u8>,
@@ -778,6 +780,14 @@ where T: OutputManagerBackend + 'static
         })
         .await
         .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
+        Ok(())
+    }
+
+    pub async fn set_output_as_unmined(&self, hash: HashOutput) -> Result<(), OutputManagerStorageError> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || db.set_output_to_unmined(hash))
+            .await
+            .map_err(|err| OutputManagerStorageError::BlockingTaskSpawnError(err.to_string()))??;
         Ok(())
     }
 
