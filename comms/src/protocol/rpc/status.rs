@@ -83,6 +83,13 @@ impl RpcStatus {
         }
     }
 
+    pub fn deadline_exceeded<T: ToString>(details: T) -> Self {
+        Self {
+            code: RpcStatusCode::DeadlineExceeded,
+            details: details.to_string(),
+        }
+    }
+
     pub fn not_found<T: ToString>(details: T) -> Self {
         Self {
             code: RpcStatusCode::NotFound,
@@ -177,6 +184,8 @@ pub enum RpcStatusCode {
     General = 6,
     /// Entity not found
     NotFound = 7,
+    /// Deadline exceeded
+    DeadlineExceeded = 8,
     // The following status represents anything that is not recognised (i.e not one of the above codes).
     /// Unrecognised RPC status code
     InvalidRpcStatusCode,
@@ -208,6 +217,7 @@ impl From<u32> for RpcStatusCode {
             5 => MalformedResponse,
             6 => General,
             7 => NotFound,
+            8 => DeadlineExceeded,
             _ => InvalidRpcStatusCode,
         }
     }

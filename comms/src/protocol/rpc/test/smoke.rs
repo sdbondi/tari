@@ -270,19 +270,45 @@ async fn server_shutdown_before_connect() {
 
 #[runtime::test_basic]
 async fn timeout() {
+    let delay = Arc::new(RwLock::new(Duration::from_secs(11)));
+    let (socket, _, _, _shutdown) = setup(SlowGreetingService::new(delay.clone()), 1).await;
+    let framed = framing::canonical(socket, 1024);
+    let mut client = GreetingClient::builder()
+        .with_deadline(Duration::from_secs(10))
+        .with_deadline_grace_period(Duration::from_secs(0))
+        .connect(framed)
+        .await
+        .unwrap();
+
+    let err = tokio::time::timeout(Duration::from_secs(1), client.say_hello(Default::default()))
+        .await
+        .unwrap_err();
+    // unpack_enum!(RpcError::RequestFailed(status) = err);
+    // assert_eq!(status.status_code(), RpcStatusCode::Timeout);
+
+    *delay.write().await = Duration::from_secs(0);
+
+    // The server should have hit the deadline and "reset" by waiting for another request without sending a response.
+    // Test that this happens by checking that the next request is furnished correctly
+    let resp = client.say_hello(Default::default()).await.unwrap();
+    assert_eq!(resp.greeting, "took a while to load");
+}
+
+#[runtime::test_basic]
+async fn deadline() {
     let delay = Arc::new(RwLock::new(Duration::from_secs(10)));
     let (socket, _, _, _shutdown) = setup(SlowGreetingService::new(delay.clone()), 1).await;
     let framed = framing::canonical(socket, 1024);
     let mut client = GreetingClient::builder()
         .with_deadline(Duration::from_secs(1))
-        .with_deadline_grace_period(Duration::from_secs(1))
+        .with_deadline_grace_period(Duration::from_secs(10))
         .connect(framed)
         .await
         .unwrap();
 
     let err = client.say_hello(Default::default()).await.unwrap_err();
     unpack_enum!(RpcError::RequestFailed(status) = err);
-    assert_eq!(status.status_code(), RpcStatusCode::Timeout);
+    assert_eq!(status.status_code(), RpcStatusCode::DeadlineExceeded);
 
     *delay.write().await = Duration::from_secs(0);
 

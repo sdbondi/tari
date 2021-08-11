@@ -472,6 +472,18 @@ where
                     target: LOG_TARGET,
                     "RPC service was not able to complete within the deadline ({:.0?}). Request aborted.", deadline
                 );
+                let status = RpcStatus::deadline_exceeded(format!(
+                    "Response could not be completed within the deadline ({:.2?}). Request aborted.",
+                    deadline
+                ));
+                let resp = proto::rpc::RpcResponse {
+                    request_id,
+                    status: status.as_code(),
+                    flags: RpcMessageFlags::FIN.bits().into(),
+                    message: status.details().as_bytes().to_vec(),
+                };
+
+                sink.send(resp.to_encoded_bytes().into()).await?;
                 return Ok(());
             },
         };
