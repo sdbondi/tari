@@ -56,6 +56,7 @@ use crate::{
 use futures::{channel::mpsc, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use log::*;
 use prost::Message;
+use rand::{rngs::OsRng, RngCore};
 use std::{
     io,
     time::{Duration, Instant},
@@ -365,6 +366,7 @@ where
         );
 
         let service = ActivePeerRpcService {
+            id: OsRng.next_u64(),
             config: self.config.clone(),
             node_id: node_id.clone(),
             framed: Some(framed),
@@ -382,6 +384,7 @@ where
 }
 
 struct ActivePeerRpcService<TSvc, TSubstream, TCommsProvider> {
+    id: u64,
     config: RpcServerBuilder,
     node_id: NodeId,
     service: TSvc,
@@ -397,14 +400,20 @@ where
     TCommsProvider: RpcCommsProvider + Send + Clone + 'static,
 {
     async fn start(mut self) {
-        debug!(target: LOG_TARGET, "(Peer = `{}`) Rpc server started.", self.node_id);
+        debug!(
+            target: LOG_TARGET,
+            "(Peer = `{}`, id: {})  Rpc server started.", self.node_id, self.id
+        );
         if let Err(err) = self.run().await {
             error!(
                 target: LOG_TARGET,
-                "(Peer = `{}`) Rpc server exited with an error: {}", self.node_id, err
+                "(Peer = `{}`, id={}) Rpc server exited with an error: {}", self.node_id, self.id, err
             );
         }
-        debug!(target: LOG_TARGET, "(Peer = {}) Rpc service shutdown", self.node_id);
+        debug!(
+            target: LOG_TARGET,
+            "(Peer = {}, id={}) Rpc service shutdown", self.node_id, self.id
+        );
     }
 
     async fn run(&mut self) -> Result<(), RpcServerError> {
