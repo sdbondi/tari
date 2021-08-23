@@ -22,7 +22,7 @@ tari_comms = { version = "^0.9", path = "../", features = ["rpc"]}
 tari_test_utils = {version="^0.9", path="../../infrastructure/test_utils"}
 
 futures = "0.3.5"
-prost = "0.6.1"
+prost = "0.8.0"
 tokio = "0.2.22"
 tokio-macros = "0.2.5"
 tower-service = "0.3.0"

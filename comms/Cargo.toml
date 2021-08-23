@@ -17,8 +17,8 @@ tari_shutdown = { version="^0.9",  path = "../infrastructure/shutdown" }
 async-trait = "0.1.36"
 bitflags = "1.0.4"
 blake2 = "0.9.0"
-bytes = { version = "0.5.x", features=["serde"] }
-chrono = { version = "0.4.6", features = ["serde"] }
+bytes = { version = "1.0.1", features=["serde"] }
+chrono = { version = "0.4.19", features = ["serde"] }
 cidr = "0.1.0"
 clear_on_drop = "=0.2.4"
 data-encoding = "2.2.0"
@@ -31,7 +31,7 @@ multiaddr = {version = "=0.11.0", package = "parity-multiaddr"}
 nom = {version = "5.1.0", features=["std"], default-features=false}
 openssl = { version = "0.10", features = ["vendored"] }
 pin-project = "0.4.17"
-prost = "=0.6.1"
+prost = "=0.8.0"
 rand = "0.8"
 serde = "1.0.119"
 serde_derive = "1.0.119"

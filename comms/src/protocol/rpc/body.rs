@@ -205,14 +205,14 @@ impl Buf for BodyBytes {
         self.0.as_ref().map(Buf::remaining).unwrap_or(0)
     }
 
-    fn bytes(&self) -> &[u8] {
-        self.0.as_ref().map(Buf::bytes).unwrap_or(&[])
-    }
-
     fn advance(&mut self, cnt: usize) {
         if let Some(b) = self.0.as_mut() {
             b.advance(cnt);
         }
+    }
+
+    fn chunk(&self) -> &[u8] {
+        self.0.as_ref().map(Buf::bytes).unwrap_or(&[])
     }
 }
 

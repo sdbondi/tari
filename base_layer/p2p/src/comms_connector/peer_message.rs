@@ -68,3 +68,30 @@ impl PeerMessage {
             .unwrap_or_else(|| self.source_peer.node_id.clone())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::test_utils::make_node_identity;
+
+    #[test]
+    fn it_decodes_the_message() {
+        let peer_message = PeerMessage {
+            dht_header: DhtMessageHeader {
+                major: 0,
+                minor: 0,
+                destination: Default::default(),
+                origin_mac: vec![],
+                ephemeral_public_key: None,
+                message_type: (),
+                flags: Default::default(),
+                message_tag: Default::default(),
+                expires: None,
+            },
+            source_peer: make_node_identity().to_peer(),
+            message_header: Default::default(),
+            authenticated_origin: None,
+            body: vec![],
+        };
+    }
+}

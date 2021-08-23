@@ -99,7 +99,8 @@ where
     // Receive the connecting nodes identity
     let msg_bytes = time::timeout(Duration::from_secs(10), stream.next())
         .await?
-        .ok_or(IdentityProtocolError::PeerUnexpectedCloseConnection)??;
+        .ok_or(IdentityProtocolError::PeerUnexpectedCloseConnection)??
+        .freeze();
     let identity_msg = PeerIdentityMsg::decode(msg_bytes)?;
 
     if identity_msg.major != network_info.major_version {
