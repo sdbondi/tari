@@ -27,7 +27,7 @@ use crate::{
     transactions::{transaction::Transaction, types::Commitment},
     validation::{
         error::ValidationError,
-        CandidateBlockBodyValidation,
+        BlockSyncBodyValidation,
         DifficultyCalculator,
         FinalHorizonStateValidation,
         HeaderValidation,
@@ -67,7 +67,7 @@ impl MockValidator {
     }
 }
 
-impl<B: BlockchainBackend> CandidateBlockBodyValidation<B> for MockValidator {
+impl<B: BlockchainBackend> BlockSyncBodyValidation<B> for MockValidator {
     fn validate_body(&self, _item: &Block, _db: &B) -> Result<(), ValidationError> {
         if self.is_valid.load(Ordering::SeqCst) {
             Ok(())

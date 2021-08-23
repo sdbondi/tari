@@ -27,7 +27,10 @@ use crate::transactions::{
 };
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Error, Formatter};
+use std::{
+    cmp::max,
+    fmt::{Display, Error, Formatter},
+};
 use tari_crypto::{
     commitment::HomomorphicCommitmentFactory,
     keys::PublicKey as PublicKeyTrait,
@@ -441,6 +444,12 @@ impl AggregateBody {
             self.outputs.len(),
             self.kernels.len()
         )
+    }
+
+    pub fn max_kernel_timelock(&self) -> u64 {
+        self.kernels()
+            .iter()
+            .fold(0, |max_timelock, kernel| max(max_timelock, kernel.lock_height))
     }
 }
 
