@@ -21,9 +21,9 @@ let lastResult;
 const AUTOUPDATE_HASHES_TXT_URL =
   "https://raw.githubusercontent.com/sdbondi/tari/autoupdate-test-branch/meta/hashes.txt";
 const AUTOUPDATE_HASHES_TXT_SIG_URL =
-  "https://github.com/sdbondi/tari/raw/base-node-auto-update/meta/good.sig";
+  "https://github.com/sdbondi/tari/raw/autoupdate-test-branch/meta/good.sig";
 const AUTOUPDATE_HASHES_TXT_BAD_SIG_URL =
-  "https://github.com/sdbondi/tari/raw/base-node-auto-update/meta/bad.sig";
+  "https://github.com/sdbondi/tari/raw/autoupdate-test-branch/meta/bad.sig";
 
 Given(/I have a seed node (.*)/, { timeout: 20 * 1000 }, async function (name) {
   return await this.createSeedNode(name);
@@ -97,7 +97,7 @@ Given(
       },
     });
     await node.startNew();
-    this.addNode(name, node);
+    await this.addNode(name, node);
   }
 );
 
@@ -116,7 +116,7 @@ Given(
       },
     });
     await node.startNew();
-    this.addNode(name, node);
+    await this.addNode(name, node);
   }
 );
 
