@@ -716,7 +716,6 @@ async fn local_get_new_block_with_zero_conf() {
     );
     block_template.body.add_kernel(kernel);
     block_template.body.add_output(output);
-    block_template.body.sort();
     let block = node.local_nci.get_new_block(block_template.clone()).await.unwrap();
     assert_eq!(block.header.height, 1);
     assert_eq!(block.body, block_template.body);
@@ -788,7 +787,6 @@ async fn local_get_new_block_with_combined_transaction() {
     );
     block_template.body.add_kernel(kernel);
     block_template.body.add_output(output);
-    block_template.body.sort();
     let block = node.local_nci.get_new_block(block_template.clone()).await.unwrap();
     assert_eq!(block.header.height, 1);
     assert_eq!(block.body, block_template.body);
