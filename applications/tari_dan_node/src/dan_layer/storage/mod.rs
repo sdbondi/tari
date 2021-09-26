@@ -20,6 +20,19 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod asset_data_store;
+// mod asset_data_store;
+// pub use asset_data_store::FileAssetDataStore;
 
-pub use asset_data_store::{AssetDataStore, FileAssetDataStore};
+mod error;
+pub use error::PersistenceError;
+
+mod lmdb;
+pub use lmdb::LmdbAssetBackend;
+
+mod memory;
+
+mod store;
+pub use store::{AssetDataStore, AssetStore};
+
+mod traits;
+pub use traits::{AssetBackend, Atomic, AtomicAccess};

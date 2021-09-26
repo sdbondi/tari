@@ -23,7 +23,7 @@
 use crate::{
     dan_layer::{
         models::{Instruction, InstructionCaller, InstructionId, TemplateId},
-        storage::{AssetDataStore, FileAssetDataStore},
+        storage::{AssetBackend, AssetStore},
         template_command::{ExecutionResult, TemplateCommand},
         templates::editable_metadata_template::EditableMetadataTemplate,
     },
@@ -38,18 +38,19 @@ pub trait TemplateService {
     async fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), DigitalAssetError>;
 }
 
-pub struct ConcreteTemplateService<TAssetDataStore: AssetDataStore, TInstructionLog: InstructionLog> {
+pub struct ConcreteTemplateService<TAssetBackend, TInstructionLog: InstructionLog> {
     template_id: TemplateId,
     template_factory: TemplateFactory,
     instruction_log: TInstructionLog,
-    data_store: TAssetDataStore,
+    data_store: AssetStore<TAssetBackend>,
 }
 
 #[async_trait]
-impl<TAssetDataStore: AssetDataStore + Send, TInstructionLog: InstructionLog + Send> TemplateService
-    for ConcreteTemplateService<TAssetDataStore, TInstructionLog>
+impl<'a, TAssetBackend: AssetBackend<'a> + Send, TInstructionLog: InstructionLog + Send> TemplateService
+    for ConcreteTemplateService<TAssetBackend, TInstructionLog>
 {
     async fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), DigitalAssetError> {
+        // TODO: This is thread blocking
         self.execute(
             instruction.method().to_owned(),
             instruction.args().to_owned(),
@@ -62,10 +63,14 @@ impl<TAssetDataStore: AssetDataStore + Send, TInstructionLog: InstructionLog + S
     }
 }
 
-impl<TAssetDataStore: AssetDataStore, TInstructionLog: InstructionLog>
-    ConcreteTemplateService<TAssetDataStore, TInstructionLog>
+impl<'a, TAssetBackend: AssetBackend<'a>, TInstructionLog: InstructionLog>
+    ConcreteTemplateService<TAssetBackend, TInstructionLog>
 {
-    pub fn new(data_store: TAssetDataStore, instruction_log: TInstructionLog, template_id: TemplateId) -> Self {
+    pub fn new(
+        data_store: AssetStore<TAssetBackend>,
+        instruction_log: TInstructionLog,
+        template_id: TemplateId,
+    ) -> Self {
         Self {
             template_factory: TemplateFactory {},
             instruction_log,

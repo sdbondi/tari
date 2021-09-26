@@ -24,8 +24,6 @@ use crate::{dan_layer::models::TokenId, digital_assets_error::DigitalAssetError}
 use bytecodec::{
     bytes::{BytesDecoder, BytesEncoder, CopyableBytesDecoder},
     io::{IoDecodeExt, IoEncodeExt},
-    json_codec::{JsonDecoder, JsonEncoder},
-    null::{NullDecoder, NullEncoder},
     Encode,
 };
 use patricia_tree::{
@@ -34,10 +32,6 @@ use patricia_tree::{
 };
 use serde_json::Value;
 use std::{fs::File, path::PathBuf};
-
-pub trait AssetDataStore {
-    fn replace_metadata(&mut self, token_id: &TokenId, metadata: Vec<u8>) -> Result<(), DigitalAssetError>;
-}
 
 pub struct FileAssetDataStore {
     token_metadata: PatriciaMap<Value>,
@@ -76,7 +70,7 @@ impl FileAssetDataStore {
     }
 }
 
-impl AssetDataStore for FileAssetDataStore {
+impl AssetStoreWriter for FileAssetDataStore {
     fn replace_metadata(&mut self, token_id: &TokenId, metadata: Vec<u8>) -> Result<(), DigitalAssetError> {
         let json = String::from_utf8(metadata).unwrap();
         dbg!(&json);

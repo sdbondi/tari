@@ -23,11 +23,12 @@
 use crate::{
     dan_layer::{
         models::{InstructionCaller, TokenId},
-        storage::AssetDataStore,
+        storage::{AssetBackend, AssetDataStore, Atomic, AtomicAccess},
         template_command::{ExecutionResult, TemplateCommand},
     },
     digital_assets_error::DigitalAssetError,
 };
+use prost::bytes::BufMut;
 
 pub struct EditableMetadataTemplate {}
 
@@ -69,10 +70,15 @@ impl UpdateMetadataCommand {
         }
     }
 }
+
 impl TemplateCommand for UpdateMetadataCommand {
-    fn try_execute(&self, data_store: &mut AssetDataStore) -> Result<ExecutionResult, DigitalAssetError> {
-        // TODO: put in concurrency check, perhaps nonce?
-        data_store.replace_metadata(&self.token_id, self.metadata.clone())?;
+    fn try_execute<'a, TDb: Atomic<'a>>(
+        &self,
+        data_store: &mut dyn AssetDataStore<'a, TDb>,
+    ) -> Result<ExecutionResult, DigitalAssetError> {
+        let mut txn = data_store.write()?;
+        data_store.replace_metadata(&mut txn, &self.token_id, &self.metadata)?;
+        txn.commit()?;
         Ok(ExecutionResult::Ok)
     }
 }

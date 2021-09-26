@@ -22,7 +22,7 @@
 
 use crate::{
     dan_layer::{
-        models::{Committee, HotStuffMessage, InstructionSet, TemplateId},
+        models::{Committee, TemplateId},
         services::{
             infrastructure_services::{TariCommsInboundConnectionService, TariCommsOutboundService},
             ConcreteBftReplicaService,
@@ -35,23 +35,17 @@ use crate::{
             MempoolService,
             NodeIdentitySigningService,
         },
-        storage::FileAssetDataStore,
+        storage::{AssetStore, LmdbAssetBackend},
         workers::ConsensusWorker,
     },
     digital_assets_error::DigitalAssetError,
     ExitCodes,
 };
-use anyhow::anyhow;
 use log::*;
-use std::{
-    fs,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{fs, sync::Arc, time::Duration};
 use tari_app_utilities::{
     identity_management,
     identity_management::{load_from_json, setup_node_identity},
-    utilities,
     utilities::convert_socks_authentication,
 };
 use tari_common::{CommsTransport, ConfigBootstrap, GlobalConfig, TorControlAuthentication};
@@ -141,7 +135,11 @@ impl DanNode {
         let committee = Committee::new(committee);
         let events_publisher = LoggingEventsPublisher::new();
         let signing_service = NodeIdentitySigningService::new(node_identity.as_ref().clone());
-        let data_store = FileAssetDataStore::load_or_create(self.config.data_dir.join("asset_data"));
+
+        let backend = LmdbAssetBackend::initialize(self.config.data_dir.join("asset_data"), Default::default())
+            .map_err(|err| ExitCodes::DatabaseError(err.to_string()))?;
+        let data_store = AssetStore::new(backend);
+
         let instruction_log = MemoryInstructionLog::default();
         let template_service =
             ConcreteTemplateService::new(data_store, instruction_log, TemplateId::parse(&dan_config.template_id));
