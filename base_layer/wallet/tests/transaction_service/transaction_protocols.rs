@@ -40,8 +40,8 @@ use tari_core::{
         rpc::BaseNodeWalletRpcServer,
     },
     transactions::{
-        helpers::schema_to_transaction,
         tari_amount::{uT, MicroTari, T},
+        test_helpers::schema_to_transaction,
         CryptoFactories,
     },
     txn_schema,

@@ -21,10 +21,11 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
+    consensus::ConsensusConstants,
     mempool::priority::{FeePriority, PriorityError},
     transactions::transaction::Transaction,
 };
-use std::{convert::TryFrom, sync::Arc};
+use std::sync::Arc;
 use tari_crypto::tari_utilities::message_format::MessageFormat;
 
 /// Create a unique transaction priority based on the maximum time-lock (lock_height or input UTXO maturity) and the
@@ -57,18 +58,17 @@ pub struct TimelockedTransaction {
     pub max_timelock_height: u64,
 }
 
-impl TryFrom<Transaction> for TimelockedTransaction {
-    type Error = PriorityError;
-
-    fn try_from(transaction: Transaction) -> Result<Self, Self::Error> {
+impl TimelockedTransaction {
+    fn try_construct(constants: &ConsensusConstants, transaction: Arc<Transaction>) -> Result<Self, PriorityError> {
+        let weight = transaction.calculate_weight(constants.transaction_weight());
         Ok(Self {
-            fee_priority: FeePriority::try_from(&transaction)?,
+            fee_priority: FeePriority::try_construct(&transaction, weight)?,
             timelock_priority: TimelockPriority::try_from(&transaction)?,
             max_timelock_height: match transaction.min_spendable_height() {
                 0 => 0,
                 v => v - 1,
             },
-            transaction: Arc::new(transaction),
+            transaction,
         })
     }
 }

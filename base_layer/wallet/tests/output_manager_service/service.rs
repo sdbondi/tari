@@ -39,11 +39,11 @@ use tari_comms::{
 };
 use tari_core::{
     base_node::rpc::BaseNodeWalletRpcServer,
-    consensus::ConsensusConstantsBuilder,
+    consensus::{ConsensusConstantsBuilder, ConsensusEncodingSized, ConsensusEncodingWrapper},
     transactions::{
         fee::Fee,
-        helpers::{create_unblinded_output, TestParams as TestParamsHelpers},
         tari_amount::{uT, MicroTari},
+        test_helpers::{create_unblinded_output, TestParams as TestParamsHelpers},
         transaction::{KernelFeatures, OutputFeatures, Transaction},
         transaction_protocol::{
             recipient::RecipientState,
@@ -79,6 +79,7 @@ use tari_wallet::{
         TxId,
         TxoValidationType,
     },
+    test_utils::create_consensus_constants,
     transaction_service::handle::TransactionServiceHandle,
     types::ValidationRetryStrategy,
 };
@@ -87,6 +88,11 @@ use tokio::{
     task,
     time,
 };
+
+fn default_metadata_byte_size() -> usize {
+    OutputFeatures::default().consensus_encode_exact_size() +
+        ConsensusEncodingWrapper::wrap(&script![Nop]).consensus_encode_exact_size()
+}
 
 #[allow(clippy::type_complexity)]
 async fn setup_output_manager_service<T: OutputManagerBackend + 'static>(
@@ -111,7 +117,7 @@ async fn setup_output_manager_service<T: OutputManagerBackend + 'static>(
     let (event_publisher, _) = channel(100);
     let ts_handle = TransactionServiceHandle::new(ts_request_sender, event_publisher);
 
-    let constants = ConsensusConstantsBuilder::new(Network::Weatherwax).build();
+    let constants = create_consensus_constants(0);
 
     let (sender, receiver_bns) = reply_channel::unbounded();
     let (event_publisher_bns, _) = broadcast::channel(100);
@@ -228,7 +234,7 @@ pub async fn setup_oms_with_bn_state<T: OutputManagerBackend + 'static>(
     let (event_publisher, _) = channel(100);
     let ts_handle = TransactionServiceHandle::new(ts_request_sender, event_publisher);
 
-    let constants = ConsensusConstantsBuilder::new(Network::Weatherwax).build();
+    let constants = create_consensus_constants(0);
 
     let (sender, receiver_bns) = reply_channel::unbounded();
     let (event_publisher_bns, _) = broadcast::channel(100);
@@ -280,7 +286,7 @@ fn generate_sender_transaction_message(amount: MicroTari) -> (TxId, TransactionS
     let alice = TestParams::new(&mut OsRng);
 
     let (utxo, input) = make_input(&mut OsRng, 2 * amount, &factories.commitment);
-    let mut builder = SenderTransactionProtocol::builder(1);
+    let mut builder = SenderTransactionProtocol::builder(1, create_consensus_constants(0));
     let script_private_key = PrivateKey::random(&mut OsRng);
     builder
         .with_lock_height(0)
@@ -321,22 +327,35 @@ async fn fee_estimate() {
 
     let (_, uo) = make_input(&mut OsRng.clone(), MicroTari::from(3000), &factories.commitment);
     oms.add_output(uo).await.unwrap();
-
-    // minimum fee
+    let fee_calc = Fee::new(*create_consensus_constants(0).transaction_weight());
+    // minimum fpg
     let fee_per_gram = MicroTari::from(1);
     let fee = oms
         .fee_estimate(MicroTari::from(100), fee_per_gram, 1, 1)
         .await
         .unwrap();
-    assert_eq!(fee, MicroTari::from(100));
+    assert_eq!(
+        fee,
+        fee_calc.calculate(fee_per_gram, 1, 1, 2, 2 * default_metadata_byte_size())
+    );
 
-    let fee_per_gram = MicroTari::from(25);
+    let fee_per_gram = MicroTari::from(5);
     for outputs in 1..5 {
         let fee = oms
             .fee_estimate(MicroTari::from(100), fee_per_gram, 1, outputs)
             .await
             .unwrap();
-        assert_eq!(fee, Fee::calculate(fee_per_gram, 1, 1, outputs as usize));
+
+        assert_eq!(
+            fee,
+            fee_calc.calculate(
+                fee_per_gram,
+                1,
+                1,
+                outputs + 1,
+                default_metadata_byte_size() * (outputs + 1)
+            )
+        );
     }
 
     // not enough funds
@@ -357,9 +376,10 @@ async fn test_utxo_selection_no_chain_metadata() {
     let (mut oms, _shutdown, _, _) =
         setup_oms_with_bn_state(OutputManagerSqliteDatabase::new(connection, None), None).await;
 
+    let fee_calc = Fee::new(*create_consensus_constants(0).transaction_weight());
     // no utxos - not enough funds
     let amount = MicroTari::from(1000);
-    let fee_per_gram = MicroTari::from(10);
+    let fee_per_gram = MicroTari::from(2);
     let err = oms
         .prepare_transaction_to_send(
             OsRng.next_u64(),
@@ -409,7 +429,8 @@ async fn test_utxo_selection_no_chain_metadata() {
 
     // test that we can get a fee estimate with no chain metadata
     let fee = oms.fee_estimate(amount, fee_per_gram, 1, 2).await.unwrap();
-    assert_eq!(fee, MicroTari::from(300));
+    let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 3, default_metadata_byte_size() * 3);
+    assert_eq!(fee, expected_fee);
 
     // test if a fee estimate would be possible with pending funds included
     // at this point 52000 uT is still spendable, with pending change incoming of 1690 uT
@@ -428,7 +449,8 @@ async fn test_utxo_selection_no_chain_metadata() {
 
     // coin split uses the "Largest" selection strategy
     let (_, _, fee, utxos_total_value) = oms.create_coin_split(amount, 5, fee_per_gram, None).await.unwrap();
-    assert_eq!(fee, MicroTari::from(820));
+    let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 6, default_metadata_byte_size() * 6);
+    assert_eq!(fee, expected_fee);
     assert_eq!(utxos_total_value, MicroTari::from(10_000));
 
     // test that largest utxo was encumbered
@@ -450,10 +472,11 @@ async fn test_utxo_selection_with_chain_metadata() {
     // setup with chain metadata at a height of 6
     let (mut oms, _shutdown, _, _) =
         setup_oms_with_bn_state(OutputManagerSqliteDatabase::new(connection, None), Some(6)).await;
+    let fee_calc = Fee::new(*create_consensus_constants(0).transaction_weight());
 
     // no utxos - not enough funds
     let amount = MicroTari::from(1000);
-    let fee_per_gram = MicroTari::from(10);
+    let fee_per_gram = MicroTari::from(2);
     let err = oms
         .prepare_transaction_to_send(
             OsRng.next_u64(),
@@ -483,7 +506,8 @@ async fn test_utxo_selection_with_chain_metadata() {
 
     // test fee estimates
     let fee = oms.fee_estimate(amount, fee_per_gram, 1, 2).await.unwrap();
-    assert_eq!(fee, MicroTari::from(310));
+    let expected_fee = fee_calc.calculate(fee_per_gram, 1, 2, 3, default_metadata_byte_size() * 3);
+    assert_eq!(fee, expected_fee);
 
     // test fee estimates are maturity aware
     // even though we have utxos for the fee, they can't be spent because they are not mature yet
@@ -497,7 +521,8 @@ async fn test_utxo_selection_with_chain_metadata() {
     // test coin split is maturity aware
     let (_, _, fee, utxos_total_value) = oms.create_coin_split(amount, 5, fee_per_gram, None).await.unwrap();
     assert_eq!(utxos_total_value, MicroTari::from(6_000));
-    assert_eq!(fee, MicroTari::from(820));
+    let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 6, default_metadata_byte_size() * 6);
+    assert_eq!(fee, expected_fee);
 
     // test that largest spendable utxo was encumbered
     let utxos = oms.get_unspent_outputs().await.unwrap();
@@ -586,7 +611,7 @@ async fn sending_transaction_and_confirmation() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            MicroTari::from(4),
             None,
             "".to_string(),
             script!(Nop),
@@ -706,8 +731,9 @@ async fn send_no_change() {
 
     let (mut oms, _shutdown, _, _, _, _, _) = setup_output_manager_service(backend, true).await;
 
-    let fee_per_gram = MicroTari::from(20);
-    let fee_without_change = Fee::calculate(fee_per_gram, 1, 2, 1);
+    let fee_per_gram = MicroTari::from(4);
+    let constants = create_consensus_constants(0);
+    let fee_without_change = Fee::new(*constants.transaction_weight()).calculate(fee_per_gram, 1, 2, 1, 0);
     let value1 = 500;
     oms.add_output(create_unblinded_output(
         script!(Nop),
@@ -780,23 +806,24 @@ async fn send_not_enough_for_change() {
 
     let (mut oms, _shutdown, _, _, _, _, _) = setup_output_manager_service(backend, true).await;
 
-    let fee_per_gram = MicroTari::from(20);
-    let fee_without_change = Fee::calculate(fee_per_gram, 1, 2, 1);
-    let value1 = 500;
+    let fee_per_gram = MicroTari::from(4);
+    let constants = create_consensus_constants(0);
+    let fee_without_change = Fee::new(*constants.transaction_weight()).calculate(fee_per_gram, 1, 2, 1, 0);
+    let value1 = MicroTari(500);
     oms.add_output(create_unblinded_output(
         TariScript::default(),
         OutputFeatures::default(),
         TestParamsHelpers::new(),
-        MicroTari::from(value1),
+        value1,
     ))
     .await
     .unwrap();
-    let value2 = 800;
+    let value2 = MicroTari(800);
     oms.add_output(create_unblinded_output(
         TariScript::default(),
         OutputFeatures::default(),
         TestParamsHelpers::new(),
-        MicroTari::from(value2),
+        value2,
     ))
     .await
     .unwrap();
@@ -804,8 +831,8 @@ async fn send_not_enough_for_change() {
     match oms
         .prepare_transaction_to_send(
             OsRng.next_u64(),
-            MicroTari::from(value1 + value2 + 1) - fee_without_change,
-            MicroTari::from(20),
+            value1 + value2 + uT - fee_without_change,
+            fee_per_gram,
             None,
             "".to_string(),
             script!(Nop),
@@ -863,7 +890,7 @@ async fn cancel_transaction() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            MicroTari::from(4),
             None,
             "".to_string(),
             script!(Nop),
@@ -952,7 +979,7 @@ async fn timeout_transaction() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            MicroTari::from(4),
             None,
             "".to_string(),
             script!(Nop),
@@ -1001,7 +1028,7 @@ async fn test_get_balance() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             send_value,
-            MicroTari::from(20),
+            MicroTari::from(4),
             None,
             "".to_string(),
             script!(Nop),
@@ -1069,12 +1096,13 @@ async fn sending_transaction_with_short_term_clear() {
     let (_ti, uo) = make_input(&mut OsRng.clone(), available_balance, &factories.commitment);
     oms.add_output(uo).await.unwrap();
 
+    let fee_per_gram = MicroTari::from(4);
     // Check that funds are encumbered and then unencumbered if the pending tx is not confirmed before restart
     let _stp = oms
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            fee_per_gram,
             None,
             "".to_string(),
             script!(Nop),
@@ -1097,7 +1125,7 @@ async fn sending_transaction_with_short_term_clear() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            fee_per_gram,
             None,
             "".to_string(),
             script!(Nop),
@@ -1118,7 +1146,7 @@ async fn sending_transaction_with_short_term_clear() {
         .prepare_transaction_to_send(
             OsRng.next_u64(),
             MicroTari::from(1000),
-            MicroTari::from(20),
+            fee_per_gram,
             None,
             "".to_string(),
             script!(Nop),
@@ -1154,14 +1182,14 @@ async fn coin_split_with_change() {
     let val1 = 6_000 * uT;
     let val2 = 7_000 * uT;
     let val3 = 8_000 * uT;
-    let (_ti, uo1) = make_input(&mut OsRng.clone(), val1, &factories.commitment);
-    let (_ti, uo2) = make_input(&mut OsRng.clone(), val2, &factories.commitment);
-    let (_ti, uo3) = make_input(&mut OsRng.clone(), val3, &factories.commitment);
+    let (_ti, uo1) = make_input(&mut OsRng, val1, &factories.commitment);
+    let (_ti, uo2) = make_input(&mut OsRng, val2, &factories.commitment);
+    let (_ti, uo3) = make_input(&mut OsRng, val3, &factories.commitment);
     assert!(oms.add_output(uo1).await.is_ok());
     assert!(oms.add_output(uo2).await.is_ok());
     assert!(oms.add_output(uo3).await.is_ok());
 
-    let fee_per_gram = MicroTari::from(25);
+    let fee_per_gram = MicroTari::from(5);
     let split_count = 8;
     let (_tx_id, coin_split_tx, fee, amount) = oms
         .create_coin_split(1000.into(), split_count, fee_per_gram, None)
@@ -1169,7 +1197,15 @@ async fn coin_split_with_change() {
         .unwrap();
     assert_eq!(coin_split_tx.body.inputs().len(), 2);
     assert_eq!(coin_split_tx.body.outputs().len(), split_count + 1);
-    assert_eq!(fee, Fee::calculate(fee_per_gram, 1, 2, split_count + 1));
+    let fee_calc = Fee::new(*create_consensus_constants(0).transaction_weight());
+    let expected_fee = fee_calc.calculate(
+        fee_per_gram,
+        1,
+        2,
+        split_count + 1,
+        (split_count + 1) * default_metadata_byte_size(),
+    );
+    assert_eq!(fee, expected_fee);
     assert_eq!(amount, val2 + val3);
 }
 
@@ -1180,15 +1216,23 @@ async fn coin_split_no_change() {
     let backend = OutputManagerSqliteDatabase::new(connection, None);
     let (mut oms, _shutdown, _, _, _, _, _) = setup_output_manager_service(backend, true).await;
 
-    let fee_per_gram = MicroTari::from(25);
+    let fee_per_gram = MicroTari::from(4);
     let split_count = 15;
-    let fee = Fee::calculate(fee_per_gram, 1, 3, 15);
+    let constants = create_consensus_constants(0);
+    let fee_calc = Fee::new(*constants.transaction_weight());
+    let expected_fee = fee_calc.calculate(
+        fee_per_gram,
+        1,
+        3,
+        split_count,
+        split_count * default_metadata_byte_size(),
+    );
     let val1 = 4_000 * uT;
     let val2 = 5_000 * uT;
-    let val3 = 6_000 * uT + fee;
-    let (_ti, uo1) = make_input(&mut OsRng.clone(), val1, &factories.commitment);
-    let (_ti, uo2) = make_input(&mut OsRng.clone(), val2, &factories.commitment);
-    let (_ti, uo3) = make_input(&mut OsRng.clone(), val3, &factories.commitment);
+    let val3 = 6_000 * uT + expected_fee;
+    let (_ti, uo1) = make_input(&mut OsRng, val1, &factories.commitment);
+    let (_ti, uo2) = make_input(&mut OsRng, val2, &factories.commitment);
+    let (_ti, uo3) = make_input(&mut OsRng, val3, &factories.commitment);
     assert!(oms.add_output(uo1).await.is_ok());
     assert!(oms.add_output(uo2).await.is_ok());
     assert!(oms.add_output(uo3).await.is_ok());
@@ -1199,7 +1243,7 @@ async fn coin_split_no_change() {
         .unwrap();
     assert_eq!(coin_split_tx.body.inputs().len(), 3);
     assert_eq!(coin_split_tx.body.outputs().len(), split_count);
-    assert_eq!(fee, Fee::calculate(fee_per_gram, 1, 3, split_count));
+    assert_eq!(fee, expected_fee);
     assert_eq!(amount, val1 + val2 + val3);
 }
 

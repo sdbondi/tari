@@ -21,22 +21,26 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
-    blocks::{Block, BlockHeader, NewBlockTemplate},
-    chain_storage::{
-        accumulated_data::BlockHeaderAccumulatedData,
-        blockchain_database::MmrRoots,
+    blocks::{
+        Block,
         BlockAccumulatedData,
+        BlockHeader,
+        BlockHeaderAccumulatedData,
+        ChainBlock,
+        ChainHeader,
+        CompleteDeletedBitmap,
+        HistoricalBlock,
+        NewBlockTemplate,
+    },
+    chain_storage::{
+        blockchain_database::MmrRoots,
         BlockAddResult,
         BlockchainBackend,
         BlockchainDatabase,
-        ChainBlock,
-        ChainHeader,
         ChainStorageError,
-        CompleteDeletedBitmap,
         DbBasicStats,
         DbTotalSizeStats,
         DbTransaction,
-        HistoricalBlock,
         HorizonData,
         MmrTree,
         PrunedOutput,

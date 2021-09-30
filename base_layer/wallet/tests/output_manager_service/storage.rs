@@ -34,8 +34,8 @@ use tokio::runtime::Runtime;
 
 use tari_common_types::types::PrivateKey;
 use tari_core::transactions::{
-    helpers::{create_unblinded_output, TestParams},
     tari_amount::MicroTari,
+    test_helpers::{create_unblinded_output, TestParams},
     transaction::OutputFeatures,
     CryptoFactories,
 };

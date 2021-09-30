@@ -21,17 +21,19 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{
+    consensus::ConsensusManager,
     mempool::{
         async_mempool,
         proto,
         sync_protocol::{MempoolPeerProtocol, MempoolSyncProtocol, MAX_FRAME_SIZE, MEMPOOL_SYNC_PROTOCOL},
         Mempool,
     },
-    transactions::{helpers::create_tx, tari_amount::uT, transaction::Transaction},
+    transactions::{tari_amount::uT, test_helpers::create_tx, transaction::Transaction},
     validation::mocks::MockValidator,
 };
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use std::{fmt, io, iter::repeat_with, sync::Arc};
+use tari_common::configuration::Network;
 use tari_comms::{
     connectivity::{ConnectivityEvent, ConnectivityEventTx},
     framing,
@@ -59,7 +61,11 @@ pub fn create_transactions(n: usize) -> Vec<Transaction> {
 }
 
 fn new_mempool_with_transactions(n: usize) -> (Mempool, Vec<Transaction>) {
-    let mempool = Mempool::new(Default::default(), Arc::new(MockValidator::new(true)));
+    let mempool = Mempool::new(
+        Default::default(),
+        ConsensusManager::builder(Network::LocalNet).build(),
+        Arc::new(MockValidator::new(true)),
+    );
 
     let transactions = create_transactions(n);
     for txn in &transactions {
