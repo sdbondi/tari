@@ -47,10 +47,6 @@ pub use rpc::{MempoolRpcClient, MempoolRpcServer, MempoolRpcService, MempoolServ
 #[cfg(feature = "base_node")]
 mod unconfirmed_pool;
 
-// public modules
-#[cfg(feature = "base_node")]
-pub mod async_mempool;
-
 // Public re-exports
 #[cfg(feature = "base_node")]
 pub use self::config::{MempoolConfig, MempoolServiceConfig};

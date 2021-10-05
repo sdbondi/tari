@@ -34,8 +34,9 @@ use crate::{
     transactions::transaction::Transaction,
     validation::MempoolTransactionValidation,
 };
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tari_common_types::types::Signature;
+use tokio::sync::RwLock;
 
 /// The Mempool consists of an Unconfirmed Transaction Pool, Pending Pool, Orphan Pool and Reorg Pool and is responsible
 /// for managing and maintaining all unconfirmed transactions have not yet been included in a block, and transactions
@@ -59,31 +60,25 @@ impl Mempool {
 
     /// Insert an unconfirmed transaction into the Mempool. The transaction *MUST* have passed through the validation
     /// pipeline already and will thus always be internally consistent by this stage
-    pub fn insert(&self, tx: Arc<Transaction>) -> Result<TxStorageResponse, MempoolError> {
-        self.pool_storage
-            .write()
-            .map_err(|e| MempoolError::BackendError(e.to_string()))?
-            .insert(tx)
+    pub async fn insert(&self, tx: Arc<Transaction>) -> Result<TxStorageResponse, MempoolError> {
+        self.pool_storage.write().await.insert(tx)
     }
 
     /// Update the Mempool based on the received published block.
-    pub fn process_published_block(&self, published_block: Arc<Block>) -> Result<(), MempoolError> {
-        self.pool_storage
-            .write()
-            .map_err(|e| MempoolError::BackendError(e.to_string()))?
-            .process_published_block(published_block)
+    pub async fn process_published_block(&self, published_block: Arc<Block>) -> Result<(), MempoolError> {
+        self.pool_storage.write().await.process_published_block(published_block)
     }
 
     /// In the event of a ReOrg, resubmit all ReOrged transactions into the Mempool and process each newly introduced
     /// block from the latest longest chain.
-    pub fn process_reorg(
+    pub async fn process_reorg(
         &self,
         removed_blocks: Vec<Arc<Block>>,
         new_blocks: Vec<Arc<Block>>,
     ) -> Result<(), MempoolError> {
         self.pool_storage
             .write()
-            .map_err(|e| MempoolError::BackendError(e.to_string()))?
+            .await
             .process_reorg(removed_blocks, new_blocks)
     }
 
