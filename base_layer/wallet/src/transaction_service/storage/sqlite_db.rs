@@ -24,7 +24,7 @@ use crate::{
     schema::{completed_transactions, inbound_transactions, outbound_transactions},
     storage::sqlite_utilities::WalletDbConnection,
     transaction_service::{
-        error::TransactionStorageError,
+        error::{TransactionKeyError, TransactionStorageError},
         storage::{
             database::{DbKey, DbKeyValuePair, DbValue, TransactionBackend, WriteOperation},
             models::{
@@ -32,7 +32,6 @@ use crate::{
                 InboundTransaction,
                 OutboundTransaction,
                 TransactionDirection,
-                TransactionStatus,
                 WalletTransaction,
             },
         },
@@ -53,7 +52,7 @@ use std::{
     sync::{Arc, MutexGuard, RwLock},
 };
 use tari_common_types::{
-    transaction::TxId,
+    transaction::{TransactionStatus, TxId},
     types::{BlockHash, PublicKey},
 };
 use tari_comms::types::CommsPublicKey;
@@ -731,9 +730,12 @@ impl TransactionBackend for TransactionServiceSqliteDatabase {
         let mut coinbase_txs = CompletedTransactionSql::index_coinbase_at_block_height(block_height as i64, &conn)?;
         for c in coinbase_txs.iter_mut() {
             self.decrypt_if_necessary(c)?;
-            let completed_tx = CompletedTransaction::try_from(c.clone()).map_err(|_| {
-                TransactionStorageError::ConversionError("Error converting to CompletedTransaction".to_string())
-            })?;
+            // TODO: WARNING! The change hides the intermediate error!
+            // Use `CompletedTransactionConversionError` ASAP!!!
+            let completed_tx = CompletedTransaction::try_from(c.clone())?;
+            // .map_err(|_| {
+            // TransactionStorageError::ConversionError("Error converting to CompletedTransaction".to_string())
+            // })?;
 
             if completed_tx.amount == amount {
                 return Ok(Some(completed_tx));
@@ -1018,8 +1020,7 @@ impl TryFrom<InboundTransactionSql> for InboundTransaction {
     fn try_from(i: InboundTransactionSql) -> Result<Self, Self::Error> {
         Ok(Self {
             tx_id: i.tx_id as u64,
-            source_public_key: PublicKey::from_vec(&i.source_public_key)
-                .map_err(|_| TransactionStorageError::ConversionError("Invalid Source Publickey".to_string()))?,
+            source_public_key: PublicKey::from_vec(&i.source_public_key).map_err(TransactionKeyError::Source)?,
             amount: MicroTari::from(i.amount as u64),
             receiver_protocol: serde_json::from_str(&i.receiver_protocol)?,
             status: TransactionStatus::Pending,
@@ -1191,7 +1192,7 @@ impl TryFrom<OutboundTransactionSql> for OutboundTransaction {
         Ok(Self {
             tx_id: o.tx_id as u64,
             destination_public_key: PublicKey::from_vec(&o.destination_public_key)
-                .map_err(|_| TransactionStorageError::ConversionError("Invalid destination PublicKey".to_string()))?,
+                .map_err(TransactionKeyError::Destination)?,
             amount: MicroTari::from(o.amount as u64),
             fee: MicroTari::from(o.fee as u64),
             sender_protocol: serde_json::from_str(&o.sender_protocol)?,
@@ -1446,15 +1447,15 @@ impl TryFrom<CompletedTransaction> for CompletedTransactionSql {
 }
 
 impl TryFrom<CompletedTransactionSql> for CompletedTransaction {
+    // TODO: Add `CompletedTransactionConversionError` instead
     type Error = TransactionStorageError;
 
     fn try_from(c: CompletedTransactionSql) -> Result<Self, Self::Error> {
         Ok(Self {
             tx_id: c.tx_id as u64,
-            source_public_key: PublicKey::from_vec(&c.source_public_key)
-                .map_err(|_| TransactionStorageError::ConversionError("Invalid source Publickey".to_string()))?,
+            source_public_key: PublicKey::from_vec(&c.source_public_key).map_err(TransactionKeyError::Source)?,
             destination_public_key: PublicKey::from_vec(&c.destination_public_key)
-                .map_err(|_| TransactionStorageError::ConversionError("Invalid destination PublicKey".to_string()))?,
+                .map_err(TransactionKeyError::Destination)?,
             amount: MicroTari::from(c.amount as u64),
             fee: MicroTari::from(c.fee as u64),
             transaction: serde_json::from_str(&c.transaction_protocol)?,
