@@ -1503,7 +1503,10 @@ mod test {
     };
     use tempfile::tempdir;
 
-    use tari_common_types::types::{HashDigest, PrivateKey, PublicKey};
+    use tari_common_types::{
+        transaction::{TransactionDirection, TransactionStatus},
+        types::{HashDigest, PrivateKey, PublicKey},
+    };
     use tari_core::transactions::{
         helpers::{create_unblinded_output, TestParams},
         tari_amount::MicroTari,
@@ -1519,13 +1522,7 @@ mod test {
         storage::sqlite_utilities::WalletDbConnection,
         transaction_service::storage::{
             database::{DbKey, TransactionBackend},
-            models::{
-                CompletedTransaction,
-                InboundTransaction,
-                OutboundTransaction,
-                TransactionDirection,
-                TransactionStatus,
-            },
+            models::{CompletedTransaction, InboundTransaction, OutboundTransaction},
             sqlite_db::{
                 CompletedTransactionSql,
                 InboundTransactionSql,
