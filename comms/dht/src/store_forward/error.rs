@@ -62,7 +62,6 @@ pub enum StoreAndForwardError {
     MessageOriginRequired,
     #[error("The message was malformed")]
     MalformedMessage,
-
     #[error("StorageError: {0}")]
     StorageError(#[from] StorageError),
     #[error("The store and forward service requester channel closed")]
@@ -81,4 +80,6 @@ pub enum StoreAndForwardError {
     InvalidDhtMessageType,
     #[error("Failed to send request for store and forward messages: {0}")]
     RequestMessagesFailed(DhtOutboundError),
+    #[error("Invalid SAF request: `stored_at` cannot be in the future")]
+    StoredAtWasInFuture,
 }
