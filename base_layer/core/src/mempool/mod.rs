@@ -108,14 +108,20 @@ impl Display for StateResponse {
         fmt.write_str("--- Unconfirmed Pool ---\n")?;
         for tx in &self.unconfirmed_pool {
             fmt.write_str(&format!(
-                "    {} Fee:{}, Outputs:{}, Kernels:{}, Inputs:{}\n",
+                "    {} Fee:{}, Outputs:{}, Kernels:{}, Inputs:{} {}\n ",
                 tx.first_kernel_excess_sig()
                     .map(|sig| sig.get_signature().to_hex())
                     .unwrap_or_else(|| "N/A".to_string()),
                 tx.body.get_total_fee(),
                 tx.body.outputs().len(),
                 tx.body.kernels().len(),
-                tx.body.inputs().len()
+                tx.body.inputs().len(),
+                tx.body
+                    .outputs()
+                    .iter()
+                    .map(|o| o.script.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
             ))?;
         }
         fmt.write_str("--- Reorg Pool ---\n")?;
