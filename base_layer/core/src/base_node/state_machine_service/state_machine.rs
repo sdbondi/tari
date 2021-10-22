@@ -37,7 +37,7 @@ use futures::{future, future::Either};
 use log::*;
 use randomx_rs::RandomXFlag;
 use std::{future::Future, sync::Arc};
-use tari_comms::{connectivity::ConnectivityRequester, PeerManager};
+use tari_comms::{connectivity::ConnectivityRequester, PeerConnection, PeerManager};
 use tari_shutdown::ShutdownSignal;
 use tokio::sync::{broadcast, watch};
 
@@ -138,13 +138,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
         use self::{BaseNodeState::*, StateEvent::*, SyncStatus::*};
         match (state, event) {
             (Starting(s), Initialized) => Listening(s.into()),
-            (HeaderSync(_), HeadersSynchronized(conn)) => {
-                if self.config.pruning_horizon > 0 {
-                    HorizonStateSync(states::HorizonStateSync::with_peer(conn))
-                } else {
-                    BlockSync(states::BlockSync::with_peer(conn))
-                }
-            },
+            (HeaderSync(_), HeadersSynchronized(s)) => DetermineSyncPeer(s.into()),
             (HeaderSync(s), HeaderSyncFailed) => Waiting(s.into()),
             (HeaderSync(s), Continue) => Listening(s.into()),
             (HeaderSync(s), NetworkSilence) => Listening(s.into()),
@@ -252,6 +246,15 @@ impl<B: BlockchainBackend + 'static> BaseNodeStateMachine<B> {
     /// the node will enter a `Shutdown` state.
     pub fn get_interrupt_signal(&self) -> ShutdownSignal {
         self.interrupt_signal.clone()
+    }
+
+    fn next_state_after_header_sync(&self, conn: PeerConnection) -> BaseNodeState {
+        use BaseNodeState::*;
+        if self.config.pruning_horizon > 0 {
+            HorizonStateSync(states::HorizonStateSync::with_peer(conn))
+        } else {
+            BlockSync(states::BlockSync::with_peer(conn))
+        }
     }
 }
 

@@ -97,7 +97,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         self.hooks.add_on_rewind_hook(hook);
     }
 
-    pub async fn synchronize(&mut self) -> Result<PeerConnection, BlockHeaderSyncError> {
+    pub async fn synchronize(&mut self) -> Result<SyncPeer, BlockHeaderSyncError> {
         debug!(target: LOG_TARGET, "Starting header sync.",);
         self.hooks.call_on_starting_hook();
 
@@ -108,13 +108,13 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             sync_peers.len()
         );
 
-        for (sync_peer, peer_conn) in sync_peers {
-            let node_id = peer_conn.peer_node_id().clone();
+        for mut sync_peer in sync_peers {
+            let node_id = sync_peer.node_id().clone();
             debug!(
                 target: LOG_TARGET,
                 "Attempting to synchronize headers with `{}`", node_id
             );
-            match self.attempt_sync(&sync_peer, peer_conn.clone()).await {
+            match self.attempt_sync(&mut sync_peer).await {
                 Ok(()) => return Ok(peer_conn),
                 // Try another peer
                 Err(err @ BlockHeaderSyncError::NotInSync) => {
@@ -169,22 +169,25 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         Err(BlockHeaderSyncError::SyncFailedAllPeers)
     }
 
-    async fn select_sync_peers(&self) -> Result<Vec<(SyncPeer, PeerConnection)>, BlockHeaderSyncError> {
+    async fn select_sync_peers(&self) -> Result<Vec<SyncPeer>, BlockHeaderSyncError> {
         let tasks = self
             .sync_peers
             .iter()
             .cloned()
-            .map(|sync_peer| {
+            .map(|mut sync_peer| {
                 debug!(target: LOG_TARGET, "Dialing {} sync peer", sync_peer.node_id());
                 self.connectivity
                     .dial_peer(sync_peer.node_id().clone())
-                    .and_then(|conn| future::ready(Ok((sync_peer, conn))))
+                    .and_then(move |conn| {
+                        sync_peer.set_connection(conn);
+                        future::ready(Ok(sync_peer))
+                    })
             })
             .collect::<FuturesUnordered<_>>();
 
         let connections = tasks
             .filter_map(|r| match r {
-                Ok((sync_peer, conn)) => future::ready(Some((sync_peer, conn))),
+                Ok((sync_peer, conn)) => future::ready(Some(sync_peer)),
                 Err(err) => {
                     debug!(target: LOG_TARGET, "Failed to dial sync peer: {}", err);
                     future::ready(None)
@@ -231,11 +234,9 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
     }
 
     #[tracing::instrument(skip(self, conn), err)]
-    async fn attempt_sync(
-        &mut self,
-        sync_peer: &SyncPeer,
-        mut conn: PeerConnection,
-    ) -> Result<(), BlockHeaderSyncError> {
+    async fn attempt_sync(&mut self, sync_peer: &mut SyncPeer) -> Result<(), BlockHeaderSyncError> {
+        // unreachable panic: sync peer is guaranteed to have a connection assigned by select_sync_peers
+        let conn = sync_peer.connection_mut().expect("unreachable");
         let mut client = conn.connect_rpc::<rpc::BaseNodeSyncRpcClient>().await?;
         let latency = client.get_last_request_latency().await?;
         debug!(

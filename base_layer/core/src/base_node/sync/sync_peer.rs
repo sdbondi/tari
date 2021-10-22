@@ -21,5 +21,36 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::base_node::chain_metadata_service::PeerChainMetadata;
+use tari_common_types::chain_metadata::ChainMetadata;
+use tari_comms::{peer_manager::NodeId, PeerConnection};
 
-pub type SyncPeer = PeerChainMetadata;
+pub struct SyncPeer {
+    peer_chain_metadata: PeerChainMetadata,
+    connection: Option<PeerConnection>,
+}
+
+impl SyncPeer {
+    pub fn new(node_id: NodeId, chain_metadata: ChainMetadata) -> Self {
+        Self {
+            connection: None,
+            peer_chain_metadata: PeerChainMetadata::new(node_id, chain_metadata),
+        }
+    }
+
+    pub fn node_id(&self) -> &NodeId {
+        &self.node_id
+    }
+
+    pub fn claimed_chain_metadata(&self) -> &ChainMetadata {
+        &self.peer_chain_metadata.claimed_chain_metadata()
+    }
+
+    pub fn connection_mut(&mut self) -> Option<&mut PeerConnection> {
+        self.connection.as_mut()
+    }
+
+    pub fn set_connection(&mut self, conn: PeerConnection) -> &mut Self {
+        self.connection = Some(conn);
+        self
+    }
+}

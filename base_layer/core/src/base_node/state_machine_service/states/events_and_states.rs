@@ -42,6 +42,7 @@ use tari_comms::{peer_manager::NodeId, PeerConnection};
 pub enum BaseNodeState {
     Starting(Starting),
     HeaderSync(HeaderSync),
+    DetermineSyncPeer(DetermineSyncPeer),
     HorizonStateSync(HorizonStateSync),
     BlockSync(BlockSync),
     // The best network chain metadata
@@ -54,7 +55,7 @@ pub enum BaseNodeState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StateEvent {
     Initialized,
-    HeadersSynchronized(PeerConnection),
+    HeadersSynchronized(SyncPeer),
     HeaderSyncFailed,
     HorizonStateSynchronized,
     HorizonStateSyncFailure,

@@ -107,6 +107,8 @@ impl HeaderSync {
             },
             Err(err @ BlockHeaderSyncError::SyncFailedAllPeers) => {
                 warn!(target: LOG_TARGET, "{}. Continuing...", err);
+                // Sync failed from all peers, bad peers wil be banned so immediately continue without disruption
+                self.is_synced = true;
                 StateEvent::Continue
             },
             Err(err @ BlockHeaderSyncError::NetworkSilence) => {
