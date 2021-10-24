@@ -477,8 +477,10 @@ impl StoreAndForwardService {
     }
 
     async fn cleanup(&mut self) -> SafResult<()> {
+        // t+5m is arbitrarily chosen to keep the inflight SAF state set "for a while" so that any very slow responses
+        // may be recognised as a slow rather than unrequested
         self.local_state
-            .garbage_collect(self.config.max_inflight_request_age * 2);
+            .cleanup(self.config.max_inflight_request_age + Duration::from_secs(5 * 60));
 
         let num_removed = self
             .database

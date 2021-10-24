@@ -66,7 +66,7 @@ impl SafLocalState {
         }
     }
 
-    pub fn garbage_collect(&mut self, older_than: Duration) {
+    pub fn cleanup(&mut self, older_than: Duration) {
         self.inflight_saf_requests = self
             .inflight_saf_requests
             .drain()
