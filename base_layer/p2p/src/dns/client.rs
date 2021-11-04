@@ -21,152 +21,72 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #[cfg(test)]
-use crate::dns::mock::{DefaultOnSend, MockClientHandle};
+use crate::dns::mock::MockClientHandle;
 
 use super::DnsClientError;
-use futures::{future, FutureExt};
-use std::{net::SocketAddr, sync::Arc};
-use tari_shutdown::Shutdown;
-use tokio::{net::UdpSocket, task};
-use trust_dns_client::{
-    client::{AsyncClient, AsyncDnssecClient, ClientHandle},
-    op::Query,
-    proto::{error::ProtoError, rr::dnssec::TrustAnchor, udp::UdpClientStream, xfer::DnsResponse, DnsHandle},
-    rr::{DNSClass, IntoName, RecordType},
-    serialize::binary::BinEncoder,
+use trust_dns_resolver::{
+    config::{ResolverConfig, ResolverOpts},
+    AsyncResolver,
+    IntoName,
+    TokioAsyncResolver,
 };
 
 #[derive(Clone)]
 pub enum DnsClient {
-    Secure(Client<AsyncDnssecClient>),
-    Normal(Client<AsyncClient>),
+    Resolver(TokioAsyncResolver),
     #[cfg(test)]
-    Mock(Client<MockClientHandle<DefaultOnSend, ProtoError>>),
+    Mock(MockClientHandle),
 }
 
 impl DnsClient {
-    pub async fn connect_secure(name_server: SocketAddr, trust_anchor: TrustAnchor) -> Result<Self, DnsClientError> {
-        let client = Client::connect_secure(name_server, trust_anchor).await?;
-        Ok(DnsClient::Secure(client))
+    pub async fn connect_secure() -> Result<Self, DnsClientError> {
+        let options = ResolverOpts {
+            // Enable DNSSec validation
+            validate: true,
+            ..Default::default()
+        };
+        let resolver = AsyncResolver::tokio(ResolverConfig::cloudflare_tls(), options)?;
+        Ok(DnsClient::Resolver(resolver))
     }
 
-    pub async fn connect(name_server: SocketAddr) -> Result<Self, DnsClientError> {
-        let client = Client::connect(name_server).await?;
-        Ok(DnsClient::Normal(client))
+    pub async fn connect() -> Result<Self, DnsClientError> {
+        let options = ResolverOpts {
+            validate: false,
+            ..Default::default()
+        };
+        let resolver = AsyncResolver::tokio(ResolverConfig::cloudflare_tls(), options)?;
+        Ok(DnsClient::Resolver(resolver))
     }
 
     #[cfg(test)]
-    pub async fn connect_mock(messages: Vec<Result<DnsResponse, ProtoError>>) -> Result<Self, DnsClientError> {
-        let client = Client::connect_mock(messages).await?;
+    pub async fn connect_mock(messages: Vec<String>) -> Result<Self, DnsClientError> {
+        let client = MockClientHandle::new(messages);
         Ok(DnsClient::Mock(client))
     }
 
-    pub async fn lookup(&mut self, query: Query) -> Result<DnsResponse, DnsClientError> {
+    pub async fn lookup_txt<T: IntoName>(&mut self, name: T) -> Result<Vec<String>, DnsClientError> {
         use DnsClient::*;
-        match self {
-            Secure(ref mut client) => client.lookup(query).await,
-            Normal(ref mut client) => client.lookup(query).await,
+        let response = match self {
+            Resolver(client) => client.txt_lookup(name).await?,
             #[cfg(test)]
-            Mock(ref mut client) => client.lookup(query).await,
-        }
-    }
+            Mock(client) => {
+                return Ok(client.messages().to_vec());
+            },
+        };
 
-    pub async fn query_txt<T: IntoName>(&mut self, name: T) -> Result<Vec<String>, DnsClientError> {
-        let mut query = Query::new();
-        query
-            .set_name(name.into_name()?)
-            .set_query_class(DNSClass::IN)
-            .set_query_type(RecordType::TXT);
-
-        let responses = self.lookup(query).await?;
-
-        let records = responses
-            .answers()
+        let records = response
             .iter()
-            .map(|answer| {
-                let data = answer.rdata();
-                let mut buf = Vec::new();
-                let mut decoder = BinEncoder::new(&mut buf);
-                data.emit(&mut decoder).unwrap();
-                buf
-            })
             .filter_map(|txt| {
-                if txt.is_empty() {
+                let data = txt.txt_data();
+                if data.is_empty() {
                     return None;
                 }
                 // Exclude the first length octet from the string result
-                Some(String::from_utf8_lossy(&txt[1..]).to_string())
+                Some(data.iter().map(|bytes| String::from_utf8_lossy(bytes).to_string()))
             })
+            .flatten()
             .collect();
 
         Ok(records)
-    }
-}
-
-#[derive(Clone)]
-pub struct Client<C> {
-    inner: C,
-    _shutdown: Arc<Shutdown>,
-}
-
-impl Client<AsyncDnssecClient> {
-    pub async fn connect_secure(name_server: SocketAddr, trust_anchor: TrustAnchor) -> Result<Self, DnsClientError> {
-        let shutdown = Shutdown::new();
-        let stream = UdpClientStream::<UdpSocket>::new(name_server);
-        let (client, background) = AsyncDnssecClient::builder(stream)
-            .trust_anchor(trust_anchor)
-            .build()
-            .await?;
-        task::spawn(future::select(shutdown.to_signal(), background.fuse()));
-
-        Ok(Self {
-            inner: client,
-            _shutdown: Arc::new(shutdown),
-        })
-    }
-}
-
-impl Client<AsyncClient> {
-    pub async fn connect(name_server: SocketAddr) -> Result<Self, DnsClientError> {
-        let shutdown = Shutdown::new();
-        let stream = UdpClientStream::<UdpSocket>::new(name_server);
-        let (client, background) = AsyncClient::connect(stream).await?;
-        task::spawn(future::select(shutdown.to_signal(), background.fuse()));
-
-        Ok(Self {
-            inner: client,
-            _shutdown: Arc::new(shutdown),
-        })
-    }
-}
-
-impl<C> Client<C>
-where C: DnsHandle<Error = ProtoError>
-{
-    pub async fn lookup(&mut self, query: Query) -> Result<DnsResponse, DnsClientError> {
-        let client_resp = self
-            .inner
-            .query(query.name().clone(), query.query_class(), query.query_type())
-            .await?;
-        Ok(client_resp)
-    }
-}
-
-#[cfg(test)]
-mod mock {
-    use super::*;
-    use crate::dns::mock::{DefaultOnSend, MockClientHandle};
-    use std::sync::Arc;
-    use tari_shutdown::Shutdown;
-    use trust_dns_client::proto::error::ProtoError;
-
-    impl Client<MockClientHandle<DefaultOnSend, ProtoError>> {
-        pub async fn connect_mock(messages: Vec<Result<DnsResponse, ProtoError>>) -> Result<Self, ProtoError> {
-            let client = MockClientHandle::mock(messages);
-            Ok(Self {
-                inner: client,
-                _shutdown: Arc::new(Shutdown::new()),
-            })
-        }
     }
 }

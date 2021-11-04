@@ -348,7 +348,6 @@ pub async fn init_wallet(
         allow_test_addresses: config.allow_test_addresses,
         listener_liveness_allowlist_cidrs: Vec::new(),
         listener_liveness_max_sessions: 0,
-        dns_seeds_name_server: DEFAULT_DNS_NAME_SERVER.parse().unwrap(),
         peer_seeds: Default::default(),
         dns_seeds: Default::default(),
         dns_seeds_use_dnssec: true,
@@ -361,7 +360,6 @@ pub async fn init_wallet(
     );
 
     let updater_config = AutoUpdateConfig {
-        name_server: config.dns_seeds_name_server,
         update_uris: config.autoupdate_dns_hosts.clone(),
         use_dnssec: config.dns_seeds_use_dnssec,
         download_base_url: "https://tari-binaries.s3.amazonaws.com/latest".to_string(),

@@ -31,7 +31,6 @@ pub use error::AutoUpdateError;
 
 // Re-exports of foreign types used in public interface
 pub use semver::Version;
-pub use trust_dns_client::rr::dnssec::TrustAnchor;
 
 use crate::auto_update::{dns::UpdateSpec, signature::SignedMessageVerifier};
 use futures::future;
@@ -41,7 +40,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     io,
-    net::SocketAddr,
 };
 use tari_common::configuration::bootstrap::ApplicationType;
 use tari_utilities::hex::Hex;
@@ -50,7 +48,6 @@ const LOG_TARGET: &str = "p2p::auto_update";
 
 #[derive(Debug, Clone)]
 pub struct AutoUpdateConfig {
-    pub name_server: SocketAddr,
     pub update_uris: Vec<String>,
     pub use_dnssec: bool,
     pub download_base_url: String,

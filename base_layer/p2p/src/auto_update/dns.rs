@@ -21,7 +21,7 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use super::{error::AutoUpdateError, AutoUpdateConfig, Version};
-use crate::dns::{default_trust_anchor, DnsClient};
+use crate::dns::DnsClient;
 use anyhow::anyhow;
 use futures::future;
 use std::{
@@ -43,9 +43,9 @@ impl DnsSoftwareUpdate {
     /// Connect to DNS host according to the given config
     pub async fn connect(config: AutoUpdateConfig) -> Result<Self, AutoUpdateError> {
         let client = if config.use_dnssec {
-            DnsClient::connect_secure(config.name_server, default_trust_anchor()).await?
+            DnsClient::connect_secure().await?
         } else {
-            DnsClient::connect(config.name_server).await?
+            DnsClient::connect().await?
         };
 
         Ok(Self { client, config })
@@ -61,7 +61,7 @@ impl DnsSoftwareUpdate {
             let mut client = self.client.clone();
             async move {
                 log::debug!(target: LOG_TARGET, "Checking {} for updates...", addr);
-                match client.query_txt(addr.as_str()).await {
+                match client.lookup_txt(addr.as_str()).await {
                     Ok(recs) => recs
                         .iter()
                         .filter_map(|s| UpdateSpec::from_str(s).ok())
@@ -189,27 +189,6 @@ impl Display for UpdateSpec {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::dns::mock;
-    use trust_dns_client::{
-        op::Query,
-        proto::{
-            rr::{rdata, Name, RData, RecordType},
-            xfer::DnsResponse,
-        },
-        rr::Record,
-    };
-
-    fn create_txt_record(contents: Vec<&str>) -> DnsResponse {
-        let resp_query = Query::query(Name::from_str("test.local.").unwrap(), RecordType::A);
-        let mut record = Record::new();
-        record
-            .set_record_type(RecordType::TXT)
-            .set_rdata(RData::TXT(rdata::TXT::new(
-                contents.into_iter().map(ToString::to_string).collect(),
-            )));
-
-        mock::message(resp_query, vec![record], vec![], vec![]).into()
-    }
 
     mod update_spec {
         use super::*;
@@ -226,12 +205,10 @@ mod test {
 
     mod dns_software_update {
         use super::*;
-        use crate::DEFAULT_DNS_NAME_SERVER;
 
         impl AutoUpdateConfig {
             fn get_test_defaults() -> Self {
                 Self {
-                    name_server: DEFAULT_DNS_NAME_SERVER.parse().unwrap(),
                     update_uris: vec!["test.local".to_string()],
                     use_dnssec: true,
                     download_base_url: "https://tari-binaries.s3.amazonaws.com/latest".to_string(),
@@ -247,11 +224,11 @@ mod test {
         #[tokio::test]
         async fn it_ignores_non_conforming_txt_entries() {
             let records = vec![
-                Ok(create_txt_record(vec![":::"])),
-                Ok(create_txt_record(vec!["base-node:::"])),
-                Ok(create_txt_record(vec!["base-node::1.0:"])),
-                Ok(create_txt_record(vec!["base-node:android-armv7:0.1.0:abcdef"])),
-                Ok(create_txt_record(vec!["base-node:linux-x86_64:1.0.0:bada55"])),
+                ":::".to_string(),
+                "base-node:::".to_string(),
+                "base-node::1.0:".to_string(),
+                "base-node:android-armv7:0.1.0:abcdef".to_string(),
+                "base-node:linux-x86_64:1.0.0:bada55".to_string(),
             ];
             let updater = DnsSoftwareUpdate {
                 client: DnsClient::connect_mock(records).await.unwrap(),
@@ -267,8 +244,8 @@ mod test {
         #[tokio::test]
         async fn it_returns_best_update() {
             let records = vec![
-                Ok(create_txt_record(vec!["base-node:linux-x86_64:1.0.0:abcdef"])),
-                Ok(create_txt_record(vec!["base-node:linux-x86_64:1.0.1:abcdef01"])),
+                "base-node:linux-x86_64:1.0.0:abcdef".to_string(),
+                "base-node:linux-x86_64:1.0.1:abcdef01".to_string(),
             ];
             let updater = DnsSoftwareUpdate {
                 client: DnsClient::connect_mock(records).await.unwrap(),

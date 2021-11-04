@@ -21,9 +21,9 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use super::dns::DnsClientError;
-use crate::dns::{default_trust_anchor, DnsClient};
+use crate::dns::DnsClient;
 use anyhow::anyhow;
-use std::{net::SocketAddr, str::FromStr};
+use std::str::FromStr;
 use tari_comms::{
     multiaddr::Multiaddr,
     peer_manager::{NodeId, Peer, PeerFeatures},
@@ -42,8 +42,8 @@ impl DnsSeedResolver {
     ///
     /// ## Arguments
     /// -`name_server` - the DNS name server to use to resolve records
-    pub async fn connect_secure(name_server: SocketAddr) -> Result<Self, DnsClientError> {
-        let client = DnsClient::connect_secure(name_server, default_trust_anchor()).await?;
+    pub async fn connect_secure() -> Result<Self, DnsClientError> {
+        let client = DnsClient::connect_secure().await?;
         Ok(Self { client })
     }
 
@@ -51,8 +51,8 @@ impl DnsSeedResolver {
     ///
     /// ## Arguments
     /// -`name_server` - the DNS name server to use to resolve records
-    pub async fn connect(name_server: SocketAddr) -> Result<Self, DnsClientError> {
-        let client = DnsClient::connect(name_server).await?;
+    pub async fn connect() -> Result<Self, DnsClientError> {
+        let client = DnsClient::connect().await?;
         Ok(Self { client })
     }
 
@@ -63,7 +63,7 @@ impl DnsSeedResolver {
     /// 06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/onion3/bsmuof2cn4y2ysz253gzsvg3s72fcgh4f3qcm3hdlxdtcwe6al2dicyd:1234
     /// ```
     pub async fn resolve(&mut self, addr: &str) -> Result<Vec<SeedPeer>, DnsClientError> {
-        let records = self.client.query_txt(addr).await?;
+        let records = self.client.lookup_txt(addr).await?;
         let peers = records.into_iter().filter_map(|txt| txt.parse().ok()).collect();
         Ok(peers)
     }
@@ -184,74 +184,43 @@ mod test {
 
     mod peer_seed_resolver {
         use super::*;
-        use crate::dns::mock;
-        use trust_dns_client::{
-            proto::{
-                op::Query,
-                rr::{DNSClass, Name},
-                xfer::DnsResponse,
-            },
-            rr::{rdata, RData, Record, RecordType},
-        };
 
         #[ignore = "This test requires network IO and is mostly useful during development"]
         #[tokio::test]
         async fn it_returns_seeds_from_real_address() {
             let mut resolver = DnsSeedResolver {
-                client: DnsClient::connect("1.1.1.1:53".parse().unwrap()).await.unwrap(),
+                client: DnsClient::connect().await.unwrap(),
             };
             let seeds = resolver.resolve("seeds.weatherwax.tari.com").await.unwrap();
+            println!("{:?}", seeds);
+            eprintln!("seeds.len() = {:?}", seeds.len());
             assert!(!seeds.is_empty());
-        }
-
-        fn create_txt_record(contents: Vec<&str>) -> DnsResponse {
-            let mut resp_query = Query::query(Name::from_str(TEST_NAME).unwrap(), RecordType::TXT);
-            resp_query.set_query_class(DNSClass::IN);
-            let mut record = Record::new();
-            record
-                .set_record_type(RecordType::TXT)
-                .set_rdata(RData::TXT(rdata::TXT::new(
-                    contents.into_iter().map(ToString::to_string).collect(),
-                )));
-
-            mock::message(resp_query, vec![record], vec![], vec![]).into()
         }
 
         #[tokio::test]
         async fn it_returns_peer_seeds() {
-            let records = vec![
+            let records = [
                 // Multiple addresses(works)
-                Ok(create_txt_record(vec![
-                    "fab24c542183073996ddf3a6c73ff8b8562fed351d252ec5cb8f269d1ad92f0c::/ip4/127.0.0.1/tcp/8000::/\
-                     onion3/bsmuof2cn4y2ysz253gzsvg3s72fcgh4f3qcm3hdlxdtcwe6al2dicyd:1234",
-                ])),
+                "fab24c542183073996ddf3a6c73ff8b8562fed351d252ec5cb8f269d1ad92f0c::/ip4/127.0.0.1/tcp/8000::/onion3/\
+                 bsmuof2cn4y2ysz253gzsvg3s72fcgh4f3qcm3hdlxdtcwe6al2dicyd:1234",
                 // Misc
-                Ok(create_txt_record(vec!["v=spf1 include:_spf.spf.com ~all"])),
+                "v=spf1 include:_spf.spf.com ~all",
                 // Single address (works)
-                Ok(create_txt_record(vec![
-                    "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000",
-                ])),
+                "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000",
                 // Single address trailing delim
-                Ok(create_txt_record(vec![
-                    "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000::",
-                ])),
+                "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000::",
                 // Invalid public key
-                Ok(create_txt_record(vec![
-                    "07e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000",
-                ])),
+                "07e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/ip4/127.0.0.1/tcp/8000",
                 // No Address with delim
-                Ok(create_txt_record(vec![
-                    "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::",
-                ])),
+                "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::",
                 // No Address no delim
-                Ok(create_txt_record(vec![
-                    "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a",
-                ])),
+                "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a",
                 // Invalid address
-                Ok(create_txt_record(vec![
-                    "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/onion3/invalid:1234",
-                ])),
-            ];
+                "06e98e9c5eb52bd504836edec1878eccf12eb9f26a5fe5ec0e279423156e657a::/onion3/invalid:1234",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
             let mut resolver = DnsSeedResolver {
                 client: DnsClient::connect_mock(records).await.unwrap(),
             };

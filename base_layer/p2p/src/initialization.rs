@@ -35,7 +35,6 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{
     fs::File,
     iter,
-    net::SocketAddr,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -146,8 +145,6 @@ pub struct P2pConfig {
     /// DNS seeds hosts. The DNS TXT records are queried from these hosts and the resulting peers added to the comms
     /// peer list.
     pub dns_seeds: Vec<String>,
-    /// DNS resolver to use for DNS seeds.
-    pub dns_seeds_name_server: SocketAddr,
     /// All DNS seed records must pass DNSSEC validation
     pub dns_seeds_use_dnssec: bool,
     /// The address to bind on using the TCP transport _in addition to_ the primary transport. This is typically useful
@@ -477,7 +474,6 @@ impl P2pInitializer {
 
     #[inline(always)]
     async fn try_resolve_dns_seeds(
-        resolver_addr: SocketAddr,
         dns_seeds: &[String],
         use_dnssec: bool,
     ) -> Result<Vec<Peer>, ServiceInitializationError> {
@@ -489,17 +485,11 @@ impl P2pInitializer {
         let start = Instant::now();
 
         let resolver = if use_dnssec {
-            debug!(
-                target: LOG_TARGET,
-                "Using {} to resolve DNS seeds. DNSSEC is enabled", resolver_addr
-            );
-            DnsSeedResolver::connect_secure(resolver_addr).await?
+            debug!(target: LOG_TARGET, "DNSSEC is enabled",);
+            DnsSeedResolver::connect_secure().await?
         } else {
-            debug!(
-                target: LOG_TARGET,
-                "Using {} to resolve DNS seeds. DNSSEC is disabled", resolver_addr
-            );
-            DnsSeedResolver::connect(resolver_addr).await?
+            debug!(target: LOG_TARGET, "DNSSEC is disabled",);
+            DnsSeedResolver::connect().await?
         };
         let resolving = dns_seeds.iter().map(|addr| {
             let mut resolver = resolver.clone();
@@ -561,12 +551,7 @@ impl ServiceInitializer for P2pInitializer {
         let node_identity = comms.node_identity();
         add_all_peers(&peer_manager, &node_identity, peers).await?;
 
-        let peers = Self::try_resolve_dns_seeds(
-            config.dns_seeds_name_server,
-            &config.dns_seeds,
-            config.dns_seeds_use_dnssec,
-        )
-        .await?;
+        let peers = Self::try_resolve_dns_seeds(&config.dns_seeds, config.dns_seeds_use_dnssec).await?;
         add_all_peers(&peer_manager, &node_identity, peers).await?;
 
         context.register_handle(comms.connectivity());
