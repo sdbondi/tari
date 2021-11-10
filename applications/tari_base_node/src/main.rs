@@ -89,6 +89,8 @@ mod builder;
 mod cli;
 mod command_handler;
 mod grpc;
+mod metrics;
+mod metrics_server;
 mod parser;
 mod recovery;
 mod status_line;
@@ -97,7 +99,8 @@ mod utils;
 use crate::command_handler::{CommandHandler, StatusOutput};
 use futures::{pin_mut, FutureExt};
 use log::*;
-use opentelemetry::{self, global, KeyValue};
+use opentelemetry::{self, global, sdk::trace as trace_sdk, KeyValue};
+use opentelemetry_otlp::WithExportConfig;
 use parser::Parser;
 use rustyline::{config::OutputStreamType, error::ReadlineError, CompletionType, Config, EditMode, Editor};
 use std::{
@@ -122,7 +125,7 @@ use tokio::{
     task,
     time::{self},
 };
-use tonic::transport::Server;
+use tonic::{metadata::MetadataMap, transport::Server};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 const LOG_TARGET: &str = "base_node::app";
@@ -162,6 +165,8 @@ async fn run_node(node_config: Arc<GlobalConfig>, bootstrap: ConfigBootstrap) ->
     if bootstrap.tracing_enabled {
         enable_tracing();
     }
+    let _metrics = metrics::enable();
+
     // Load or create the Node identity
     let node_identity = setup_node_identity(
         &node_config.base_node_identity_file,

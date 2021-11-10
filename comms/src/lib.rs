@@ -37,6 +37,7 @@ pub mod rate_limit;
 mod multiplexing;
 pub use multiplexing::Substream;
 
+mod metrics;
 mod noise;
 mod proto;
 mod stream_id;

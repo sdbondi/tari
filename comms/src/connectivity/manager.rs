@@ -35,6 +35,7 @@ use crate::{
         ConnectionManagerRequester,
     },
     connectivity::ConnectivityEventTx,
+    metrics,
     peer_manager::NodeId,
     runtime::task,
     utils::datetime::format_duration,
@@ -44,6 +45,7 @@ use crate::{
 };
 use log::*;
 use nom::lib::std::collections::hash_map::Entry;
+use opentelemetry::{trace::Span, Key};
 use std::{
     collections::HashMap,
     fmt,
@@ -572,6 +574,7 @@ impl ConnectivityManagerActor {
         }
 
         self.update_connectivity_status();
+        self.update_connectivity_metrics();
         Ok(())
     }
 
@@ -632,6 +635,18 @@ impl ConnectivityManagerActor {
             },
             _ => unreachable!("num_connected is unsigned and only negative pattern covered on this branch"),
         }
+    }
+
+    fn update_connectivity_metrics(&mut self) {
+        let total = self.pool.count_connected() as i64;
+        let num_inbound = self.pool.count_filtered(|state| match state.connection() {
+            Some(conn) => conn.is_connected() && conn.direction().is_inbound(),
+            None => false,
+        }) as i64;
+
+        println!("inbound = {}, outbound = {}", num_inbound, total - num_inbound);
+        // metrics::record_connections(&self.node_identity, ConnectionDirection::Inbound, num_inbound);
+        metrics::record_connections(&self.node_identity, ConnectionDirection::Outbound, total); // total - num_inbound);
     }
 
     fn transition(&mut self, next_status: ConnectivityStatus, required_num_peers: usize) {
