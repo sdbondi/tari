@@ -59,6 +59,12 @@ pub enum DigitalAssetError {
     NotFound { entity: &'static str, id: String },
     #[error("Not authorised: {0}")]
     NotAuthorised(String),
+    #[error("Database is missing or has not be created")]
+    MissingDatabase,
+    #[error("There was no committee for the asset")]
+    NoCommitteeForAsset,
+    #[error("None of the committee responded")]
+    NoResponsesFromCommittee,
 }
 
 impl From<lmdb_zero::Error> for DigitalAssetError {

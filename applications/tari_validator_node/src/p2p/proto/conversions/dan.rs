@@ -22,22 +22,20 @@
 
 use std::convert::{TryFrom, TryInto};
 
+use tari_common_types::types::PublicKey;
 use tari_crypto::tari_utilities::ByteArray;
-use tari_dan_core::{
-    models::{
-        CheckpointData,
-        HotStuffMessage,
-        HotStuffMessageType,
-        HotStuffTreeNode,
-        Instruction,
-        InstructionSet,
-        QuorumCertificate,
-        Signature,
-        TariDanPayload,
-        TreeNodeHash,
-        ViewId,
-    },
-    types::PublicKey,
+use tari_dan_core::models::{
+    CheckpointData,
+    HotStuffMessage,
+    HotStuffMessageType,
+    HotStuffTreeNode,
+    Instruction,
+    InstructionSet,
+    QuorumCertificate,
+    Signature,
+    TariDanPayload,
+    TreeNodeHash,
+    ViewId,
 };
 
 use crate::p2p::proto::dan as dan_proto;

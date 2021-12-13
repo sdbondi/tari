@@ -20,27 +20,24 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use async_trait::async_trait;
 use tari_common_types::types::PublicKey;
 
-use crate::storage::{
-    chain::{ChainDb, ChainDbBackendAdapter},
-    state::{StateDb, StateDbBackendAdapter},
-    StorageError,
-};
+use crate::{models::TemplateId, services::infrastructure_services::NodeAddressable, DigitalAssetError};
 
-pub trait DbFactory {
-    type ChainDbBackendAdapter: ChainDbBackendAdapter;
-    type StateDbBackendAdapter: StateDbBackendAdapter;
-    fn get_or_create_chain_db(
+pub trait ValidatorNodeClientFactory {
+    type Addr: NodeAddressable;
+    type Client: ValidatorNodeRpcClient + Sync + Send;
+    fn create_client(&self, address: &Self::Addr) -> Self::Client;
+}
+
+#[async_trait]
+pub trait ValidatorNodeRpcClient {
+    async fn invoke_read_method(
         &self,
         asset_public_key: &PublicKey,
-    ) -> Result<ChainDb<Self::ChainDbBackendAdapter>, StorageError>;
-    fn get_state_db(
-        &self,
-        asset_public_key: &PublicKey,
-    ) -> Result<Option<StateDb<Self::StateDbBackendAdapter>>, StorageError>;
-    fn get_or_create_state_db(
-        &self,
-        asset_public_key: &PublicKey,
-    ) -> Result<StateDb<Self::StateDbBackendAdapter>, StorageError>;
+        template_id: TemplateId,
+        method: String,
+        args: Vec<u8>,
+    ) -> Result<Vec<u8>, DigitalAssetError>;
 }

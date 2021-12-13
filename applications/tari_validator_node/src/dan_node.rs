@@ -20,8 +20,16 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::{fs, fs::File, io::BufReader, path::Path, sync::Arc, time::Duration};
+use std::{
+    fs,
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
+use futures::future::try_join_all;
 use log::*;
 use tari_app_utilities::{
     identity_management,
@@ -67,7 +75,7 @@ use tari_p2p::{
 };
 use tari_service_framework::{ServiceHandles, StackBuilder};
 use tari_shutdown::ShutdownSignal;
-use tokio::task;
+use tokio::{task, try_join};
 
 use crate::{
     grpc::services::base_node_client::GrpcBaseNodeClient,
@@ -124,23 +132,47 @@ impl DanNode {
 
         let asset_definitions = self.read_asset_definitions(&dan_config.asset_config_directory)?;
         if asset_definitions.is_empty() {
-            warn!(target: LOG_TARGET, "No assets to process. Exiting");
+            warn!(
+                target: LOG_TARGET,
+                "No assets to process. Add assets by putting definitions in the `assets` folder with a `.asset` \
+                 extension."
+            );
         }
         let db_factory = SqliteDbFactory::new(&self.config);
+        let mut tasks = vec![];
         for asset in asset_definitions {
-            // TODO: spawn into multiple processes. This requires some routing as well.
-            self.start_asset_worker(
+            let data_dir = self.config.data_dir.clone();
+            let node_identitiy = node_identity.as_ref().clone();
+            let mempool = mempool_service.clone();
+            let handles = handles.clone();
+            let subscription_factory = subscription_factory.clone();
+            let shutdown = shutdown.clone();
+            let dan_config = dan_config.clone();
+            let db_factory = db_factory.clone();
+
+            tasks.push(task::spawn(DanNode::start_asset_worker(
+                data_dir,
                 asset,
-                node_identity.as_ref().clone(),
-                mempool_service.clone(),
-                handles.clone(),
-                subscription_factory.clone(),
-                shutdown.clone(),
+                node_identitiy,
+                mempool,
+                handles,
+                subscription_factory,
+                shutdown,
                 dan_config,
-                db_factory.clone(),
-            )
-            .await?;
+                db_factory,
+            )));
         }
+
+        if tasks.is_empty() {
+            // If there are no assets to process, work in proxy mode
+            tasks.push(task::spawn(DanNode::wait_for_exit()));
+        }
+        try_join_all(tasks)
+            .await
+            .map_err(|err| ExitCodes::UnknownError(format!("Join error occurred. {}", err)))?
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+
         Ok(())
     }
 
@@ -153,7 +185,6 @@ impl DanNode {
         let mut result = vec![];
         for path in paths {
             let path = path.expect("Not a valid file").path();
-            dbg!(&path.extension());
 
             if !path.is_dir() && path.extension().unwrap_or_default() == "asset" {
                 let file = File::open(path).expect("could not open file");
@@ -166,22 +197,38 @@ impl DanNode {
         Ok(result)
     }
 
+    async fn wait_for_exit() -> Result<(), ExitCodes> {
+        println!("Type `exit` to exit");
+        loop {
+            let mut line = String::new();
+            let _ = std::io::stdin().read_line(&mut line).expect("Failed to read line");
+            if line.to_lowercase().trim() == "exit" {
+                return Err(ExitCodes::UnknownError("User cancelled".to_string()));
+            } else {
+                println!("Type `exit` to exit");
+            }
+        }
+    }
+
+    // async fn start_asset_proxy(&self) -> Result<(), ExitCodes> {
+    //     todo!()
+    // }
+
     async fn start_asset_worker<
         TMempoolService: MempoolService + Clone,
         TDbFactory: DbFactory + Clone + Send + Sync,
     >(
-        &self,
+        data_dir: PathBuf,
         asset_definition: AssetDefinition,
         node_identity: NodeIdentity,
         mempool_service: TMempoolService,
         handles: ServiceHandles,
         subscription_factory: SubscriptionFactory,
         shutdown: ShutdownSignal,
-        config: &ValidatorNodeConfig,
+        config: ValidatorNodeConfig,
         db_factory: TDbFactory,
     ) -> Result<(), ExitCodes> {
         let timeout = Duration::from_secs(asset_definition.phase_timeout);
-        // TODO: read from base layer get asset definition
         let committee = asset_definition
             .initial_committee
             .iter()
@@ -191,15 +238,6 @@ impl DanNode {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // let committee: Vec<CommsPublicKey> = dan_config
-        //     .committee
-        //     .iter()
-        //     .map(|s| {
-        //         CommsPublicKey::from_hex(s)
-        //             .map_err(|e| ExitCodes::ConfigError(format!("could not convert to hex:{}", e)))
-        //     })
-        //     .collect::<Result<Vec<_>, _>>()?;
-        //
         let committee = Committee::new(committee);
         let committee_service = ConcreteCommitteeManager::new(committee);
 
@@ -208,7 +246,7 @@ impl DanNode {
         let events_publisher = LoggingEventsPublisher::default();
         let signing_service = NodeIdentitySigningService::new(node_identity.clone());
 
-        let _backend = LmdbAssetStore::initialize(self.config.data_dir.join("asset_data"), Default::default())
+        let _backend = LmdbAssetStore::initialize(data_dir.join("asset_data"), Default::default())
             .map_err(|err| ExitCodes::DatabaseError(err.to_string()))?;
         // let data_store = AssetDataStore::new(backend);
         let asset_processor = ConcreteAssetProcessor::default();

@@ -25,7 +25,7 @@ use tari_shutdown::ShutdownSignal;
 
 use crate::{
     digital_assets_error::DigitalAssetError,
-    models::{Committee, HotStuffMessage, Payload, View},
+    models::{AssetDefinition, Committee, HotStuffMessage, Payload, View},
     services::infrastructure_services::{NodeAddressable, OutboundService},
     storage::DbFactory,
     workers::states::ConsensusWorkerStateEvent,
@@ -49,9 +49,10 @@ impl NextViewState {
         broadcast: &mut TOutboundService,
         committee: &Committee<TAddr>,
         node_id: TAddr,
+        asset_definition: &AssetDefinition,
         _shutdown: &ShutdownSignal,
     ) -> Result<ConsensusWorkerStateEvent, DigitalAssetError> {
-        let db = db_factory.create_chain_db()?;
+        let db = db_factory.get_or_create_chain_db(&asset_definition.public_key)?;
         let prepare_qc = db.find_highest_prepared_qc()?;
         let message = HotStuffMessage::new_view(prepare_qc, current_view.view_id);
         let next_view = current_view.view_id.next();

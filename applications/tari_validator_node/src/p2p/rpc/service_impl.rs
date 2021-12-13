@@ -19,9 +19,10 @@
 //  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+use tari_common_types::types::PublicKey;
 use tari_comms::protocol::rpc::{Request, Response, RpcStatus};
 use tari_crypto::tari_utilities::ByteArray;
-use tari_dan_core::{models::Instruction, services::MempoolService, types::PublicKey};
+use tari_dan_core::{models::Instruction, services::MempoolService};
 
 use crate::p2p::{proto::validator_node as proto, rpc::ValidatorNodeRpcService};
 
