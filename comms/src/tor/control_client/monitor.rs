@@ -102,6 +102,11 @@ where
                     }
                 },
 
+                Either::Right(Some(Err(err))) if err.kind() == io::ErrorKind::ConnectionReset => {
+                    warn!(target: LOG_TARGET, "Lost connection: '{:?}'. Monitor is exiting.", err);
+                    break;
+                },
+
                 // Error receiving a line from the control server
                 Either::Right(Some(Err(err))) => {
                     error!(
@@ -113,7 +118,7 @@ where
                 // The control server disconnected
                 Either::Right(None) => {
                     cmd_rx.close();
-                    debug!(
+                    warn!(
                         target: LOG_TARGET,
                         "Connection to tor control port closed. Monitor is exiting."
                     );

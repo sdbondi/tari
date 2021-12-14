@@ -168,7 +168,7 @@ impl HiddenServiceController {
                             }
                         },
                         Either::Right((Some(Ok(evt)), _)) => {
-                            trace!(target: LOG_TARGET, "Tor control event: {:?}", evt);
+                            debug!(target: LOG_TARGET, "Tor control event: {:?}", evt);
                         },
                         _ => {},
                     }
@@ -207,7 +207,7 @@ impl HiddenServiceController {
                     self.client = Some(client);
                     self.authenticate().await?;
                     self.set_events().await?;
-                    let _ = self.create_hidden_service_from_identity().await;
+                    self.create_hidden_service_from_identity().await?;
                     break Ok(());
                 },
                 Either::Left((Err(err), shutdown_signal)) => {
