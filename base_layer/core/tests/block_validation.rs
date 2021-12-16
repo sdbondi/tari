@@ -227,6 +227,7 @@ async fn inputs_are_not_malleable() {
         script: spent_output.script.clone(),
         input_data: Some(inputs![malicious_script_public_key]),
         output_features: spent_output.features,
+        ..Default::default()
     });
 
     let input_mut = block.body.inputs_mut().get_mut(0).unwrap();

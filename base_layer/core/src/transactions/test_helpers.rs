@@ -37,6 +37,7 @@ use tari_crypto::{
 
 use crate::{
     consensus::{ConsensusEncodingSized, ConsensusManager},
+    covenants::Covenant,
     transactions::{
         crypto_factories::CryptoFactories,
         fee::Fee,
@@ -95,6 +96,7 @@ pub struct UtxoTestParams {
     pub script: TariScript,
     pub output_features: OutputFeatures,
     pub input_data: Option<ExecutionStack>,
+    pub covenant: Covenant,
 }
 
 impl Default for UtxoTestParams {
@@ -104,6 +106,7 @@ impl Default for UtxoTestParams {
             script: script![Nop],
             output_features: Default::default(),
             input_data: None,
+            covenant: Covenant::default(),
         }
     }
 }
@@ -143,6 +146,7 @@ impl TestParams {
             &params.script,
             &params.output_features,
             &self.sender_offset_private_key,
+            &params.covenant,
         )
         .unwrap();
 
@@ -158,6 +162,7 @@ impl TestParams {
             self.sender_offset_public_key.clone(),
             metadata_signature,
             0,
+            params.covenant,
         )
     }
 
@@ -454,9 +459,9 @@ pub fn create_transaction_with(
         stx_builder.with_output(utxo, script_offset_pvt_key).unwrap();
     });
 
-    let mut stx_protocol = stx_builder.build::<Blake256>(&factories, None, Some(u64::MAX)).unwrap();
+    let mut stx_protocol = stx_builder.build::<Blake256>(&factories, None, u64::MAX).unwrap();
     stx_protocol
-        .finalize(KernelFeatures::empty(), &factories, None, Some(u64::MAX))
+        .finalize(KernelFeatures::empty(), &factories, None, u64::MAX)
         .unwrap();
     stx_protocol.take_transaction().unwrap()
 }
@@ -502,6 +507,7 @@ pub fn spend_utxos(schema: TransactionSchema) -> (Transaction, Vec<UnblindedOutp
             output_features: schema.features.clone(),
             script: schema.script.clone(),
             input_data: schema.input_data.clone(),
+            ..Default::default()
         });
         outputs.push(utxo.clone());
         stx_builder
@@ -516,6 +522,7 @@ pub fn spend_utxos(schema: TransactionSchema) -> (Transaction, Vec<UnblindedOutp
             &utxo.script,
             &utxo.features,
             &test_params.sender_offset_private_key,
+            &utxo.covenant,
         )
         .unwrap();
         utxo.sender_offset_public_key = test_params.sender_offset_public_key;
@@ -525,18 +532,20 @@ pub fn spend_utxos(schema: TransactionSchema) -> (Transaction, Vec<UnblindedOutp
             .unwrap();
     }
 
-    let mut stx_protocol = stx_builder.build::<Blake256>(&factories, None, Some(u64::MAX)).unwrap();
+    let mut stx_protocol = stx_builder.build::<Blake256>(&factories, None, u64::MAX).unwrap();
     let change = stx_protocol.get_change_amount().unwrap();
     // The change output is assigned its own random script offset private key
     let change_sender_offset_public_key = stx_protocol.get_change_sender_offset_public_key().unwrap().unwrap();
 
     let script = script!(Nop);
+    let covenant = Covenant::default();
     let metadata_sig = TransactionOutput::create_final_metadata_signature(
         &change,
         &test_params_change_and_txn.change_spend_key,
         &script,
         &schema.features,
         &test_params_change_and_txn.sender_offset_private_key,
+        &covenant,
     )
     .unwrap();
 
@@ -552,10 +561,11 @@ pub fn spend_utxos(schema: TransactionSchema) -> (Transaction, Vec<UnblindedOutp
         change_sender_offset_public_key,
         metadata_sig,
         0,
+        covenant,
     );
     outputs.push(change_output);
     stx_protocol
-        .finalize(KernelFeatures::empty(), &factories, None, Some(u64::MAX))
+        .finalize(KernelFeatures::empty(), &factories, None, u64::MAX)
         .unwrap();
     let txn = stx_protocol.get_transaction().unwrap().clone();
     (txn, outputs, test_params_change_and_txn)
@@ -579,13 +589,21 @@ pub fn create_utxo(
     factories: &CryptoFactories,
     features: OutputFeatures,
     script: &TariScript,
+    covenant: &Covenant,
 ) -> (TransactionOutput, PrivateKey, PrivateKey) {
     let keys = generate_keys();
     let offset_keys = generate_keys();
     let commitment = factories.commitment.commit_value(&keys.k, value.into());
     let proof = factories.range_proof.construct_proof(&keys.k, value.into()).unwrap();
-    let metadata_sig =
-        TransactionOutput::create_final_metadata_signature(&value, &keys.k, script, &features, &offset_keys.k).unwrap();
+    let metadata_sig = TransactionOutput::create_final_metadata_signature(
+        &value,
+        &keys.k,
+        script,
+        &features,
+        &offset_keys.k,
+        &covenant,
+    )
+    .unwrap();
 
     let utxo = TransactionOutput::new(
         features,
@@ -594,6 +612,7 @@ pub fn create_utxo(
         script.clone(),
         offset_keys.pk,
         metadata_sig,
+        covenant.clone(),
     );
     (utxo, keys.k, offset_keys.k)
 }

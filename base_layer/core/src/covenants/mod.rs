@@ -36,9 +36,11 @@ mod error;
 mod fields;
 mod filters;
 mod output_set;
+mod serde;
 mod token;
 
 pub use covenant::Covenant;
+pub use error::CovenantError;
 // Used in macro
 #[allow(unused_imports)]
 pub(self) use fields::OutputField;

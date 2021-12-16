@@ -1067,7 +1067,7 @@ async fn consensus_validation_large_tx() {
     // make sure the tx was correctly made and is valid
     let factories = CryptoFactories::default();
     assert!(tx
-        .validate_internal_consistency(true, &factories, None, None, Some(u64::MAX))
+        .validate_internal_consistency(true, &factories, None, None, u64::MAX)
         .is_ok());
     let weighting = constants.transaction_weight();
     let weight = tx.calculate_weight(weighting);

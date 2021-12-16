@@ -46,6 +46,8 @@ pub use transaction_output::TransactionOutput;
 pub use unblinded_output::UnblindedOutput;
 pub use unblinded_output_builder::UnblindedOutputBuilder;
 
+use crate::{consensus::ToConsensusBytes, covenants::Covenant};
+
 mod asset_output_features;
 mod error;
 mod full_rewind_result;
@@ -82,13 +84,19 @@ pub const MAX_TRANSACTION_RECIPIENTS: usize = 15;
 /// a) It is a significant performance boost, since the RP is the biggest part of an output
 /// b) Range proofs are committed to elsewhere and so we'd be hashing them twice (and as mentioned, this is slow)
 /// c) TransactionInputs will now have the same hash as UTXOs, which makes locating STXOs easier when doing reorgs
-pub fn hash_output(features: &OutputFeatures, commitment: &Commitment, script: &TariScript) -> Vec<u8> {
+pub(super) fn hash_output(
+    features: &OutputFeatures,
+    commitment: &Commitment,
+    script: &TariScript,
+    covenant: &Covenant,
+) -> Vec<u8> {
     HashDigest::new()
         // TODO: use consensus encoding #testnet_reset
         .chain(features.to_v1_bytes())
         .chain(commitment.as_bytes())
         // .chain(range proof) // See docs as to why we exclude this
         .chain(script.as_bytes())
+        .chain(covenant.to_consensus_bytes())
         .finalize()
         .to_vec()
 }
@@ -108,6 +116,7 @@ mod test {
         script::{ExecutionStack, StackItem},
         tari_utilities::{hex::Hex, Hashable},
     };
+    use tari_test_utils::unpack_enum;
 
     use super::*;
     use crate::{
@@ -178,12 +187,10 @@ mod test {
         let tx_output2 = unblinded_output2.as_transaction_output(&factories);
         match tx_output2 {
             Ok(_) => panic!("Range proof should have failed to verify"),
-            Err(e) => assert_eq!(
-                e,
-                TransactionError::ValidationError(
-                    "Value provided is outside the range allowed by the range proof".to_string()
-                )
-            ),
+            Err(e) => {
+                unpack_enum!(TransactionError::ValidationError(s) = e);
+                assert_eq!(s, "Value provided is outside the range allowed by the range proof");
+            },
         }
 
         let value = 2u64.pow(32) + 1;
@@ -206,8 +213,10 @@ mod test {
                 &script,
                 &output_features,
                 &test_params_2.sender_offset_private_key,
+                &Covenant::default(),
             )
             .unwrap(),
+            Covenant::default(),
         );
         tx_output3.verify_range_proof(&factories.range_proof).unwrap_err();
     }
@@ -287,6 +296,7 @@ mod test {
             OutputFeatures::default(),
             c,
             script,
+            Covenant::default(),
             input_data,
             script_signature,
             offset_pub_key,
@@ -300,8 +310,11 @@ mod test {
         kernel.lock_height = 2;
         tx.body.add_input(input.clone());
         tx.body.add_kernel(kernel.clone());
-        assert_eq!(tx.body.check_stxo_rules(1), Err(TransactionError::InputMaturity));
-        assert_eq!(tx.body.check_stxo_rules(5), Ok(()));
+        assert!(matches!(
+            tx.body.check_stxo_rules(1),
+            Err(TransactionError::InputMaturity)
+        ));
+        tx.body.check_stxo_rules(5).unwrap();
 
         assert_eq!(tx.max_input_maturity(), 5);
         assert_eq!(tx.max_kernel_timelock(), 2);
@@ -332,7 +345,7 @@ mod test {
 
         let factories = CryptoFactories::default();
         assert!(tx
-            .validate_internal_consistency(false, &factories, None, None, None)
+            .validate_internal_consistency(false, &factories, None, None, u64::MAX)
             .is_ok());
     }
 
@@ -347,7 +360,7 @@ mod test {
 
         let factories = CryptoFactories::default();
         assert!(tx
-            .validate_internal_consistency(false, &factories, None, None, None)
+            .validate_internal_consistency(false, &factories, None, None, u64::MAX)
             .is_ok());
 
         let schema = txn_schema!(from: vec![outputs[1].clone()], to: vec![1 * T, 2 * T]);
@@ -380,12 +393,12 @@ mod test {
 
         // Validate basis transaction where cut-through has not been applied.
         assert!(tx3
-            .validate_internal_consistency(false, &factories, None, None, Some(u64::MAX))
+            .validate_internal_consistency(false, &factories, None, None, u64::MAX)
             .is_ok());
 
         // tx3_cut_through has manual cut-through, it should not be possible so this should fail
         assert!(tx3_cut_through
-            .validate_internal_consistency(false, &factories, None, None, Some(u64::MAX))
+            .validate_internal_consistency(false, &factories, None, None, u64::MAX)
             .is_err());
     }
 
@@ -424,7 +437,7 @@ mod test {
 
         let factories = CryptoFactories::default();
         let err = tx
-            .validate_internal_consistency(false, &factories, None, None, Some(u64::MAX))
+            .validate_internal_consistency(false, &factories, None, None, u64::MAX)
             .unwrap_err();
         assert!(matches!(err, TransactionError::InvalidSignatureError(_)));
     }
@@ -456,18 +469,18 @@ mod test {
             .as_rewindable_transaction_output(&factories, &rewind_data)
             .unwrap();
 
-        assert_eq!(
+        assert!(matches!(
             output.rewind_range_proof_value_only(
                 &factories.range_proof,
                 &public_random_key,
                 &rewind_blinding_public_key
             ),
             Err(TransactionError::RangeProofError(RangeProofError::InvalidRewind))
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             output.rewind_range_proof_value_only(&factories.range_proof, &rewind_public_key, &public_random_key),
             Err(TransactionError::RangeProofError(RangeProofError::InvalidRewind))
-        );
+        ));
 
         let rewind_result = output
             .rewind_range_proof_value_only(&factories.range_proof, &rewind_public_key, &rewind_blinding_public_key)
@@ -476,14 +489,14 @@ mod test {
         assert_eq!(rewind_result.committed_value, v);
         assert_eq!(&rewind_result.proof_message, proof_message);
 
-        assert_eq!(
+        assert!(matches!(
             output.full_rewind_range_proof(&factories.range_proof, &random_key, &rewind_blinding_key),
             Err(TransactionError::RangeProofError(RangeProofError::InvalidRewind))
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             output.full_rewind_range_proof(&factories.range_proof, &rewind_key, &random_key),
             Err(TransactionError::RangeProofError(RangeProofError::InvalidRewind))
-        );
+        ));
 
         let full_rewind_result = output
             .full_rewind_range_proof(&factories.range_proof, &rewind_key, &rewind_blinding_key)

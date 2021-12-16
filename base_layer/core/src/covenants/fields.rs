@@ -311,19 +311,22 @@ impl FromIterator<OutputField> for OutputFields {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::transactions::transaction::OutputFeatures;
+    use crate::{
+        covenants::test::create_outputs,
+        transactions::{test_helpers::UtxoTestParams, transaction::OutputFeatures},
+    };
 
     #[test]
     fn get_field_value_ref() {
-        let output = TransactionOutput::new(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        );
+        let mut features = OutputFeatures::default();
+        features.maturity = 42;
+        let output = create_outputs(1, UtxoTestParams {
+            output_features: features.clone(),
+            ..Default::default()
+        })
+        .pop()
+        .unwrap();
         let r = OutputField::Features.get_field_value_ref::<OutputFeatures>(&output);
-        assert_eq!(*r.unwrap(), OutputFeatures::default());
+        assert_eq!(*r.unwrap(), features);
     }
 }
