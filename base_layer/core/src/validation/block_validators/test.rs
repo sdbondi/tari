@@ -29,6 +29,7 @@ use tari_test_utils::unpack_enum;
 use crate::{
     blocks::ChainBlock,
     consensus::{ConsensusConstantsBuilder, ConsensusManager},
+    covenants::CovenantError,
     test_helpers::{
         blockchain::{TempDatabase, TestBlockchain},
         BlockSpec,

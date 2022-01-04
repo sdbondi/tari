@@ -292,6 +292,7 @@ macro_rules! txn_schema {
             lock_height: $lock,
             features: $features.clone(),
             script: tari_crypto::script![Nop],
+            covenant: Default::default(),
             input_data: None,
         }
     }};
@@ -346,6 +347,7 @@ pub struct TransactionSchema {
     pub features: OutputFeatures,
     pub script: TariScript,
     pub input_data: Option<ExecutionStack>,
+    pub covenant: Covenant,
 }
 
 fn default_metadata_byte_size() -> usize {
@@ -507,6 +509,7 @@ pub fn spend_utxos(schema: TransactionSchema) -> (Transaction, Vec<UnblindedOutp
             output_features: schema.features.clone(),
             script: schema.script.clone(),
             input_data: schema.input_data.clone(),
+            covenant: schema.covenant.clone(),
             ..Default::default()
         });
         outputs.push(utxo.clone());

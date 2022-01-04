@@ -20,6 +20,8 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use crate::validation::MempoolTransactionValidation;
+use crate::validation::transaction_validators::TxInternalConsistencyValidator;
 use std::sync::Arc;
 
 use tari_common::configuration::Network;
@@ -43,52 +45,56 @@ use crate::{
     validation::{header_iter::HeaderIter, ChainBalanceValidator, FinalHorizonStateValidation},
 };
 
-#[test]
-fn header_iter_empty_and_invalid_height() {
-    let consensus_manager = ConsensusManager::builder(Network::LocalNet).build();
-    let genesis = consensus_manager.get_genesis_block();
-    let db = create_store_with_consensus(consensus_manager);
+mod header_validators {
+    use super::*;
 
-    let iter = HeaderIter::new(&db, 0, 10);
-    let headers = iter.map(Result::unwrap).collect::<Vec<_>>();
-    assert_eq!(headers.len(), 1);
+    #[test]
+    fn header_iter_empty_and_invalid_height() {
+        let consensus_manager = ConsensusManager::builder(Network::LocalNet).build();
+        let genesis = consensus_manager.get_genesis_block();
+        let db = create_store_with_consensus(consensus_manager);
 
-    assert_eq!(genesis.header(), &headers[0]);
+        let iter = HeaderIter::new(&db, 0, 10);
+        let headers = iter.map(Result::unwrap).collect::<Vec<_>>();
+        assert_eq!(headers.len(), 1);
 
-    // Invalid header height
-    let iter = HeaderIter::new(&db, 1, 10);
-    let headers = iter.collect::<Result<Vec<_>, _>>().unwrap();
-    assert_eq!(headers.len(), 1);
-}
+        assert_eq!(genesis.header(), &headers[0]);
 
-#[test]
-fn header_iter_fetch_in_chunks() {
-    let consensus_manager = ConsensusManagerBuilder::new(Network::LocalNet).build();
-    let db = create_store_with_consensus(consensus_manager.clone());
-    let headers = (1..=15).fold(vec![db.fetch_chain_header(0).unwrap()], |mut acc, i| {
-        let prev = acc.last().unwrap();
-        let mut header = BlockHeader::new(0);
-        header.height = i;
-        header.prev_hash = prev.hash().clone();
-        // These have to be unique
-        header.kernel_mmr_size = 2 + i;
-        header.output_mmr_size = 4001 + i;
+        // Invalid header height
+        let iter = HeaderIter::new(&db, 1, 10);
+        let headers = iter.collect::<Result<Vec<_>, _>>().unwrap();
+        assert_eq!(headers.len(), 1);
+    }
 
-        let chain_header = create_chain_header(header, prev.accumulated_data());
-        acc.push(chain_header);
-        acc
-    });
-    db.insert_valid_headers(headers.into_iter().skip(1).collect()).unwrap();
+    #[test]
+    fn header_iter_fetch_in_chunks() {
+        let consensus_manager = ConsensusManagerBuilder::new(Network::LocalNet).build();
+        let db = create_store_with_consensus(consensus_manager.clone());
+        let headers = (1..=15).fold(vec![db.fetch_chain_header(0).unwrap()], |mut acc, i| {
+            let prev = acc.last().unwrap();
+            let mut header = BlockHeader::new(0);
+            header.height = i;
+            header.prev_hash = prev.hash().clone();
+            // These have to be unique
+            header.kernel_mmr_size = 2 + i;
+            header.output_mmr_size = 4001 + i;
 
-    let iter = HeaderIter::new(&db, 11, 3);
-    let headers = iter.map(Result::unwrap).collect::<Vec<_>>();
-    assert_eq!(headers.len(), 12);
-    let genesis = consensus_manager.get_genesis_block();
-    assert_eq!(genesis.header(), &headers[0]);
+            let chain_header = create_chain_header(header, prev.accumulated_data());
+            acc.push(chain_header);
+            acc
+        });
+        db.insert_valid_headers(headers.into_iter().skip(1).collect()).unwrap();
 
-    (1..=11).for_each(|i| {
-        assert_eq!(headers[i].height, i as u64);
-    })
+        let iter = HeaderIter::new(&db, 11, 3);
+        let headers = iter.map(Result::unwrap).collect::<Vec<_>>();
+        assert_eq!(headers.len(), 12);
+        let genesis = consensus_manager.get_genesis_block();
+        assert_eq!(genesis.header(), &headers[0]);
+
+        (1..=11).for_each(|i| {
+            assert_eq!(headers[i].height, i as u64);
+        })
+    }
 }
 
 #[test]
@@ -248,4 +254,50 @@ fn chain_balance_validation() {
     validator
         .validate(&*db.db_read_access().unwrap(), 2, &utxo_sum, &kernel_sum)
         .unwrap_err();
+}
+
+mod transaction_validators {
+    use super::*;
+
+    mod tx_internal_consistency_validator {
+        use crate::transactions::test_helpers::schema_to_transaction;
+        use super::*;
+
+        #[test]
+        fn it_validates_covenants() {
+            let consensus_manager = ConsensusManager::builder(Network::LocalNet).build();
+            let genesis = consensus_manager.get_genesis_block();
+            let db = create_store_with_consensus(consensus_manager);
+            let validator = TxInternalConsistencyValidator::new(
+                CryptoFactories::default(),
+                true,
+                db
+            );
+
+            let unique_id = b"dank-meme-nft".to_vec();
+            let covenant = covenant!(fields_preserved(@fields(@field::features_unique_id, @field::covenant)));
+            let mut schema = txn_schema!(from: vec![coinbase_a], to: vec![100 * T]);
+            // schema.script = script!(CheckHeight(1) IfThen Nop Else b);
+            schema.features.unique_id = Some(unique_id.clone());
+            schema.covenant = covenant.clone();
+            let (txs, outputs) = schema_to_transaction(&[schema]);
+
+            validator.validate(
+                &tx,
+            )
+
+            et txs = txs.into_iter().map(|t| Arc::try_unwrap(t).unwrap()).collect::<Vec<_>>();
+            let (block, _) = blockchain.add_block("B", "A", BlockSpec::new().with_transactions(txs).finish());
+
+            let mut schema = txn_schema!(from: vec![outputs[0].clone()], to: vec![50 * T]);
+            schema.features.unique_id = Some(unique_id);
+            schema.covenant = covenant;
+
+            let (txs, _) = schema_to_transaction(&[schema]);
+            let txs = txs.into_iter().map(|t| Arc::try_unwrap(t).unwrap()).collect::<Vec<_>>();
+            let (block, _) = blockchain.create_next_tip(BlockSpec::new().with_transactions(txs).finish());
+            let err = validator.validate_block_body(block.block().clone()).await.unwrap_err();
+            unpack_enum!(ValidationError::CovenantError(CovenantError::NoMatchingOutputs) = err);
+        }
+    }
 }
