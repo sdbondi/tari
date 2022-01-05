@@ -181,7 +181,7 @@ impl<B: BlockchainBackend + 'static> BaseNodeSyncService for BaseNodeSyncRpcServ
                                 .into_iter()
                                 .map(|hb| {
                                     match hb.try_into_block().map_err(RpcStatus::log_internal_error(LOG_TARGET)) {
-                                        Ok(b) => Ok(b.to_compact()),
+                                        Ok(b) => Ok(b.into_compact()),
                                         Err(e) => Err(e),
                                     }
                                 })

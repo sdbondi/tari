@@ -308,14 +308,14 @@ impl TransactionInput {
     }
 
     /// Return a clone of this Input into its compact form
-    pub fn to_compact(&self) -> Self {
+    pub fn into_compact(self) -> Self {
         Self {
-            spent_output: match &self.spent_output {
-                SpentOutput::OutputHash(h) => SpentOutput::OutputHash(h.clone()),
+            spent_output: match self.spent_output {
+                SpentOutput::OutputHash(h) => SpentOutput::OutputHash(h),
                 SpentOutput::OutputData { .. } => SpentOutput::OutputHash(self.output_hash()),
             },
-            input_data: self.input_data.clone(),
-            script_signature: self.script_signature.clone(),
+            input_data: self.input_data,
+            script_signature: self.script_signature,
         }
     }
 }

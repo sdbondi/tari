@@ -524,12 +524,12 @@ impl AggregateBody {
     }
 
     /// Return a cloned version of self with TransactionInputs in their compact form
-    pub fn to_compact(&self) -> Self {
+    pub fn into_compact(self) -> Self {
         Self {
             sorted: self.sorted,
-            inputs: self.inputs.iter().map(|i| i.to_compact()).collect(),
-            outputs: self.outputs.clone(),
-            kernels: self.kernels.clone(),
+            inputs: self.inputs.into_iter().map(|i| i.into_compact()).collect(),
+            outputs: self.outputs,
+            kernels: self.kernels,
         }
     }
 }

@@ -715,7 +715,7 @@ impl LMDBDatabase {
             &*self.inputs_db,
             key.as_bytes(),
             &TransactionInputRowDataRef {
-                input: &input.to_compact(),
+                input: &input.into_compact(),
                 header_hash,
                 mmr_position,
                 hash: &hash,
