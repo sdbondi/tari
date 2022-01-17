@@ -14,8 +14,9 @@ tari_shutdown = { version = "^0.23", path = "../../infrastructure/shutdown" }
 
 anyhow = "1.0.32"
 async-trait = "0.1.50"
-futures = { version = "^0.3.16", features = ["async-await"] }
+futures = { version = "^0.3.19", default-features = false }#, features = ["async-await"] }
 log = "0.4.8"
+pin-project = "1.0.7"
 thiserror = "1.0.26"
 tokio = { version = "1.14", features = ["rt"] }
 tower-service = { version = "0.3" }
@@ -25,4 +26,4 @@ tari_test_utils = { version = "^0.23", path = "../../infrastructure/test_utils" 
 
 tokio = { version = "1.14", features = ["rt-multi-thread", "macros", "time"] }
 futures-test = { version = "0.3.3" }
-tower = "0.4"
+tower = { version = "0.4", features = ["util"] }

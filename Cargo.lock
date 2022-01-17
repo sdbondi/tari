@@ -2175,9 +2175,9 @@ checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
 
 [[package]]
 name = "futures"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12aa0eb539080d55c3f2d45a67c3b58b6b0773c1a3ca2dfec66d58c97fd66ca"
+checksum = "28560757fe2bb34e79f907794bb6b22ae8b0e5c669b638a1132f2592b19035b4"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2190,9 +2190,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5da6ba8c3bb3c165d3c7319fc1cc8304facf1fb8db99c5de877183c08a273888"
+checksum = "ba3dda0b6588335f360afc675d0564c17a77a2bda81ca178a4b6081bd86c7f0b"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2200,15 +2200,15 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d1c26957f23603395cd326b0ffe64124b818f4449552f960d815cfba83a53d"
+checksum = "d0c8ff0461b82559810cdccfde3215c3f373807f5e5232b71479bff7bb2583d7"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45025be030969d763025784f7f355043dc6bc74093e4ecc5000ca4dc50d8745c"
+checksum = "29d6d2ff5bb10fb95c85b8ce46538a2e5f5e7fdc755623a7d4529ab8a4ed9d2a"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -2217,9 +2217,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "522de2a0fe3e380f1bc577ba0474108faf3f6b18321dbf60b3b9c39a75073377"
+checksum = "b1f9d34af5a1aac6fb380f735fe510746c38067c5bf16c7fd250280503c971b2"
 
 [[package]]
 name = "futures-lite"
@@ -2238,12 +2238,10 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18e4a4b95cea4b4ccbcf1c5675ca7c4ee4e9e75eb79944d07defde18068f79bb"
+checksum = "6dbd947adfffb0efc70599b3ddcf7b5597bb5fa9e245eb99f62b3a5f7bb8bd3c"
 dependencies = [
- "autocfg 1.0.1",
- "proc-macro-hack",
  "proc-macro2",
  "quote",
  "syn",
@@ -2251,21 +2249,21 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36ea153c13024fe480590b3e3d4cad89a0cfacecc24577b68f86c6ced9c2bc11"
+checksum = "e3055baccb68d74ff6480350f8d6eb8fcfa3aa11bdc1a1ae3afdd0514617d508"
 
 [[package]]
 name = "futures-task"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d3d00f4eddb73e498a54394f228cd55853bdf059259e8e7bc6e69d408892e99"
+checksum = "6ee7c6485c30167ce4dfb83ac568a849fe53274c831081476ee13e0dce1aad72"
 
 [[package]]
 name = "futures-test"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46b9f6d284a9595a613f881a7b08d46abaab1005995e6fe3ccfe2398f6aea492"
+checksum = "4e741bc851e1e90ad08901b329389ae77e02d5e9a0ec61955b80834630fbdc2f"
 dependencies = [
  "futures-core",
  "futures-executor",
@@ -2280,11 +2278,10 @@ dependencies = [
 
 [[package]]
 name = "futures-util"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36568465210a3a6ee45e1f165136d68671471a501e632e9a98d96872222b5481"
+checksum = "d9b5cf40b47a271f77a8b1bec03ca09044d99d2372c0de244e66430761127164"
 dependencies = [
- "autocfg 1.0.1",
  "futures 0.1.31",
  "futures-channel",
  "futures-core",
@@ -2295,8 +2292,6 @@ dependencies = [
  "memchr",
  "pin-project-lite 0.2.7",
  "pin-utils",
- "proc-macro-hack",
- "proc-macro-nested",
  "slab",
 ]
 
@@ -4127,7 +4122,7 @@ checksum = "e1cf9b1c4e9a6c4de793c632496fa490bdc0e1eea73f0c91394f7b6990935d22"
 dependencies = [
  "async-trait",
  "crossbeam-channel 0.5.1",
- "futures 0.3.17",
+ "futures 0.3.19",
  "js-sys",
  "lazy_static 1.4.0",
  "percent-encoding 2.1.0",
@@ -4784,12 +4779,6 @@ name = "proc-macro-hack"
 version = "0.5.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
-
-[[package]]
-name = "proc-macro-nested"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
@@ -6261,7 +6250,7 @@ version = "0.23.0"
 dependencies = [
  "config 0.9.3",
  "dirs-next 1.0.2",
- "futures 0.3.17",
+ "futures 0.3.19",
  "json5",
  "log",
  "rand 0.8.4",
@@ -6286,7 +6275,7 @@ dependencies = [
  "chrono",
  "config 0.9.3",
  "either",
- "futures 0.3.17",
+ "futures 0.3.19",
  "log",
  "log-mdc",
  "num_cpus",
@@ -6347,7 +6336,7 @@ dependencies = [
  "blake2",
  "diesel",
  "diesel_migrations",
- "futures 0.3.17",
+ "futures 0.3.19",
  "prost",
  "prost-types",
  "rand 0.8.4",
@@ -6430,7 +6419,7 @@ dependencies = [
  "data-encoding",
  "digest 0.9.0",
  "env_logger 0.7.1",
- "futures 0.3.17",
+ "futures 0.3.19",
  "lazy_static 1.4.0",
  "lmdb-zero",
  "log",
@@ -6478,7 +6467,7 @@ dependencies = [
  "diesel_migrations",
  "digest 0.9.0",
  "env_logger 0.7.1",
- "futures 0.3.17",
+ "futures 0.3.19",
  "futures-test",
  "futures-util",
  "lazy_static 1.4.0",
@@ -6513,7 +6502,7 @@ dependencies = [
 name = "tari_comms_rpc_macros"
 version = "0.23.0"
 dependencies = [
- "futures 0.3.17",
+ "futures 0.3.19",
  "proc-macro2",
  "prost",
  "quote",
@@ -6532,7 +6521,7 @@ dependencies = [
  "chrono",
  "crossterm 0.17.7",
  "digest 0.9.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "log",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -6585,7 +6574,7 @@ dependencies = [
  "digest 0.9.0",
  "env_logger 0.7.1",
  "fs2 0.3.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "hex",
  "integer-encoding 3.0.2",
  "lazy_static 1.4.0",
@@ -6667,7 +6656,7 @@ dependencies = [
  "bytecodec",
  "clap 2.33.3",
  "digest 0.9.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "lmdb-zero",
  "log",
  "patricia_tree",
@@ -6749,7 +6738,7 @@ dependencies = [
  "bollard",
  "config 0.11.0",
  "env_logger 0.9.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "log",
  "rand 0.8.4",
  "serde 1.0.130",
@@ -6775,7 +6764,7 @@ dependencies = [
  "chrono",
  "config 0.9.3",
  "env_logger 0.7.1",
- "futures 0.3.17",
+ "futures 0.3.19",
  "hex",
  "hyper",
  "jsonrpc",
@@ -6814,7 +6803,7 @@ dependencies = [
  "bufstream",
  "chrono",
  "crossbeam",
- "futures 0.3.17",
+ "futures 0.3.19",
  "hex",
  "log",
  "native-tls",
@@ -6864,7 +6853,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "fs2 0.3.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "lazy_static 1.4.0",
  "lmdb-zero",
  "log",
@@ -6902,9 +6891,10 @@ version = "0.23.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "futures 0.3.17",
+ "futures 0.3.19",
  "futures-test",
  "log",
+ "pin-project 1.0.8",
  "tari_shutdown",
  "tari_test_utils 0.23.0",
  "thiserror",
@@ -6917,7 +6907,7 @@ dependencies = [
 name = "tari_shutdown"
 version = "0.23.0"
 dependencies = [
- "futures 0.3.17",
+ "futures 0.3.19",
  "tokio 1.14.0",
 ]
 
@@ -6960,7 +6950,7 @@ dependencies = [
  "chrono",
  "config 0.9.3",
  "env_logger 0.7.1",
- "futures 0.3.17",
+ "futures 0.3.19",
  "hex",
  "hyper",
  "jsonrpc",
@@ -6990,7 +6980,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f11c0804a3f136ad0f821981411215886f0039bf1519c4ec0ec0af8098a8def"
 dependencies = [
- "futures 0.3.17",
+ "futures 0.3.19",
  "futures-test",
  "lazy_static 1.4.0",
  "rand 0.7.3",
@@ -7002,7 +6992,7 @@ dependencies = [
 name = "tari_test_utils"
 version = "0.23.0"
 dependencies = [
- "futures 0.3.17",
+ "futures 0.3.19",
  "futures-test",
  "rand 0.8.4",
  "tari_shutdown",
@@ -7038,7 +7028,7 @@ dependencies = [
  "bytecodec",
  "clap 2.33.3",
  "digest 0.9.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "lmdb-zero",
  "log",
  "patricia_tree",
@@ -7086,7 +7076,7 @@ dependencies = [
  "digest 0.9.0",
  "env_logger 0.7.1",
  "fs2 0.3.0",
- "futures 0.3.17",
+ "futures 0.3.19",
  "libsqlite3-sys",
  "lmdb-zero",
  "log",
@@ -7123,7 +7113,7 @@ name = "tari_wallet_ffi"
 version = "0.23.0"
 dependencies = [
  "chrono",
- "futures 0.3.17",
+ "futures 0.3.19",
  "lazy_static 1.4.0",
  "libc",
  "log",
@@ -7162,7 +7152,7 @@ dependencies = [
  "either",
  "embed_plist",
  "flate2",
- "futures 0.3.17",
+ "futures 0.3.19",
  "futures-lite",
  "glib",
  "gtk",
@@ -8609,7 +8599,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7d9028f208dd5e63c614be69f115c1b53cacc1111437d4c765185856666c107"
 dependencies = [
- "futures 0.3.17",
+ "futures 0.3.19",
  "log",
  "nohash-hasher",
  "parking_lot 0.11.2",
@@ -8628,7 +8618,7 @@ dependencies = [
  "derivative",
  "enumflags2",
  "fastrand",
- "futures 0.3.17",
+ "futures 0.3.19",
  "nb-connect",
  "nix 0.17.0",
  "once_cell",

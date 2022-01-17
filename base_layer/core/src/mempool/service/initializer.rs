@@ -119,12 +119,12 @@ impl ServiceInitializer for MempoolServiceInitializer {
         let inbound_transaction_stream = self.inbound_transaction_stream();
 
         // Connect MempoolOutboundServiceHandle to MempoolService
-        let (request_sender, request_receiver) = reply_channel::unbounded();
+        let (request_sender, request_receiver) = reply_channel::channel();
         let mempool_handle = MempoolHandle::new(request_sender);
         context.register_handle(mempool_handle);
 
         let (outbound_tx_sender, outbound_tx_stream) = mpsc::unbounded_channel();
-        let (local_request_sender_service, local_request_stream) = reply_channel::unbounded();
+        let (local_request_sender_service, local_request_stream) = reply_channel::channel();
         let outbound_mp_interface = OutboundMempoolServiceInterface::new(outbound_tx_sender);
         let local_mp_interface = LocalMempoolService::new(local_request_sender_service);
         let inbound_handlers = MempoolInboundHandlers::new(self.mempool.clone(), outbound_mp_interface.clone());
