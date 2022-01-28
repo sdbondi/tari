@@ -38,6 +38,7 @@
 //! This hash is called the UTXO merkle root, and is used as the output_mr
 
 use std::{
+    cmp,
     fmt,
     fmt::{Display, Error, Formatter},
 };
@@ -57,7 +58,11 @@ use thiserror::Error;
 
 #[cfg(feature = "base_node")]
 use crate::blocks::{BlockBuilder, NewBlockHeaderTemplate};
-use crate::proof_of_work::{PowAlgorithm, PowError, ProofOfWork};
+use crate::{
+    common::hash_writer::HashWriter,
+    consensus::ConsensusEncoding,
+    proof_of_work::{PowAlgorithm, PowError, ProofOfWork},
+};
 
 #[derive(Debug, Error)]
 pub enum BlockHeaderValidationError {
@@ -190,21 +195,31 @@ impl BlockHeader {
     /// Provides a hash of the header, used for the merge mining.
     /// This differs from the normal hash by not hashing the nonce and kernel pow.
     pub fn merged_mining_hash(&self) -> Vec<u8> {
-        HashDigest::new()
-            .chain(self.version.to_le_bytes())
-            .chain(self.height.to_le_bytes())
-            .chain(self.prev_hash.as_bytes())
-            .chain(self.timestamp.as_u64().to_le_bytes())
-            .chain(self.input_mr.as_bytes())
-            .chain(self.output_mr.as_bytes())
-            .chain(self.output_mmr_size.to_le_bytes())
-            .chain(self.witness_mr.as_bytes())
-            .chain(self.kernel_mr.as_bytes())
-            .chain(self.kernel_mmr_size.to_le_bytes())
-            .chain(self.total_kernel_offset.as_bytes())
-            .chain(self.total_script_offset.as_bytes())
-            .finalize()
-            .to_vec()
+        let mut writer = HashWriter::new(HashDigest::new());
+        self.version.to_le_bytes().consensus_encode(&mut writer).unwrap();
+        self.height.to_le_bytes().consensus_encode(&mut writer).unwrap();
+        // Hashes are fixed size but represented in the code as a dynamically sized vec
+        consensus_encode_hash_output(&mut writer, &self.prev_hash).unwrap();
+        self.timestamp
+            .as_u64()
+            .to_le_bytes()
+            .consensus_encode(&mut writer)
+            .unwrap();
+        consensus_encode_hash_output(&mut writer, &self.input_mr).unwrap();
+        consensus_encode_hash_output(&mut writer, &self.output_mr).unwrap();
+        self.output_mmr_size
+            .to_le_bytes()
+            .consensus_encode(&mut writer)
+            .unwrap();
+        consensus_encode_hash_output(&mut writer, &self.witness_mr).unwrap();
+        consensus_encode_hash_output(&mut writer, &self.kernel_mr).unwrap();
+        self.kernel_mmr_size
+            .to_le_bytes()
+            .consensus_encode(&mut writer)
+            .unwrap();
+        self.total_kernel_offset.consensus_encode(&mut writer).unwrap();
+        self.total_script_offset.consensus_encode(&mut writer).unwrap();
+        writer.finalize().to_vec()
     }
 
     #[inline]
@@ -216,6 +231,17 @@ impl BlockHeader {
     pub fn pow_algo(&self) -> PowAlgorithm {
         self.pow.pow_algo
     }
+}
+
+fn consensus_encode_hash_output<W: std::io::Write>(writer: &mut W, hash: &[u8]) -> Result<usize, std::io::Error> {
+    let mut buf = [0u8; 32];
+    // The hash should be 32 bytes, if it isn't the end will fill with zeros
+    // We cannot error here because:
+    // 1. encoding must always be infallible (the writer is only allowed to return errors), and
+    // 2. the hash should be checked either before or after this
+    let len = cmp::min(hash.len(), 32);
+    buf[0..len].copy_from_slice(&hash[0..len]);
+    buf.consensus_encode(writer)
 }
 
 #[cfg(feature = "base_node")]
