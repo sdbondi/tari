@@ -327,6 +327,7 @@ async fn mining_cycle(
                 let mut mined_block = block.clone();
                 mined_block.header = Some(header);
                 // 5. Sending block to the node
+                debug!(target: LOG_TARGET, "Submitting mined block: {}", mined_block);
                 node_conn.submit_block(mined_block).await?;
                 block_submitted = true;
                 break;
