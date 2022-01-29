@@ -919,7 +919,7 @@ pub unsafe extern "C" fn commitment_signature_create_from_bytes(
         return ptr::null_mut();
     }
 
-    let nonce = match Commitment::from_bytes(&(*public_nonce_bytes).0.clone()) {
+    let nonce = match Commitment::from_bytes((*public_nonce_bytes).0.as_slice()) {
         Ok(nonce) => nonce,
         Err(e) => {
             error!(
@@ -931,7 +931,7 @@ pub unsafe extern "C" fn commitment_signature_create_from_bytes(
             return ptr::null_mut();
         },
     };
-    let u = match TariPrivateKey::from_bytes(&(*u_bytes).0.clone()) {
+    let u = match TariPrivateKey::from_bytes((*u_bytes).0.as_slice()) {
         Ok(u) => u,
         Err(e) => {
             error!(
@@ -943,7 +943,7 @@ pub unsafe extern "C" fn commitment_signature_create_from_bytes(
             return ptr::null_mut();
         },
     };
-    let v = match TariPrivateKey::from_bytes(&(*v_bytes).0.clone()) {
+    let v = match TariPrivateKey::from_bytes((*v_bytes).0.as_slice()) {
         Ok(u) => u,
         Err(e) => {
             error!(
