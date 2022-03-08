@@ -102,8 +102,12 @@ impl DbConnection {
         F: FnOnce(PooledConnection<ConnectionManager<SqliteConnection>>) -> Result<T, StorageError> + Send + 'static,
         T: Sync + Send + 'static,
     {
-        let conn = self.pool.get_pooled_connection()?;
-        task::spawn_blocking(move || f(conn)).await?
+        let pool = self.pool.clone();
+        task::spawn_blocking(move || {
+            let conn = pool.get_pooled_connection()?;
+            f(conn)
+        })
+        .await?
     }
 
     pub async fn migrate(&self) -> Result<String, StorageError> {
