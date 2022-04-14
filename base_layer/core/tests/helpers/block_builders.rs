@@ -105,7 +105,7 @@ fn genesis_template(
 }
 
 #[test]
-// #[ignore = "used to generate a new genesis block"]
+#[ignore = "This is used to generate a new genesis block"]
 /// This is a helper function to generate and print out a block that can be used as the genesis block.
 /// 1. Pick a network
 /// 1. Run `cargo test --package tari_core --test mempool -- helpers::block_builders::print_new_genesis_block --exact
