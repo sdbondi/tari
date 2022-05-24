@@ -59,6 +59,7 @@ mod kernel_features;
 mod kernel_sum;
 mod mint_non_fungible_features;
 mod output_features;
+mod output_features_builder;
 mod output_features_version;
 mod output_flags;
 mod rewind_result;
