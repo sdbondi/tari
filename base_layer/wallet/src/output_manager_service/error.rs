@@ -116,7 +116,7 @@ pub enum OutputManagerError {
     #[error("Private Key is not found in the current Key Chain")]
     KeyNotFoundInKeyChain,
     #[error("Token with unique id not found")]
-    TokenUniqueIdNotFound,
+    ContractIdNotFound,
     #[error("Connectivity error: {source}")]
     ConnectivityError {
         #[from]

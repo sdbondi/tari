@@ -35,7 +35,7 @@ use rand::rngs::OsRng;
 use sha2::Sha256;
 use tari_common_types::{
     transaction::{ImportStatus, TransactionDirection, TransactionStatus, TxId},
-    types::{PrivateKey, PublicKey},
+    types::{FixedHash, PrivateKey, PublicKey},
 };
 use tari_comms::{peer_manager::NodeIdentity, types::CommsPublicKey};
 use tari_comms_dht::outbound::OutboundMessageRequester;
@@ -45,7 +45,14 @@ use tari_core::{
     proto::base_node as base_node_proto,
     transactions::{
         tari_amount::MicroTari,
-        transaction_components::{EncryptedValue, KernelFeatures, Transaction, TransactionOutput, UnblindedOutput},
+        transaction_components::{
+            EncryptedValue,
+            KernelFeatures,
+            OutputType,
+            Transaction,
+            TransactionOutput,
+            UnblindedOutput,
+        },
         transaction_protocol::{
             proto::protocol as proto,
             recipient::RecipientSignedMessage,
@@ -562,8 +569,8 @@ where
             TransactionServiceRequest::SendTransaction {
                 dest_pubkey,
                 amount,
-                unique_id,
-                parent_public_key,
+                contract_id,
+                output_type,
                 fee_per_gram,
                 message,
             } => {
@@ -571,8 +578,8 @@ where
                 self.send_transaction(
                     dest_pubkey,
                     amount,
-                    unique_id,
-                    parent_public_key,
+                    contract_id,
+                    output_type,
                     fee_per_gram,
                     message,
                     send_transaction_join_handles,
@@ -848,8 +855,8 @@ where
         &mut self,
         dest_pubkey: CommsPublicKey,
         amount: MicroTari,
-        unique_id: Option<Vec<u8>>,
-        parent_public_key: Option<PublicKey>,
+        contract_id: Option<FixedHash>,
+        output_type: Option<OutputType>,
         fee_per_gram: MicroTari,
         message: String,
         join_handles: &mut FuturesUnordered<
@@ -874,8 +881,8 @@ where
                 .create_pay_to_self_transaction(
                     tx_id,
                     amount,
-                    unique_id.clone(),
-                    parent_public_key.clone(),
+                    contract_id,
+                    output_type,
                     fee_per_gram,
                     None,
                     message.clone(),

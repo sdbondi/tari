@@ -29,7 +29,7 @@ use log::*;
 use rand::{rngs::OsRng, RngCore};
 use tari_common_types::{
     transaction::TxId,
-    types::{BlockHash, HashOutput, PrivateKey, PublicKey},
+    types::{BlockHash, FixedHash, HashOutput, PrivateKey, PublicKey},
 };
 use tari_comms::{types::CommsPublicKey, NodeIdentity};
 use tari_core::{
@@ -43,6 +43,7 @@ use tari_core::{
             EncryptedValue,
             KernelFeatures,
             OutputFeatures,
+            OutputType,
             Transaction,
             TransactionOutput,
             TransactionOutputVersion,
@@ -312,8 +313,8 @@ where
             OutputManagerRequest::CreatePayToSelfTransaction {
                 tx_id,
                 amount,
-                unique_id,
-                parent_public_key,
+                contract_id,
+                output_type,
                 fee_per_gram,
                 lock_height,
                 message,
@@ -321,8 +322,8 @@ where
                 .create_pay_to_self_transaction(
                     tx_id,
                     amount,
-                    unique_id,
-                    parent_public_key,
+                    contract_id,
+                    output_type,
                     fee_per_gram,
                     lock_height,
                     message,
@@ -418,15 +419,15 @@ where
             OutputManagerRequest::CreatePayToSelfWithOutputs {
                 outputs,
                 fee_per_gram,
-                spending_unique_id,
-                spending_parent_public_key,
+                spending_contract_id,
+                spending_output_type,
             } => {
                 let (tx_id, transaction) = self
                     .create_pay_to_self_containing_outputs(
                         outputs,
                         fee_per_gram,
-                        spending_unique_id.as_ref(),
-                        spending_parent_public_key.as_ref(),
+                        spending_contract_id,
+                        spending_output_type,
                     )
                     .await?;
                 Ok(OutputManagerResponse::CreatePayToSelfWithOutputs {
@@ -830,8 +831,7 @@ where
                 num_outputs,
                 metadata_byte_size * num_outputs,
                 None,
-                None,
-                None,
+                UtxoSelectionCriteria::Standard,
             )
             .await?;
 
@@ -883,8 +883,9 @@ where
                 1,
                 metadata_byte_size,
                 None,
-                unique_id.as_ref(),
-                parent_public_key.as_ref(),
+                UtxoSelectionCriteria::Standard
+                // unique_id.as_ref(),
+                // parent_public_key.as_ref(),
             )
             .await?;
 
@@ -1072,8 +1073,8 @@ where
         &mut self,
         outputs: Vec<UnblindedOutputBuilder>,
         fee_per_gram: MicroTari,
-        spending_unique_id: Option<&Vec<u8>>,
-        spending_parent_public_key: Option<&PublicKey>,
+        contract_id: Option<FixedHash>,
+        output_type: Option<OutputType>,
     ) -> Result<(TxId, Transaction), OutputManagerError> {
         let total_value = MicroTari(outputs.iter().fold(0u64, |running, out| running + out.value.as_u64()));
         let nop_script = script![Nop];
@@ -1089,6 +1090,14 @@ where
                             .consensus_encode_exact_size()
                 })
         });
+
+        let selection_criteria = contract_id
+            .map(|cid| UtxoSelectionCriteria::ContractOutput {
+                contract_id: cid,
+                output_type: output_type.unwrap_or_default(),
+            })
+            .unwrap_or(UtxoSelectionCriteria::Standard);
+
         let input_selection = self
             .select_utxos(
                 total_value,
@@ -1096,8 +1105,7 @@ where
                 outputs.len(),
                 metadata_byte_size,
                 None,
-                spending_unique_id,
-                spending_parent_public_key,
+                selection_criteria,
             )
             .await?;
         let offset = PrivateKey::random(&mut OsRng);
@@ -1426,35 +1434,38 @@ where
         num_outputs: usize,
         output_metadata_byte_size: usize,
         strategy: Option<UTXOSelectionStrategy>,
-        unique_id: Option<&Vec<u8>>,
-        parent_public_key: Option<&PublicKey>,
+        selection_criteria: UtxoSelectionCriteria,
     ) -> Result<UtxoSelection, OutputManagerError> {
-        let token = match unique_id {
-            Some(unique_id) => {
-                debug!(target: LOG_TARGET, "Looking for {:?}", unique_id);
-                // todo: new method to fetch by unique asset id
-                let uo = self.resources.db.fetch_all_unspent_outputs()?;
-                if let Some(token_id) = uo.into_iter().find(|x| match &x.unblinded_output.features.unique_id {
-                    Some(token_unique_id) => {
-                        debug!(target: LOG_TARGET, "Comparing with {:?}", token_unique_id);
-                        token_unique_id == unique_id &&
-                            x.unblinded_output.features.parent_public_key.as_ref() == parent_public_key
-                    },
-                    _ => false,
-                }) {
-                    Some(token_id)
-                } else {
-                    return Err(OutputManagerError::TokenUniqueIdNotFound);
-                }
+        // todo: this should be handled by the fetch unspent for spending
+        let contract_output = match selection_criteria {
+            UtxoSelectionCriteria::Any | UtxoSelectionCriteria::Standard => {
+                // TODO: these are the same for now
+                None
             },
-            _ => None,
+            UtxoSelectionCriteria::ContractOutput {
+                contract_id,
+                output_type,
+            } => {
+                debug!(target: LOG_TARGET, "Looking for contract output {:?}", contract_id);
+                let utxos = self.resources.db.fetch_all_unspent_outputs()?;
+                let contract_output = utxos
+                    .into_iter()
+                    .find(|x| {
+                        let features = &x.unblinded_output.features;
+                        features.output_type == output_type &&
+                            features.contract_id().map(|cid| cid == contract_id).unwrap_or(false)
+                    })
+                    .ok_or_else(|| OutputManagerError::ContractIdNotFound)?;
+
+                Some(contract_output)
+            },
         };
         debug!(
             target: LOG_TARGET,
-            "select_utxos amount: {}, token : {:?}, fee_per_gram: {}, num_outputs: {}, output_metadata_byte_size: {}, \
-             strategy: {:?}",
+            "select_utxos amount: {}, contract_output : {:?}, fee_per_gram: {}, num_outputs: {}, \
+             output_metadata_byte_size: {}, strategy: {:?}",
             amount,
-            token,
+            contract_output,
             fee_per_gram,
             num_outputs,
             output_metadata_byte_size,
@@ -1466,7 +1477,7 @@ where
         let mut fee_without_change = MicroTari::from(0);
         let mut fee_with_change = MicroTari::from(0);
         let fee_calc = self.get_fee_calc();
-        if let Some(token) = token {
+        if let Some(token) = contract_output {
             utxos_total_value = token.unblinded_output.value;
             utxos.push(token);
         }
@@ -2097,6 +2108,18 @@ impl Display for UTXOSelectionStrategy {
             UTXOSelectionStrategy::Default => write!(f, "Default"),
         }
     }
+}
+
+pub enum UtxoSelectionCriteria {
+    /// Select any output
+    Any,
+    /// Select OutputType::Standard outputs only
+    Standard,
+    /// Select matching contract outputs
+    ContractOutput {
+        contract_id: FixedHash,
+        output_type: OutputType,
+    },
 }
 
 /// This struct holds the detailed balance of the Output Manager Service.
