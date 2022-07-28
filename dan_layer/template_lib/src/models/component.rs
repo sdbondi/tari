@@ -20,19 +20,4 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use digest::Digest;
-use rand::rngs::OsRng;
-use tari_common_types::types::{PrivateKey, PublicKey};
-use tari_crypto::{hash::blake2::Blake256, hash_domain, hashing::DomainSeparatedHasher, keys::PublicKey as PublicKeyT};
-
-hash_domain!(TariEngineHashDomain, "tari.dan.engine", 0);
-
-pub type TariEngineHasher = DomainSeparatedHasher<Blake256, TariEngineHashDomain>;
-
-pub fn hasher(label: &'static str) -> impl Digest<OutputSize = digest::consts::U32> {
-    TariEngineHasher::new(label)
-}
-
-pub fn create_key_pair() -> (PrivateKey, PublicKey) {
-    PublicKey::random_keypair(&mut OsRng)
-}
+pub type ComponentId = ([u8; 32], u32);

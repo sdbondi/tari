@@ -40,6 +40,12 @@ pub enum Instruction {
         function: String,
         args: Vec<Vec<u8>>,
     },
+    CallMethod {
+        package_id: PackageId,
+        component_id: String,
+        method: String,
+        args: Vec<Vec<u8>>,
+    },
 }
 
 #[derive(Debug, Clone)]

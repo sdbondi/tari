@@ -20,19 +20,57 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use digest::Digest;
-use rand::rngs::OsRng;
-use tari_common_types::types::{PrivateKey, PublicKey};
-use tari_crypto::{hash::blake2::Blake256, hash_domain, hashing::DomainSeparatedHasher, keys::PublicKey as PublicKeyT};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, RwLock},
+};
 
-hash_domain!(TariEngineHashDomain, "tari.dan.engine", 0);
+use tari_common_types::types::FixedHash;
+use tari_template_abi::LogLevel;
 
-pub type TariEngineHasher = DomainSeparatedHasher<Blake256, TariEngineHashDomain>;
+use crate::models::{Bucket, Component, ComponentId};
 
-pub fn hasher(label: &'static str) -> impl Digest<OutputSize = digest::consts::U32> {
-    TariEngineHasher::new(label)
+#[derive(Clone)]
+pub struct Runtime {
+    tracker: Arc<RwLock<ChangeTracker>>,
+    interface: Arc<dyn RuntimeInterface>,
 }
 
-pub fn create_key_pair() -> (PrivateKey, PublicKey) {
-    PublicKey::random_keypair(&mut OsRng)
+impl Runtime {
+    pub fn new(engine: Arc<dyn RuntimeInterface>) -> Self {
+        Self {
+            tracker: Arc::new(RwLock::new(ChangeTracker::default())),
+            interface: engine,
+        }
+    }
+
+    pub fn interface(&self) -> &dyn RuntimeInterface {
+        &*self.interface
+    }
+}
+
+impl Debug for Runtime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Runtime")
+            .field("tracker", &self.tracker)
+            .field("engine", &"dyn RuntimeEngine")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ChangeTracker {
+    pub buckets: HashMap<FixedHash, Bucket>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RuntimeError {
+    #[error("todo")]
+    Todo,
+}
+
+pub trait RuntimeInterface: Send + Sync {
+    fn emit_log(&self, level: LogLevel, message: &str);
+    fn create_component(&self, component: Component) -> Result<ComponentId, RuntimeError>;
 }

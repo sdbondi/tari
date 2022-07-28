@@ -23,8 +23,8 @@
 // TODO: we should only use stdlib if the template dev needs to include it e.g. use core::mem when stdlib is not
 // available
 
-use common::{generate_abi, generate_main, TemplateImpl};
 use tari_template_abi::{encode_with_len, FunctionDef, Type};
+use tari_template_lib::{generate_abi, generate_main, TemplateImpl};
 
 // TODO: Macro generated code
 #[no_mangle]

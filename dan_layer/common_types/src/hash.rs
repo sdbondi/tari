@@ -20,19 +20,52 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use digest::Digest;
-use rand::rngs::OsRng;
-use tari_common_types::types::{PrivateKey, PublicKey};
-use tari_crypto::{hash::blake2::Blake256, hash_domain, hashing::DomainSeparatedHasher, keys::PublicKey as PublicKeyT};
+use std::{io, io::Write};
 
-hash_domain!(TariEngineHashDomain, "tari.dan.engine", 0);
+use borsh::{BorshDeserialize, BorshSerialize};
+use tari_common_types::types::FixedHash;
 
-pub type TariEngineHasher = DomainSeparatedHasher<Blake256, TariEngineHashDomain>;
+// This is to avoid adding borsh as a dependency in common types (and therefore every application).
+// Either this becomes the standard Hash type for the dan layer, or Borsh becomes the standard serialization format for
+// Tari.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Hash(FixedHash);
 
-pub fn hasher(label: &'static str) -> impl Digest<OutputSize = digest::consts::U32> {
-    TariEngineHasher::new(label)
+impl Hash {
+    pub fn into_inner(self) -> FixedHash {
+        self.0
+    }
 }
 
-pub fn create_key_pair() -> (PrivateKey, PublicKey) {
-    PublicKey::random_keypair(&mut OsRng)
+impl From<FixedHash> for Hash {
+    fn from(hash: FixedHash) -> Self {
+        Self(hash)
+    }
+}
+
+impl BorshSerialize for Hash {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        (*self.0).serialize(writer)
+    }
+}
+
+impl BorshDeserialize for Hash {
+    fn deserialize(buf: &mut &[u8]) -> io::Result<Self> {
+        let hash = <[u8; 32] as BorshDeserialize>::deserialize(buf)?;
+        Ok(Hash(hash.into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_deserialize() {
+        let hash = Hash::default();
+        let mut buf = Vec::new();
+        hash.serialize(&mut buf).unwrap();
+        let hash2 = Hash::deserialize(&mut &buf[..]).unwrap();
+        assert_eq!(hash, hash2);
+    }
 }

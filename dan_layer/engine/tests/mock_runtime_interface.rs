@@ -20,19 +20,45 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use digest::Digest;
-use rand::rngs::OsRng;
-use tari_common_types::types::{PrivateKey, PublicKey};
-use tari_crypto::{hash::blake2::Blake256, hash_domain, hashing::DomainSeparatedHasher, keys::PublicKey as PublicKeyT};
+use std::sync::{atomic::AtomicU32, Arc};
 
-hash_domain!(TariEngineHashDomain, "tari.dan.engine", 0);
+use tari_dan_common_types::Hash;
+use tari_dan_engine::{
+    models::{Component, ComponentId},
+    runtime::{RuntimeError, RuntimeInterface},
+};
+use tari_template_abi::LogLevel;
 
-pub type TariEngineHasher = DomainSeparatedHasher<Blake256, TariEngineHashDomain>;
-
-pub fn hasher(label: &'static str) -> impl Digest<OutputSize = digest::consts::U32> {
-    TariEngineHasher::new(label)
+#[derive(Debug, Clone, Default)]
+pub struct MockRuntimeInterface {
+    ids: Arc<AtomicU32>,
 }
 
-pub fn create_key_pair() -> (PrivateKey, PublicKey) {
-    PublicKey::random_keypair(&mut OsRng)
+impl MockRuntimeInterface {
+    pub fn new() -> Self {
+        Self {
+            ids: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    pub fn next_id(&self) -> u32 {
+        self.ids.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl RuntimeInterface for MockRuntimeInterface {
+    fn emit_log(&self, level: LogLevel, message: &str) {
+        let level = match level {
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warn => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Debug => log::Level::Debug,
+        };
+        eprintln!("[{:?}] {}", level, message);
+        log::log!(target: "tari::dan::engine::runtime", level, "{}", message);
+    }
+
+    fn create_component(&self, _new_component: Component) -> Result<ComponentId, RuntimeError> {
+        Ok((Hash::default(), self.next_id()))
+    }
 }
