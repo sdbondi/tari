@@ -35,6 +35,10 @@ use tari_template_abi::{Decode, Encode};
 pub struct Hash([u8; 32]);
 
 impl Hash {
+    pub const fn from_fixed(arr: [u8; 32]) -> Self {
+        Self(arr)
+    }
+
     pub fn into_inner(self) -> [u8; 32] {
         self.0
     }

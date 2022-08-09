@@ -22,18 +22,23 @@
 
 use std::marker::PhantomData;
 
-use tari_template_abi::{Decode, Encode};
-
-pub type BucketId = u32;
-
-#[derive(Debug, Clone, Encode, Decode)]
-pub struct Bucket<T> {
-    id: BucketId,
+pub struct ResourceBuilder<T> {
     _t: PhantomData<T>,
 }
 
-impl<T> Bucket<T> {
-    pub fn id(&self) -> BucketId {
-        self.id
+impl<T> ResourceBuilder<T> {
+    pub fn new() -> Self {
+        Self { _t: PhantomData }
     }
+
+    // pub fn initial_supply(self, initial_supply: u64) -> Resource<T> {
+    //     Resource {
+    //         initial_supply,
+    //         _t: PhantomData,
+    //     }
+    // }
+    //
+    // pub fn badge(self) -> Resource<T> {
+    //     Self::initial_supply(1)
+    // }
 }

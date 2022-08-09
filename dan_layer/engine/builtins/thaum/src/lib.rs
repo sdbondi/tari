@@ -20,20 +20,25 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::marker::PhantomData;
+use tari_template_macros::template;
 
-use tari_template_abi::{Decode, Encode};
+#[template]
+mod thaum_template {
+    pub struct ThaumCoin {
+        pub utxos: Vault<Thaum>,
+    }
 
-pub type BucketId = u32;
+    impl ThaumCoin {
+        pub fn new() -> Self {
+            Self { utxos: Vault::new() }
+        }
 
-#[derive(Debug, Clone, Encode, Decode)]
-pub struct Bucket<T> {
-    id: BucketId,
-    _t: PhantomData<T>,
-}
+        pub fn set(&mut self, value: u32) {
+            self.value = value;
+        }
 
-impl<T> Bucket<T> {
-    pub fn id(&self) -> BucketId {
-        self.id
+        pub fn get(&self) -> u32 {
+            self.value
+        }
     }
 }

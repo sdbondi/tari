@@ -41,6 +41,7 @@ pub use context::{get_context, set_context_from_call_info};
 
 #[cfg(target_arch = "wasm32")]
 mod engine;
+mod resource;
 
 #[cfg(target_arch = "wasm32")]
 pub use engine::engine;

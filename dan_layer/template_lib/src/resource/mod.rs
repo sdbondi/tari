@@ -20,20 +20,4 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::marker::PhantomData;
-
-use tari_template_abi::{Decode, Encode};
-
-pub type BucketId = u32;
-
-#[derive(Debug, Clone, Encode, Decode)]
-pub struct Bucket<T> {
-    id: BucketId,
-    _t: PhantomData<T>,
-}
-
-impl<T> Bucket<T> {
-    pub fn id(&self) -> BucketId {
-        self.id
-    }
-}
+mod builder;

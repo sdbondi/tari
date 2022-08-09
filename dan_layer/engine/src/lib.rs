@@ -13,4 +13,5 @@ pub mod instruction;
 pub mod packager;
 pub mod runtime;
 pub mod state_store;
+pub mod thaum;
 pub mod traits;

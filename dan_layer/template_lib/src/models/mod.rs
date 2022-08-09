@@ -30,7 +30,7 @@ mod contract;
 pub use contract::{Contract, ContractAddress};
 
 mod resource;
-pub use resource::ResourceAddress;
+pub use resource::{ResourceAddress, ResourceRef};
 
 mod package;
 pub use package::{Package, PackageId};

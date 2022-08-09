@@ -21,23 +21,15 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod mock_runtime_interface;
+mod template_test;
 
-use std::path::Path;
-
-use borsh::BorshDeserialize;
-use mock_runtime_interface::MockRuntimeInterface;
-use tari_crypto::ristretto::RistrettoSecretKey;
-use tari_dan_engine::{
-    crypto::create_key_pair,
-    instruction::{Instruction, InstructionBuilder, InstructionProcessor},
-    packager::Package,
-    state_store::{memory::MemoryStateStore, AtomicDb, StateReader},
-    wasm::{compile::compile_template, LoadedWasmModule},
-};
+use tari_dan_engine::state_store::{AtomicDb, StateReader};
 use tari_template_lib::{
     args,
     models::{ComponentId, ComponentInstance},
 };
+
+use crate::template_test::TemplateTest;
 
 #[test]
 fn test_hello_world() {
@@ -123,80 +115,10 @@ fn test_composed() {
     assert_eq!(value, new_value);
 }
 
-struct TemplateTest {
-    package: Package,
-    processor: InstructionProcessor<MockRuntimeInterface>,
-    secret_key: RistrettoSecretKey,
-    runtime_interface: MockRuntimeInterface,
-}
+#[test]
+fn test_thaum() {
+    let template_test = TemplateTest::new(vec!["tests/thaum_faucet"]);
+    let result: String = template_test.call_function("ThaumFaucet", "free_thaums", vec![]);
 
-impl TemplateTest {
-    pub fn new<P: AsRef<Path>>(template_paths: Vec<P>) -> Self {
-        let runtime_interface = MockRuntimeInterface::new();
-        let (secret_key, _pk) = create_key_pair();
-
-        let wasms = template_paths.into_iter().map(|path| compile_template(path).unwrap());
-        let mut builder = Package::builder();
-        for wasm in wasms {
-            builder.add_wasm_module(wasm);
-        }
-        let package = builder.build().unwrap();
-        let processor = InstructionProcessor::new(runtime_interface.clone(), package.clone());
-
-        Self {
-            package,
-            processor,
-            secret_key,
-            runtime_interface,
-        }
-    }
-
-    pub fn state_store(&self) -> MemoryStateStore {
-        self.runtime_interface.state_store()
-    }
-
-    pub fn assert_calls(&self, expected: &[&'static str]) {
-        let calls = self.runtime_interface.get_calls();
-        assert_eq!(calls, expected);
-    }
-
-    pub fn clear_calls(&self) {
-        self.runtime_interface.clear_calls();
-    }
-
-    pub fn get_module(&self, module_name: &str) -> &LoadedWasmModule {
-        self.package.get_module_by_name(module_name).unwrap()
-    }
-
-    pub fn call_function<T>(&self, template_name: &str, func_name: &str, args: Vec<Vec<u8>>) -> T
-    where T: BorshDeserialize {
-        let instruction = InstructionBuilder::new()
-            .add_instruction(Instruction::CallFunction {
-                package_id: self.package.id(),
-                template: template_name.to_owned(),
-                function: func_name.to_owned(),
-                args,
-            })
-            .sign(&self.secret_key)
-            .build();
-        let result = self.processor.execute(instruction).unwrap();
-
-        result[0].decode::<T>().unwrap()
-    }
-
-    pub fn call_method<T>(&self, component_id: ComponentId, method_name: &str, args: Vec<Vec<u8>>) -> T
-    where T: BorshDeserialize {
-        let instruction = InstructionBuilder::new()
-            .add_instruction(Instruction::CallMethod {
-                package_id: self.package.id(),
-                component_id,
-                method: method_name.to_owned(),
-                args,
-            })
-            .sign(&self.secret_key)
-            .build();
-        let result = self.processor.execute(instruction).unwrap();
-
-        result[0].decode::<T>().unwrap()
-    }
+    assert_eq!(result, "Hello World!");
 }

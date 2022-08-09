@@ -28,7 +28,7 @@ use crate::{
     wasm::{environment::WasmEnv, WasmExecutionError},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct WasmModule {
     code: Vec<u8>,
 }

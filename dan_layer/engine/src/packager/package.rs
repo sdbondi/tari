@@ -20,7 +20,7 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use digest::Digest;
 use rand::{rngs::OsRng, RngCore};
@@ -54,18 +54,18 @@ impl Package {
 
 #[derive(Debug, Clone, Default)]
 pub struct PackageBuilder {
-    wasm_modules: Vec<WasmModule>,
+    wasm_modules: HashSet<WasmModule>,
 }
 
 impl PackageBuilder {
     pub fn new() -> Self {
         Self {
-            wasm_modules: Vec::new(),
+            wasm_modules: HashSet::new(),
         }
     }
 
     pub fn add_wasm_module(&mut self, wasm_module: WasmModule) -> &mut Self {
-        self.wasm_modules.push(wasm_module);
+        self.wasm_modules.insert(wasm_module);
         self
     }
 

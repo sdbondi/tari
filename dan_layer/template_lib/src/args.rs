@@ -21,7 +21,7 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use tari_template_abi::{Decode, Encode};
 
-use crate::models::{ComponentId, ContractAddress, PackageId};
+use crate::models::{ComponentId, ContractAddress, PackageId, ResourceRef};
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct EmitLogArg {
@@ -53,6 +53,12 @@ pub struct GetComponentArg {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct SetComponentStateArg {
     pub component_id: ComponentId,
+    pub state: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct ResourceInvoke<T> {
+    pub resource_ref: ResourceRef<T>,
     pub state: Vec<u8>,
 }
 

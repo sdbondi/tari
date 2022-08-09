@@ -22,7 +22,17 @@
 
 use std::marker::PhantomData;
 
-use crate::{hash::HashParseError, Hash};
+use tari_template_abi::{Decode, Encode};
+
+use crate::{hash::HashParseError, models::BucketId, Hash};
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub enum ResourceRef<T> {
+    Vault,
+    VaultRef(ResourceAddress<T>),
+    Bucket,
+    BucketRef(BucketId),
+}
 
 #[derive(Debug)]
 pub struct ResourceAddress<T> {

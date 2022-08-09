@@ -20,20 +20,19 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::marker::PhantomData;
+use tari_template_macros::template;
 
-use tari_template_abi::{Decode, Encode};
+#[template]
+mod thaum_faucet_template {
+    pub struct ThaumFaucet {
+        pub faucet_vault: Vault<Thaum>,
+    }
 
-pub type BucketId = u32;
-
-#[derive(Debug, Clone, Encode, Decode)]
-pub struct Bucket<T> {
-    id: BucketId,
-    _t: PhantomData<T>,
-}
-
-impl<T> Bucket<T> {
-    pub fn id(&self) -> BucketId {
-        self.id
+    impl ThaumFaucet {
+        pub fn initialize() -> Self {
+            // Returns the faucet
+            let faucet_vault = engine().thaum_faucet_vault();
+            Self { faucet_vault }
+        }
     }
 }
