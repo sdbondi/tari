@@ -1121,6 +1121,7 @@ async fn consensus_validation_versions() {
         covenant: Default::default(),
         input_version: Some(TransactionInputVersion::V1),
         output_version: None,
+        minimum_value_promise: MicroTari::zero(),
     };
 
     let (tx, _) = spend_utxos(tx);
@@ -1141,6 +1142,7 @@ async fn consensus_validation_versions() {
         covenant: Default::default(),
         input_version: None,
         output_version: Some(TransactionOutputVersion::V1),
+        minimum_value_promise: MicroTari::zero(),
     };
 
     let (tx, _) = spend_utxos(tx);
@@ -1161,6 +1163,7 @@ async fn consensus_validation_versions() {
         covenant: Default::default(),
         input_version: None,
         output_version: None,
+        minimum_value_promise: MicroTari::zero(),
     };
 
     let (tx, _) = spend_utxos(tx);

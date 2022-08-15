@@ -31,7 +31,7 @@ use crate::{
         CryptoFactories,
     },
     validation::{
-        helpers::{check_inputs_are_utxos, check_outputs, check_total_burned},
+        helpers::{check_inputs_are_utxos, check_outputs, check_total_burned, check_valid_minimum_value},
         MempoolTransactionValidation,
         ValidationError,
     },
@@ -246,6 +246,17 @@ impl<B: BlockchainBackend> TxConsensusValidator<B> {
         }
         Ok(())
     }
+
+    fn validate_minimum_required_value(
+        &self,
+        tx: &Transaction,
+        constants: &ConsensusConstants,
+    ) -> Result<(), ValidationError> {
+        for output in tx.body().outputs() {
+            check_valid_minimum_value(constants, output)?;
+        }
+        Ok(())
+    }
 }
 
 impl<B: BlockchainBackend> MempoolTransactionValidation for TxConsensusValidator<B> {
@@ -257,6 +268,8 @@ impl<B: BlockchainBackend> MempoolTransactionValidation for TxConsensusValidator
         {
             return Err(ValidationError::MaxTransactionWeightExceeded);
         }
+
+        self.validate_minimum_required_value(tx, consensus_constants)?;
 
         self.validate_excess_sig_not_in_db(tx)?;
 
@@ -291,7 +304,7 @@ impl<B: BlockchainBackend> MempoolTransactionValidation for TxInputAndMaturityVa
 
         verify_timelocks(tx, tip_height)?;
         verify_no_duplicated_inputs_outputs(tx)?;
-        check_total_burned(&tx.body)?;
+        check_total_burned(tx.body())?;
         Ok(())
     }
 }

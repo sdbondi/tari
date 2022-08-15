@@ -363,6 +363,7 @@ impl<B: BlockchainBackend + 'static> BlockValidator<B> {
         .into()
     }
 
+    #[allow(clippy::too_many_lines)]
     fn start_output_validation(
         &self,
         header: &BlockHeader,
@@ -389,9 +390,10 @@ impl<B: BlockchainBackend + 'static> BlockValidator<B> {
             .map(|outputs| {
                 let range_proof_prover = self.factories.range_proof.clone();
                 let db = self.db.inner().clone();
-                let max_script_size = self.rules.consensus_constants(height).get_max_script_byte_size();
+                let constants = self.rules.consensus_constants(height).clone();
                 task::spawn_blocking(move || {
                     let db = db.db_read_access()?;
+                    let max_script_size = constants.get_max_script_byte_size();
                     let mut aggregate_sender_offset = PublicKey::default();
                     let mut commitment_sum = Commitment::default();
                     let mut coinbase_index = None;
@@ -417,6 +419,7 @@ impl<B: BlockchainBackend + 'static> BlockValidator<B> {
                             aggregate_sender_offset = aggregate_sender_offset + &output.sender_offset_public_key;
                         }
 
+                        helpers::check_valid_minimum_value(&constants, output)?;
                         helpers::check_tari_script_byte_size(&output.script, max_script_size)?;
                         output.verify_metadata_signature()?;
                         helpers::check_not_duplicate_txo(&*db, output)?;

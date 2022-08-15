@@ -38,6 +38,7 @@ use crate::{
         transaction_components::{
             OutputFeatures,
             OutputFeaturesVersion,
+            OutputType,
             TransactionInputVersion,
             TransactionKernelVersion,
             TransactionOutputVersion,
@@ -90,6 +91,8 @@ pub struct ConsensusConstants {
     pub(crate) output_version_range: OutputVersionRange,
     /// Range of valid transaction kernel versions
     pub(crate) kernel_version_range: RangeInclusive<TransactionKernelVersion>,
+    /// The minimum required amount for a given output type
+    minimum_required_values: &'static [(OutputType, MicroTari)],
 }
 
 // todo: remove this once OutputFeaturesVersion is removed in favor of just TransactionOutputVersion
@@ -277,6 +280,16 @@ impl ConsensusConstants {
         &self.kernel_version_range
     }
 
+    /// Returns the minimum required amount required for a given OutputType.
+    pub fn get_required_amount_for_output_type(&self, output_type: OutputType) -> MicroTari {
+        self.minimum_required_values
+            .iter()
+            .find(|(t, _)| *t == output_type)
+            .map(|(_, v)| *v)
+            // Any OutputType not listed requires a 0 minimum
+            .unwrap_or_else(MicroTari::zero)
+    }
+
     pub fn localnet() -> Vec<Self> {
         let difficulty_block_window = 90;
         let mut algos = HashMap::new();
@@ -313,6 +326,7 @@ impl ConsensusConstants {
             input_version_range,
             output_version_range,
             kernel_version_range,
+            minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
         }]
     }
 
@@ -352,6 +366,7 @@ impl ConsensusConstants {
             input_version_range,
             output_version_range,
             kernel_version_range,
+            minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
         }]
     }
 
@@ -394,6 +409,7 @@ impl ConsensusConstants {
             input_version_range,
             output_version_range,
             kernel_version_range,
+            minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
         }]
     }
 
@@ -443,6 +459,7 @@ impl ConsensusConstants {
                 input_version_range: input_version_range.clone(),
                 output_version_range: output_version_range.clone(),
                 kernel_version_range: kernel_version_range.clone(),
+                minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
             },
             ConsensusConstants {
                 effective_from_height: 23000,
@@ -465,6 +482,7 @@ impl ConsensusConstants {
                 input_version_range,
                 output_version_range,
                 kernel_version_range,
+                minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
             },
         ]
     }
@@ -512,6 +530,7 @@ impl ConsensusConstants {
             input_version_range,
             output_version_range,
             kernel_version_range,
+            minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
         }]
     }
 
@@ -552,6 +571,7 @@ impl ConsensusConstants {
             input_version_range,
             output_version_range,
             kernel_version_range,
+            minimum_required_values: DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS,
         }]
     }
 }
@@ -616,6 +636,11 @@ impl ConsensusConstantsBuilder {
         self
     }
 
+    pub fn with_minimum_required_values(mut self, minimum_required_values: &'static [(OutputType, MicroTari)]) -> Self {
+        self.consensus.minimum_required_values = minimum_required_values;
+        self
+    }
+
     pub fn with_emission_amounts(
         mut self,
         intial_amount: MicroTari,
@@ -632,6 +657,12 @@ impl ConsensusConstantsBuilder {
         self.consensus
     }
 }
+
+const DEFAULT_MIN_REQUIRED_OUTPUT_AMOUNTS: &[(OutputType, MicroTari)] = &[
+    (OutputType::Standard, MicroTari::zero()),
+    (OutputType::Coinbase, MicroTari::zero()),
+    (OutputType::CodeTemplateRegistration, MicroTari(10_000_000)),
+];
 
 #[cfg(test)]
 mod test {

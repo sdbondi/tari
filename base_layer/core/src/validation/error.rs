@@ -30,7 +30,10 @@ use crate::{
     chain_storage::ChainStorageError,
     covenants::CovenantError,
     proof_of_work::{monero_rx::MergeMineError, PowError},
-    transactions::transaction_components::{OutputType, TransactionError},
+    transactions::{
+        tari_amount::MicroTari,
+        transaction_components::{OutputType, TransactionError},
+    },
     validation::dan_validators::DanLayerValidationError,
 };
 
@@ -131,6 +134,15 @@ pub enum ValidationError {
     },
     #[error("Contains Invalid Burn: {0}")]
     InvalidBurnError(String),
+    #[error(
+        "Minimum value of {given_value} was less than the required value {required_minimum_value} for the output type \
+         {output_type}"
+    )]
+    InvalidMinimumValue {
+        output_type: OutputType,
+        given_value: MicroTari,
+        required_minimum_value: MicroTari,
+    },
 }
 
 // ChainStorageError has a ValidationError variant, so to prevent a cyclic dependency we use a string representation in

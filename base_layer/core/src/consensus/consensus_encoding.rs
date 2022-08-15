@@ -76,6 +76,12 @@ impl<T: ConsensusEncoding + ConsensusEncodingSized + ?Sized> ToConsensusBytes fo
     }
 }
 
+pub fn read_byte<R: io::Read>(reader: &mut R) -> Result<u8, io::Error> {
+    let mut buf = [0u8; 1];
+    reader.read_exact(&mut buf)?;
+    Ok(buf[0])
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;

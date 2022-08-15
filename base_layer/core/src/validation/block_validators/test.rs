@@ -35,7 +35,7 @@ use crate::{
     },
     transactions::{
         aggregated_body::AggregateBody,
-        tari_amount::T,
+        tari_amount::{MicroTari, T},
         test_helpers::{schema_to_transaction, TransactionSchema},
         transaction_components::{OutputFeatures, OutputType, TransactionError, UnblindedOutput},
         CoinbaseBuilder,
@@ -478,5 +478,70 @@ mod orphan_validator {
         let (unmined, _) = blockchain.create_unmined_block(block_spec!("2", parent: "1", transactions: transactions));
         let err = validator.validate(&unmined).unwrap_err();
         assert!(matches!(err, ValidationError::UnsortedOrDuplicateInput));
+    }
+
+    #[test]
+    fn it_accepts_block_for_valid_claimed_minimum_output_value() {
+        let rules = ConsensusManager::builder(Network::LocalNet)
+            .add_consensus_constants(
+                ConsensusConstantsBuilder::new(Network::LocalNet)
+                    // Set the minimum required value for standard outputs
+                    .with_minimum_required_values(&[(OutputType::CodeTemplateRegistration, MicroTari(10))])
+                    .with_coinbase_lockheight(0)
+                    .build(),
+            )
+            .build();
+        let mut blockchain = TestBlockchain::create(rules.clone());
+        let validator = OrphanBlockValidator::new(rules, false, CryptoFactories::default());
+        let (_, coinbase) = blockchain.append(block_spec!("1", parent: "GB")).unwrap();
+
+        let mut schema = txn_schema!(from: vec![coinbase], to: vec![10 * T]);
+        schema.features.output_type = OutputType::CodeTemplateRegistration;
+        schema.minimum_value_promise = 10 * T;
+        let (initial_tx, _) = schema_to_transaction(&[schema]);
+
+        let transactions = initial_tx
+            .into_iter()
+            .map(|b| Arc::try_unwrap(b).unwrap())
+            .collect::<Vec<_>>();
+
+        let (unmined, _) = blockchain.create_unmined_block(block_spec!("2", parent: "1", transactions: transactions));
+        validator.validate(&unmined).unwrap();
+    }
+
+    #[test]
+    fn it_rejects_block_for_invalid_claimed_minimum_output_value() {
+        let rules = ConsensusManager::builder(Network::LocalNet)
+            .add_consensus_constants(
+                ConsensusConstantsBuilder::new(Network::LocalNet)
+                    // Set the minimum required value for standard outputs
+                    .with_minimum_required_values(&[(OutputType::CodeTemplateRegistration, MicroTari(10_000_000))])
+                    .with_coinbase_lockheight(0)
+                    .build(),
+            )
+            .build();
+        let mut blockchain = TestBlockchain::create(rules.clone());
+        let validator = OrphanBlockValidator::new(rules, false, CryptoFactories::default());
+        let (_, coinbase) = blockchain.append(block_spec!("1", parent: "GB")).unwrap();
+
+        let mut schema = txn_schema!(from: vec![coinbase], to: vec![1 * T]);
+        schema.features.output_type = OutputType::CodeTemplateRegistration;
+        schema.minimum_value_promise = 1 * T;
+        let (tx, _) = schema_to_transaction(&[schema]);
+
+        let transactions = tx.into_iter().map(|b| Arc::try_unwrap(b).unwrap()).collect::<Vec<_>>();
+
+        let (unmined, _) = blockchain.create_unmined_block(block_spec!("2", parent: "1", transactions: transactions));
+        let err = validator.validate(&unmined).unwrap_err();
+        unpack_enum!(
+            ValidationError::InvalidMinimumValue {
+                output_type,
+                given_value,
+                required_minimum_value
+            } = err
+        );
+        assert_eq!(output_type, OutputType::CodeTemplateRegistration);
+        assert_eq!(given_value, 1 * T);
+        assert_eq!(required_minimum_value, 10 * T);
     }
 }

@@ -525,8 +525,9 @@ pub fn check_input_is_utxo<B: BlockchainBackend>(db: &B, input: &TransactionInpu
 }
 
 /// This function checks:
-/// 1. the byte size of TariScript does not exceed the maximum
-/// 2. that the outputs do not already exist in the UTxO set.
+/// 1. the minumum required output values are correct
+/// 2. the byte size of TariScript does not exceed the maximum
+/// 3. that the outputs do not already exist in the UTxO set.
 pub fn check_outputs<B: BlockchainBackend>(
     db: &B,
     constants: &ConsensusConstants,
@@ -535,6 +536,7 @@ pub fn check_outputs<B: BlockchainBackend>(
     let mut unique_ids = Vec::new();
     let max_script_size = constants.get_max_script_byte_size();
     for output in body.outputs() {
+        check_valid_minimum_value(constants, output)?;
         check_tari_script_byte_size(&output.script, max_script_size)?;
         // Check outputs for duplicate asset ids
         if output.features.is_non_fungible_mint() || output.features.is_non_fungible_burn() {
@@ -839,6 +841,22 @@ pub fn check_blockchain_version(constants: &ConsensusConstants, version: u16) ->
     } else {
         Err(ValidationError::InvalidBlockchainVersion { version })
     }
+}
+
+pub fn check_valid_minimum_value(
+    constants: &ConsensusConstants,
+    output: &TransactionOutput,
+) -> Result<(), ValidationError> {
+    let output_type = output.features.output_type;
+    let minimum_required = constants.get_required_amount_for_output_type(output_type);
+    if output.minimum_value_promise < minimum_required {
+        return Err(ValidationError::InvalidMinimumValue {
+            output_type,
+            given_value: output.minimum_value_promise,
+            required_minimum_value: minimum_required,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]

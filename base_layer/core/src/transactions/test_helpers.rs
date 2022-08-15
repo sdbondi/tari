@@ -394,7 +394,8 @@ macro_rules! txn_schema {
             covenant: Default::default(),
             input_data: None,
             input_version: $input_version.clone(),
-            output_version: $output_version.clone()
+            output_version: $output_version.clone(),
+            minimum_value_promise: $crate::transactions::tari_amount::MicroTari::zero()
         }
     }};
 
@@ -471,6 +472,7 @@ pub struct TransactionSchema {
     pub covenant: Covenant,
     pub input_version: Option<TransactionInputVersion>,
     pub output_version: Option<TransactionOutputVersion>,
+    pub minimum_value_promise: MicroTari,
 }
 
 /// Create an unconfirmed transaction for testing with a valid fee, unique access_sig, random inputs and outputs, the
@@ -676,7 +678,7 @@ pub fn create_stx_protocol(schema: TransactionSchema) -> (SenderTransactionProto
             input_data: schema.input_data.clone(),
             covenant: schema.covenant.clone(),
             output_version: schema.output_version,
-            minimum_value_promise: MicroTari::zero(),
+            minimum_value_promise: schema.minimum_value_promise,
         });
         outputs.push(utxo.clone());
         stx_builder
@@ -715,8 +717,6 @@ pub fn create_stx_protocol(schema: TransactionSchema) -> (SenderTransactionProto
 
     let encrypted_value = EncryptedValue::default();
 
-    let minimum_value_promise = MicroTari::zero();
-
     let change_metadata_sig = TransactionOutput::create_final_metadata_signature(
         output_version,
         change,
@@ -726,7 +726,7 @@ pub fn create_stx_protocol(schema: TransactionSchema) -> (SenderTransactionProto
         &test_params_change_and_txn.sender_offset_private_key,
         &covenant,
         &encrypted_value,
-        minimum_value_promise,
+        schema.minimum_value_promise,
     )
     .unwrap();
 
@@ -744,7 +744,7 @@ pub fn create_stx_protocol(schema: TransactionSchema) -> (SenderTransactionProto
         0,
         covenant,
         encrypted_value,
-        minimum_value_promise,
+        schema.minimum_value_promise,
     );
     outputs.push(change_output);
     (stx_protocol, outputs)

@@ -36,6 +36,7 @@ use crate::{
             check_maturity,
             check_sorting_and_duplicates,
             check_total_burned,
+            check_valid_minimum_value,
         },
         OrphanValidation,
         ValidationError,
@@ -86,9 +87,15 @@ impl OrphanValidation for OrphanBlockValidator {
         };
         trace!(target: LOG_TARGET, "Validating {}", block_id);
 
-        check_block_weight(block, self.rules.consensus_constants(height))?;
+        let constants = self.rules.consensus_constants(height);
+        check_block_weight(block, constants)?;
         trace!(target: LOG_TARGET, "SV - Block weight is ok for {} ", &block_id);
 
+        // TODO(perf): A lot of these checks can be done in the same output loop
+        for output in block.body.outputs() {
+            check_valid_minimum_value(constants, output)?;
+        }
+        trace!(target: LOG_TARGET, "SV - Claimed minimum values ok for {} ", &block_id);
         trace!(
             target: LOG_TARGET,
             "Checking duplicate inputs and outputs on {}",
