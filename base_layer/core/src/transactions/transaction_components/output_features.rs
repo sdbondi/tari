@@ -54,6 +54,7 @@ use crate::{
         OutputType,
         SideChainCheckpointFeatures,
         TemplateParameter,
+        TemplateRegistration,
     },
 };
 
@@ -151,6 +152,19 @@ impl OutputFeatures {
     pub fn create_burn_output() -> OutputFeatures {
         OutputFeatures {
             output_type: OutputType::Burn,
+            ..Default::default()
+        }
+    }
+
+    /// Creates template registration output features
+    pub fn for_template_registration(template_registration: TemplateRegistration) -> OutputFeatures {
+        OutputFeatures {
+            output_type: OutputType::CodeTemplateRegistration,
+            sidechain_features: Some(Box::new(
+                SideChainFeatures::builder(Default::default())
+                    .with_template_registration(template_registration)
+                    .finish(),
+            )),
             ..Default::default()
         }
     }
@@ -483,10 +497,11 @@ mod test {
     use std::{convert::TryInto, io::ErrorKind, iter};
 
     use tari_common_types::types::Signature;
+    use tari_utilities::hex::from_hex;
 
     use super::*;
     use crate::{
-        consensus::check_consensus_encoding_correctness,
+        consensus::{check_consensus_encoding_correctness, MaxSizeString},
         transactions::transaction_components::{
             bytes_into_fixed_string,
             side_chain::{
@@ -498,6 +513,7 @@ mod test {
                 RequirementsForConstitutionChange,
                 SideChainConsensus,
             },
+            BuildInfo,
             CommitteeSignatures,
             ContractAcceptance,
             ContractAmendment,
@@ -509,6 +525,8 @@ mod test {
             FunctionRef,
             PublicFunction,
             SignerSignature,
+            TemplateRegistration,
+            TemplateType,
         },
     };
 
@@ -555,6 +573,27 @@ mod test {
             sidechain_features: Some(Box::new(SideChainFeatures {
                 contract_id: FixedHash::zero(),
                 constitution: Some(constitution.clone()),
+                template_registration: Some(TemplateRegistration {
+                    author_public_key: Default::default(),
+                    author_signature: Default::default(),
+                    template_name: MaxSizeString::from_str_checked("🚀🚀🚀🚀🚀🚀🚀🚀").unwrap(),
+                    template_version: 1,
+                    template_type: TemplateType::Wasm { abi_version: 123 },
+                    build_info: BuildInfo {
+                        repo_url: "/dns/github.com/https/tari_project/wasm_examples".try_into().unwrap(),
+                        commit_hash: from_hex("ea29c9f92973fb7eda913902ff6173c62cb1e5df")
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                    },
+                    binary_sha: from_hex("c93747637517e3de90839637f0ce1ab7c8a3800b")
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    binary_url: "/dns4/github.com/https/tari_project/wasm_examples/releases/download/v0.0.6/coin.zip"
+                        .try_into()
+                        .unwrap(),
+                }),
                 definition: Some(ContractDefinition {
                     contract_name: bytes_into_fixed_string("name"),
                     contract_issuer: PublicKey::default(),

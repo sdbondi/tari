@@ -34,13 +34,19 @@ use super::{
 };
 use crate::{
     consensus::{ConsensusDecoding, ConsensusEncoding, ConsensusEncodingSized},
-    transactions::transaction_components::{side_chain::contract_checkpoint::ContractCheckpoint, ContractConstitution},
+    transactions::transaction_components::{
+        side_chain::contract_checkpoint::ContractCheckpoint,
+        ContractConstitution,
+        TemplateRegistration,
+    },
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Deserialize, Serialize, Eq)]
 pub struct SideChainFeatures {
     pub contract_id: FixedHash,
     pub definition: Option<ContractDefinition>,
+    pub template_registration: Option<TemplateRegistration>,
+
     pub constitution: Option<ContractConstitution>,
     pub acceptance: Option<ContractAcceptance>,
     pub update_proposal: Option<ContractUpdateProposal>,
@@ -63,6 +69,7 @@ impl ConsensusEncoding for SideChainFeatures {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.contract_id.consensus_encode(writer)?;
         self.definition.consensus_encode(writer)?;
+        self.template_registration.consensus_encode(writer)?;
         self.constitution.consensus_encode(writer)?;
         self.acceptance.consensus_encode(writer)?;
         self.update_proposal.consensus_encode(writer)?;
@@ -81,6 +88,7 @@ impl ConsensusDecoding for SideChainFeatures {
         Ok(Self {
             contract_id: FixedHash::consensus_decode(reader)?,
             definition: ConsensusDecoding::consensus_decode(reader)?,
+            template_registration: ConsensusDecoding::consensus_decode(reader)?,
             constitution: ConsensusDecoding::consensus_decode(reader)?,
             acceptance: ConsensusDecoding::consensus_decode(reader)?,
             update_proposal: ConsensusDecoding::consensus_decode(reader)?,
@@ -101,6 +109,7 @@ impl SideChainFeaturesBuilder {
             features: SideChainFeatures {
                 contract_id,
                 definition: None,
+                template_registration: None,
                 constitution: None,
                 acceptance: None,
                 update_proposal: None,
@@ -109,6 +118,11 @@ impl SideChainFeaturesBuilder {
                 checkpoint: None,
             },
         }
+    }
+
+    pub fn with_template_registration(mut self, template_registration: TemplateRegistration) -> Self {
+        self.features.template_registration = Some(template_registration);
+        self
     }
 
     pub fn with_contract_definition(mut self, contract_definition: ContractDefinition) -> Self {
@@ -159,12 +173,14 @@ mod tests {
     use std::convert::TryInto;
 
     use tari_common_types::types::{PublicKey, Signature};
+    use tari_utilities::hex::from_hex;
 
     use super::*;
     use crate::{
-        consensus::check_consensus_encoding_correctness,
+        consensus::{check_consensus_encoding_correctness, MaxSizeString},
         transactions::transaction_components::{
             bytes_into_fixed_string,
+            BuildInfo,
             CheckpointParameters,
             CommitteeMembers,
             CommitteeSignatures,
@@ -177,9 +193,11 @@ mod tests {
             RequirementsForConstitutionChange,
             SideChainConsensus,
             SignerSignature,
+            TemplateType,
         },
     };
 
+    #[allow(clippy::too_many_lines)]
     #[test]
     fn it_encodes_and_decodes_correctly() {
         let constitution = ContractConstitution {
@@ -217,6 +235,27 @@ mod tests {
         let subject = SideChainFeatures {
             contract_id: FixedHash::zero(),
             constitution: Some(constitution.clone()),
+            template_registration: Some(TemplateRegistration {
+                author_public_key: Default::default(),
+                author_signature: Default::default(),
+                template_name: MaxSizeString::from_str_checked("🚀🚀🚀🚀🚀🚀🚀🚀").unwrap(),
+                template_version: 1,
+                template_type: TemplateType::Wasm { abi_version: 123 },
+                build_info: BuildInfo {
+                    repo_url: "/dns/github.com/https/tari_project/wasm_examples".try_into().unwrap(),
+                    commit_hash: from_hex("ea29c9f92973fb7eda913902ff6173c62cb1e5df")
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                },
+                binary_sha: from_hex("c93747637517e3de90839637f0ce1ab7c8a3800b")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                binary_url: "/dns4/github.com/https/tari_project/wasm_examples/releases/download/v0.0.6/coin.zip"
+                    .try_into()
+                    .unwrap(),
+            }),
             definition: Some(ContractDefinition {
                 contract_name: bytes_into_fixed_string("name"),
                 contract_issuer: PublicKey::default(),

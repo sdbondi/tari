@@ -54,6 +54,8 @@ use tari_app_grpc::{
         CreateFollowOnAssetCheckpointResponse,
         CreateInitialAssetCheckpointRequest,
         CreateInitialAssetCheckpointResponse,
+        CreateTemplateRegistrationRequest,
+        CreateTemplateRegistrationResponse,
         FileDeletedResponse,
         GetBalanceRequest,
         GetBalanceResponse,
@@ -1271,6 +1273,51 @@ impl wallet_server::Wallet for WalletGrpcServer {
         })?;
 
         Ok(Response::new(FileDeletedResponse {}))
+    }
+
+    async fn create_template_registration(
+        &self,
+        request: Request<CreateTemplateRegistrationRequest>,
+    ) -> Result<Response<CreateTemplateRegistrationResponse>, Status> {
+        let mut asset_manager = self.wallet.asset_manager.clone();
+        let mut transaction_service = self.wallet.transaction_service.clone();
+        let message = request.into_inner();
+
+        let template_registration = message
+            .template_registration
+            .ok_or_else(|| Status::invalid_argument("template_registration is empty"))?
+            .try_into()
+            .map_err(|e| Status::invalid_argument(format!("template_registration is invalid: {}", e)))?;
+
+        let side_chain_features = SideChainFeatures::builder(Default::default())
+            .with_template_registration(template_registration)
+            .finish();
+
+        let (tx_id, transaction) = asset_manager
+            .create_constitution_definition(&side_chain_features)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        debug!(
+            target: LOG_TARGET,
+            "Template registration transaction: {:?}", transaction
+        );
+
+        let message = format!(
+            "Template registration {}",
+            side_chain_features
+                .template_registration
+                .as_ref()
+                .map(|reg| reg.template_name.as_str())
+                .unwrap_or("<no template>")
+        );
+
+        let _ = transaction_service
+            .submit_transaction(tx_id, transaction, 0.into(), message)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(CreateTemplateRegistrationResponse {}))
     }
 }
 

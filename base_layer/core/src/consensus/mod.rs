@@ -33,12 +33,14 @@ mod consensus_encoding;
 #[cfg(test)]
 pub(crate) use consensus_encoding::test::check_consensus_encoding_correctness;
 pub use consensus_encoding::{
+    read_byte,
     ConsensusDecoding,
     ConsensusEncoding,
     ConsensusEncodingSized,
     ConsensusHasher,
     DomainSeparatedConsensusHasher,
     MaxSizeBytes,
+    MaxSizeString,
     MaxSizeVec,
     ToConsensusBytes,
 };

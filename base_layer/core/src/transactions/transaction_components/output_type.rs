@@ -44,30 +44,33 @@ pub enum OutputType {
     Coinbase = 1,
     /// Output is a burned output and can not be spent ever.
     Burn = 2,
-    /// Output defines a side-chain contract.
-    ContractDefinition = 3,
+    /// Output defines a registration for a validator node
+    ValidatorRegistration = 3,
+    /// Output defines a new re-usable code template.
+    CodeTemplateRegistration = 4,
     /// Output defines the constitution for a side-chain contract.
-    ContractConstitution = 4,
+    ContractConstitution = 5,
     /// Output indicates validator node acceptance to run a contract.
-    ContractValidatorAcceptance = 5,
+    ContractValidatorAcceptance = 6,
     /// Output is a contract checkpoint.
-    ContractCheckpoint = 6,
+    ContractCheckpoint = 7,
     /// Output that defines a contract constitution proposal.
-    ContractConstitutionProposal = 7,
+    ContractConstitutionProposal = 8,
     /// Output that indicates acceptance of an existing contract constitution amendment proposal.
-    ContractConstitutionChangeAcceptance = 8,
+    ContractConstitutionChangeAcceptance = 9,
     /// Output that defines an amendment of a contract constitution.
-    ContractAmendment = 9,
-
+    ContractAmendment = 10,
+    /// Output defines a side-chain contract.
+    ContractDefinition = 11,
     // TODO: Remove these deprecated flags
-    NonFungible = 10,
-    AssetRegistration = 11,
-    MintNonFungible = 12,
-    BurnNonFungible = 13,
-    SidechainInitialCheckpoint = 14,
-    SidechainCheckpoint = 15,
-    CommitteeInitialDefinition = 16,
-    CommitteeDefinition = 17,
+    NonFungible = 100,
+    AssetRegistration = 101,
+    MintNonFungible = 102,
+    BurnNonFungible = 103,
+    SidechainInitialCheckpoint = 104,
+    SidechainCheckpoint = 105,
+    CommitteeInitialDefinition = 106,
+    CommitteeDefinition = 107,
 }
 
 impl OutputType {
@@ -146,8 +149,11 @@ mod tests {
     fn it_converts_from_byte_to_output_type() {
         assert_eq!(OutputType::from_byte(0), Some(OutputType::Standard));
         assert_eq!(OutputType::from_byte(1), Some(OutputType::Coinbase));
-        assert_eq!(OutputType::from_byte(16), Some(OutputType::CommitteeInitialDefinition));
-        assert_eq!(OutputType::from_byte(17), Some(OutputType::CommitteeDefinition));
-        assert_eq!(OutputType::from_byte(18), None);
+        assert_eq!(OutputType::from_byte(2), Some(OutputType::Burn));
+        assert_eq!(OutputType::from_byte(3), Some(OutputType::ValidatorRegistration));
+        assert_eq!(OutputType::from_byte(4), Some(OutputType::CodeTemplateRegistration));
+        assert_eq!(OutputType::from_byte(106), Some(OutputType::CommitteeInitialDefinition));
+        assert_eq!(OutputType::from_byte(107), Some(OutputType::CommitteeDefinition));
+        assert_eq!(OutputType::from_byte(108), None);
     }
 }

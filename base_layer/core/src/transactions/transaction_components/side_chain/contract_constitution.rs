@@ -31,7 +31,7 @@ use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 use super::CommitteeMembers;
-use crate::consensus::{ConsensusDecoding, ConsensusEncoding, ConsensusEncodingSized};
+use crate::consensus::{read_byte, ConsensusDecoding, ConsensusEncoding, ConsensusEncodingSized};
 
 /// # ContractConstitution
 ///
@@ -191,9 +191,8 @@ impl ConsensusEncodingSized for ConstitutionChangeFlags {
 
 impl ConsensusDecoding for ConstitutionChangeFlags {
     fn consensus_decode<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut buf = [0u8; 1];
-        reader.read_exact(&mut buf)?;
-        let flags = ConstitutionChangeFlags::from_bits(buf[0])
+        let flag_bits = read_byte(reader)?;
+        let flags = ConstitutionChangeFlags::from_bits(flag_bits)
             .ok_or_else(|| io::Error::new(ErrorKind::Other, "Invalid change flag"))?;
         Ok(flags)
     }

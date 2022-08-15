@@ -44,14 +44,13 @@ use crate::{
         BlockSpec,
     },
     transactions::{
-        tari_amount::T,
+        tari_amount::{MicroTari, T},
         test_helpers::{schema_to_transaction, TransactionSchema},
         transaction_components::{OutputFeatures, OutputType, Transaction, UnblindedOutput},
         CryptoFactories,
     },
     txn_schema,
 };
-
 fn setup() -> BlockchainDatabase<TempDatabase> {
     create_new_blockchain()
 }
@@ -421,6 +420,7 @@ mod add_block {
             input_data: None,
             input_version: None,
             output_version: None,
+            minimum_value_promise: MicroTari::zero(),
         }]);
         let commitment_hex = txns[0]
             .body
@@ -462,6 +462,7 @@ mod add_block {
             input_data: None,
             input_version: None,
             output_version: None,
+            minimum_value_promise: MicroTari::zero(),
         }]);
 
         let (block, _) = create_next_block(&db, &prev_block, txns);

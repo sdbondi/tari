@@ -30,10 +30,13 @@ mod hashing;
 mod integers;
 mod micro_tari;
 mod script;
+mod string;
 mod vec;
+
 use std::io;
 
 pub use hashing::{ConsensusHasher, DomainSeparatedConsensusHasher};
+pub use string::MaxSizeString;
 pub use vec::MaxSizeVec;
 
 pub use self::bytes::MaxSizeBytes;
