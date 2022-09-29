@@ -273,7 +273,7 @@ fn enable_tracing() {
 }
 
 fn setup_grpc_config(config: &mut ApplicationConfig) {
-    if config.wallet.grpc_enabled && config.wallet.grpc_address.is_none() {
+    if config.wallet.grpc_address.is_none() {
         config.wallet.grpc_address = Some(
             format!(
                 "/ip4/127.0.0.1/tcp/{}",

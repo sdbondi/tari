@@ -114,7 +114,7 @@ pub fn grpc_default_port(app_type: ApplicationType, network: Network) -> u16 {
             Network::Weatherwax => 18113,
             Network::Dibbler => 18123,
             Network::Esmeralda => 18143,
-            Network::Igor => 18152,
+            Network::Igor => 18153,
             _ => unreachable!("Network {} not supported", network),
         },
         _ => unreachable!("Application {} not supported", app_type),
