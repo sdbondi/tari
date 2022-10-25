@@ -51,12 +51,13 @@ use tari_common::{
     configuration::bootstrap::ApplicationType,
     exit_codes::{ExitCode, ExitError},
 };
+use tari_comms::runtime;
 use tari_key_manager::cipher_seed::CipherSeed;
 #[cfg(all(unix, feature = "libtor"))]
 use tari_libtor::tor::Tor;
 use tari_shutdown::Shutdown;
 use tari_utilities::SafePassword;
-use tokio::runtime::Runtime;
+use tokio::task;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use wallet_modes::{command_mode, grpc_mode, recovery_mode, script_mode, tui_mode, WalletMode};
 
@@ -65,7 +66,7 @@ use crate::init::wallet_mode;
 
 pub const LOG_TARGET: &str = "wallet::console_wallet::main";
 
-pub fn run_wallet(runtime: Runtime, config: &mut ApplicationConfig) -> Result<(), ExitError> {
+pub async fn run_wallet(config: &mut ApplicationConfig) -> Result<(), ExitError> {
     let data_dir = config.wallet.data_dir.clone();
     let data_dir_str = data_dir.clone().into_os_string().into_string().unwrap();
 
@@ -97,10 +98,10 @@ pub fn run_wallet(runtime: Runtime, config: &mut ApplicationConfig) -> Result<()
         command2: None,
     };
 
-    run_wallet_with_cli(runtime, config, cli)
+    run_wallet_with_cli(config, cli).await
 }
 
-pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli: Cli) -> Result<(), ExitError> {
+pub async fn run_wallet_with_cli(config: &mut ApplicationConfig, cli: Cli) -> Result<(), ExitError> {
     if cli.tracing_enabled {
         enable_tracing();
     }
@@ -131,12 +132,7 @@ pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli
 
     if cli.change_password {
         info!(target: LOG_TARGET, "Change password requested.");
-        return runtime.block_on(change_password(
-            config,
-            password,
-            shutdown_signal,
-            cli.non_interactive_mode,
-        ));
+        return change_password(config, password, shutdown_signal, cli.non_interactive_mode).await;
     }
 
     // Run our own Tor instance, if configured
@@ -145,7 +141,7 @@ pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli
     if config.wallet.use_libtor && config.wallet.p2p.transport.is_tor() {
         let tor = Tor::initialize()?;
         tor.update_comms_transport(&mut config.wallet.p2p.transport)?;
-        runtime.spawn(tor.run(shutdown.to_signal()));
+        task::spawn(tor.run(shutdown.to_signal()));
         debug!(
             target: LOG_TARGET,
             "Updated Tor comms transport: {:?}", config.wallet.p2p.transport
@@ -153,14 +149,15 @@ pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli
     }
 
     // initialize wallet
-    let mut wallet = runtime.block_on(init_wallet(
+    let mut wallet = init_wallet(
         config,
         password,
         seed_words_file_name,
         recovery_seed,
         shutdown_signal,
         cli.non_interactive_mode,
-    ))?;
+    )
+    .await?;
 
     // Check if there is an in progress recovery in the wallet's database
     if wallet.is_recovery_in_progress()? {
@@ -169,18 +166,17 @@ pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli
     }
 
     // get base node/s
-    let base_node_config =
-        runtime.block_on(get_base_node_peer_config(config, &mut wallet, cli.non_interactive_mode))?;
+    let base_node_config = get_base_node_peer_config(config, &mut wallet, cli.non_interactive_mode).await?;
     let base_node_selected = base_node_config.get_base_node_peer()?;
 
     let wallet_mode = wallet_mode(&cli, boot_mode);
 
     // start wallet
-    runtime.block_on(start_wallet(&mut wallet, &base_node_selected, &wallet_mode))?;
+    start_wallet(&mut wallet, &base_node_selected, &wallet_mode).await?;
 
     debug!(target: LOG_TARGET, "Starting app");
 
-    let handle = runtime.handle().clone();
+    let handle = runtime::current();
 
     let result = match wallet_mode {
         WalletMode::Tui => tui_mode(handle, &config.wallet, &base_node_config, wallet.clone()),
@@ -206,7 +202,7 @@ pub fn run_wallet_with_cli(runtime: Runtime, config: &mut ApplicationConfig, cli
 
     print!("\nShutting down wallet... ");
     shutdown.trigger();
-    runtime.block_on(wallet.wait_until_shutdown());
+    wallet.wait_until_shutdown().await;
     println!("Done.");
 
     result

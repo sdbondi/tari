@@ -45,11 +45,12 @@ mod ui;
 mod utils;
 mod wallet_modes;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Uncomment to enable tokio tracing via tokio-console
     // console_subscriber::init();
 
-    match main_inner() {
+    match main_inner().await {
         Ok(_) => process::exit(0),
         Err(err) => {
             eprintln!("{}", err);
@@ -69,7 +70,7 @@ fn main() {
     }
 }
 
-fn main_inner() -> Result<(), ExitError> {
+async fn main_inner() -> Result<(), ExitError> {
     let cli = Cli::parse();
 
     let cfg = load_configuration(cli.common.config_path().as_path(), true, &cli)?;
@@ -82,12 +83,7 @@ fn main_inner() -> Result<(), ExitError> {
 
     setup_grpc_config(&mut config);
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to build a runtime!");
-
-    run_wallet_with_cli(runtime, &mut config, cli)
+    run_wallet_with_cli(&mut config, cli).await
 }
 
 fn setup_grpc_config(config: &mut ApplicationConfig) {
