@@ -2463,7 +2463,7 @@ impl BlockchainBackend for LMDBDatabase {
 
         // Get the current epoch for the height
         let end_epoch = constants.block_height_to_current_epoch(height);
-        // Subtract the registration validaty period to get the start epoch
+        // Subtract the registration validity period to get the start epoch
         let start_epoch = end_epoch.saturating_sub(constants.validator_node_validity_period());
         // Convert these back to height as validators regs are indexed by height
         let start_height = start_epoch.as_u64() * constants.epoch_length();
