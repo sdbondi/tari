@@ -22,6 +22,7 @@
 //
 
 use std::{
+    env,
     fs,
     fs::File,
     io::{Read, Write},
@@ -56,6 +57,17 @@ pub fn initialize_logging(config_file: &Path, base_path: &Path, default: &str) -
 
     file.read_to_string(&mut contents)
         .map_err(|e| ConfigError::new("Could not read file: {}", Some(e.to_string())))?;
+
+    let base_path = if base_path.is_absolute() {
+        base_path.to_path_buf()
+    } else {
+        fs::canonicalize(
+            env::current_dir()
+                .map_err(|e| ConfigError::new("Failed to get working dir", Some(e.to_string())))?
+                .join(base_path),
+        )
+        .map_err(|e| ConfigError::new("Failed to canonicalize base dir", Some(e.to_string())))?
+    };
 
     let contents = contents.replace(
         "{{log_dir}}",
