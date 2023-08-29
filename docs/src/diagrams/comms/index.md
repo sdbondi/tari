@@ -1,13 +1,13 @@
   
 
 # Top level triggers
-1. New Inbound TCP Socket Connection
+1. [Inbound TCP Socket Connection](./inbound_connection.md)
 1. New Outbound TCP Socket Connection
 1. New Yamux Stream
    1. [Protocol negotiation](./protocol_negotiation.md)
 1. New Messaging Protocol Stream
    1. [Inbound Messaging](./inbound_messaging.md)
-   2. [Outbound Messaging TODO](./outbound_messaging.md)
+   2. [Outbound Messaging](./outbound_messaging.md)
 1. New RPC session handshake
 1. Timed triggers
     1. Dial backoff

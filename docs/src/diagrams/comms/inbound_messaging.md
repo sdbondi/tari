@@ -119,5 +119,4 @@ flowchart TD
 <figcaption>Fig. 6 - subscription to inbound messages coming from the pubsub connector _Fig. 4_</figcaption>
 
 * (1) [p2p/services/utils.rs:43](https://github.com/tari-project/tari/blob/08ba91af3031aa2a3c5357a5f494f95f9c8a0049/base_layer/p2p/src/services/utils.rs#L43)
-* 
 
