@@ -86,7 +86,8 @@ impl TryFrom<PeerIdentityMsg> for PeerIdentityClaim {
         if addresses.is_empty() {
             return Err(PeerManagerError::PeerIdentityNoValidAddresses);
         }
-        let features = PeerFeatures::from_bits_truncate(value.features);
+
+        let features = PeerFeatures::from_bits(value.features).ok_or(PeerManagerError::InvalidPeerFeatures { bits: value.features })?;
 
         let supported_protocols = value
             .supported_protocols

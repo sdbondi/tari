@@ -32,7 +32,7 @@ message GetPeersResponse {
 message PeerInfo {
   bytes public_key = 1;
   repeated PeerInfoAddress addresses = 2;
-  uint64 peer_features = 3;
+  uint32 peer_features = 3;
   repeated bytes supported_protocols = 4;
   // Note: not part of the signature
   string user_agent = 5;
@@ -46,6 +46,6 @@ message PeerInfoAddress {
 
 message PeerIdentityClaim {
   repeated bytes addresses = 1;
-  uint64 peer_features = 2;
+  uint32 peer_features = 2;
   tari.dht.common.IdentitySignature identity_signature = 3;
 }

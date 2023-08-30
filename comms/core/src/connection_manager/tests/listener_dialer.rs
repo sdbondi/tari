@@ -125,7 +125,6 @@ async fn smoke() {
 
     let mut peer = node_identity1.to_peer();
     peer.addresses = MultiaddressesWithStats::from_addresses_with_source(vec![address], &PeerAddressSource::Config);
-    peer.set_id_for_test(1);
 
     let (reply_tx, reply_rx) = oneshot::channel();
     request_tx
@@ -233,7 +232,7 @@ async fn banned() {
 
     let mut peer = node_identity1.to_peer();
     peer.addresses = MultiaddressesWithStats::from_addresses_with_source(vec![address], &PeerAddressSource::Config);
-    peer.set_id_for_test(1);
+    // peer.set_id_for_test(1);
 
     let (reply_tx, reply_rx) = oneshot::channel();
     request_tx

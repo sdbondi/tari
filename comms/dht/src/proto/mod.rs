@@ -238,7 +238,13 @@ impl TryInto<PeerIdentityClaim> for rpc::PeerIdentityClaim {
             .filter_map(|addr| Multiaddr::try_from(addr).ok())
             .collect::<Vec<_>>();
 
-        let features = PeerFeatures::from_bits_truncate(self.peer_features);
+        let feature_bits = self.peer_features;
+        let features = PeerFeatures::from_bits(feature_bits).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid peer features: bits({})",
+                feature_bits
+            )
+        })?;
         let signature = self
             .identity_signature
             .map(TryInto::try_into)

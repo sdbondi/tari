@@ -196,11 +196,6 @@ impl Peer {
         self.id = Some(id);
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_id_for_test(&mut self, id: PeerId) {
-        self.id = Some(id);
-    }
-
     /// Provides that date time of the last successful interaction with the peer
     pub fn last_seen(&self) -> Option<NaiveDateTime> {
         self.addresses.last_seen()
@@ -210,11 +205,6 @@ impl Peer {
     pub fn last_seen_since(&self) -> Option<Duration> {
         self.last_seen()
             .and_then(|dt| Utc::now().naive_utc().signed_duration_since(dt).to_std().ok())
-    }
-
-    /// Returns true if this peer has the given feature, otherwise false
-    pub fn has_features(&self, features: PeerFeatures) -> bool {
-        self.features.contains(features)
     }
 
     /// Returns the ban status of the peer

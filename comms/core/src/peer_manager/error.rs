@@ -46,6 +46,8 @@ pub enum PeerManagerError {
     MultiaddrError(String),
     #[error("Unable to parse any of the network addresses offered by the connecting peer")]
     PeerIdentityNoValidAddresses,
+    #[error("Invalid peer feature bits: {bits}")]
+    InvalidPeerFeatures { bits: u32 },
 }
 
 impl PeerManagerError {

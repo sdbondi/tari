@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 bitflags! {
     /// Peer feature flags. These advertised the capabilities of peer nodes.
     #[derive(Serialize, Deserialize)]
-    pub struct PeerFeatures: u64 {
+    pub struct PeerFeatures: u32 {
         /// No capabilities
         const NONE = 0b0000_0000;
         /// Node is able to propagate messages
@@ -40,6 +40,10 @@ bitflags! {
         const COMMUNICATION_NODE = Self::MESSAGE_PROPAGATION.bits | Self::DHT_STORE_FORWARD.bits;
         /// Node is a network client
         const COMMUNICATION_CLIENT = Self::NONE.bits;
+
+        /// Unknown bits may be set. This allows for future expansion of the feature flags
+        /// and allows the identity signature to be validated without being affected by bit truncation.
+        const _ALL = !0;
     }
 }
 
